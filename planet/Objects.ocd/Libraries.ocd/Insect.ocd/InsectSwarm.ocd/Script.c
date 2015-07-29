@@ -98,7 +98,7 @@ private func Death()
 private func Destruction()
 {
 	// Destruction of the master
-	if (lib_swarm_helper->GetMaster() == this)
+	if (lib_swarm_helper) if (lib_swarm_helper->GetMaster() == this)
 		lib_swarm_helper->MakeNewMaster(lib_swarm_nextinline);
 	// Destruction of a slave
 	if(lib_swarm_previnline && lib_swarm_nextinline)
@@ -116,7 +116,7 @@ private func PurgeLine()
 
 private func MoveToTarget()
 {
-	if (lib_swarm_helper->GetMaster() == this)
+	if (!lib_swarm_helper || (lib_swarm_helper->GetMaster() == this))
 		return _inherited();
 
 	var coordinates = { x=0, y=0 };
@@ -132,4 +132,13 @@ private func MoveToTarget()
 	coordinates.y = BoundBy(coordinates.y + Random(lib_swarm_density*2) - lib_swarm_density, 10, LandscapeHeight()-10);
 	SetCommand("MoveTo", nil, coordinates.x, coordinates.y, nil, true);
 	AppendCommand("Call", this, nil,nil,nil,nil, "MissionComplete");
+}
+
+/* Saving */
+
+public func SaveScenarioObject(proplist props)
+{
+	if (!inherited(props, ...)) return false;
+	// Do not save swarms - this will be done by the swarm helper instad
+	return !lib_swarm_helper;
 }

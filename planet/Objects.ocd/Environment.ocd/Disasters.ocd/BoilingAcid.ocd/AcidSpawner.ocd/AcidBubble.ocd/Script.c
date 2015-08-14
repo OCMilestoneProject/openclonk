@@ -67,16 +67,16 @@ public func FxMoveTimer(object target, effect, int time)
 	
 	// Jittery movement
 	//SetYDir(GetYDir() - 3 + Random(7));
-	var speedUp = 0;
+	var speedUp = -3;
 	if(GetEffect("Fade", this))	
 		{
-		speedUp = 3;
+		speedUp = 0;
 		if (Inside(GetXDir(), -6, 6))
 			SetXDir(GetXDir() + RandomX(-6,6) );
 		}
 	
 	
-	SetYDir(GetYDir() - RandomX(8,13) + speedUp);
+	SetYDir(GetYDir() - RandomX(3,4) + speedUp - (GetCon()/50));
 		
 	return 1;
 }

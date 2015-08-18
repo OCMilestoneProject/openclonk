@@ -12,6 +12,12 @@ global func CastMagmaBubbles(int num, int level, int x, int y)
 
 protected func Initialize()
 {
+	if (GBackSolid(0, 0))
+		{
+			RemoveObject();
+			return -1;
+		}
+		
 	DoCon(RandomX(5, 15));
 	AddEffect("Move", this, 100, 2, this);
 	Sound("ef_Bubble*");
@@ -40,7 +46,8 @@ public func FxMoveTimer(object target, effect, int time)
 	SetYDir(GetYDir() - 3 + Random(7));
 	if (Inside(GetXDir(), -6, 6))
 		SetXDir(GetXDir() + 2 * Random(2) - 1);
-		
+	
+	// Explodes near living things
 	var prey = FindObject(Find_Distance(GetCon()/15, 0, 0), Find_OCF(OCF_Alive));
 	if(prey != nil)
 			Explode(10);

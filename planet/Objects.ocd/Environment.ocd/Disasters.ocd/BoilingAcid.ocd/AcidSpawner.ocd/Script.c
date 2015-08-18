@@ -11,13 +11,17 @@ local Description = "$Description$";
 local maxTime = 12;
 local timer = 0;
 local count = 7;
-local mat;
 
-public func Init(string material)
+public func Initialize()
 {
-	mat = material;
 	AddEffect("Boil",this,1,1,this);
 }
+
+/*
+
+Periodically spawns bubbles until count runs out
+
+*/
 
 func FxBoilTimer(object target, effect, int time)
 {
@@ -35,7 +39,6 @@ func FxBoilTimer(object target, effect, int time)
 	
 	if(!GBackLiquid(0,0) || count <= 0)
 		{
-		//acidSpawnerCount--;
 		RemoveObject();
 		}
 }

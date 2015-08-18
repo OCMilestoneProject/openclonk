@@ -25,11 +25,11 @@ protected func Initialize()
 	DoCon(RandomX(-70, -60));
 	AddEffect("Move", this, 100, 2, this);
 	
-		
+	// Sometimes bubbles become darker and explosive
 	if(!Random(10))
 		{
-		isExplosive = 1;
-		SetGraphics("2");
+			isExplosive = 1;
+			SetGraphics("2");
 		}
 	return;
 }
@@ -38,26 +38,27 @@ public func FxMoveTimer(object target, effect, int time)
 {
 	if (!GBackLiquid(0, -3) && !GetEffect("Fade", this) || time > 200)
 		{
-		AddEffect("Fade", target, 100, 1, target);
-		if(!Random(20))
-			Sound("ef_Bubble*");
+			AddEffect("Fade", target, 100, 1, target);
+			if(!Random(20))
+				Sound("ef_Bubble*");
 		}
 	
 	growTimer++;
 	
 	if(growTimer >= growTime)
 		{
-		DoCon(2);
-		growTimer = 0;
+			DoCon(2);
+			growTimer = 0;
 		}
 	
+	// Causes bubbles to repel each other
 	var nearbyBubble = FindObject(Find_Distance(GetCon()/15, 0, 0), Find_ID(Fx_AcidBubble));
 	if(nearbyBubble != nil)
 	{
 		SetXDir(-(nearbyBubble->GetX() - GetX()) / 2);
 		SetYDir(-(nearbyBubble->GetY() - GetY()) / 2);
 	}
-	
+	// Deep green bubbles explode when near a living thing
 	if(isExplosive)
 	{
 		var prey = FindObject(Find_Distance(GetCon()/15, 0, 0), Find_OCF(OCF_Alive));
@@ -67,12 +68,13 @@ public func FxMoveTimer(object target, effect, int time)
 	
 	// Jittery movement
 	//SetYDir(GetYDir() - 3 + Random(7));
+	// Bubble is faster in acid, moves erratically outside
 	var speedUp = -3;
 	if(GetEffect("Fade", this))	
 		{
-		speedUp = 0;
-		if (Inside(GetXDir(), -6, 6))
-			SetXDir(GetXDir() + RandomX(-6,6) );
+			speedUp = 0;
+			if (Inside(GetXDir(), -6, 6))
+				SetXDir(GetXDir() + RandomX(-6,6) );
 		}
 	
 	

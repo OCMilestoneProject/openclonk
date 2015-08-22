@@ -5,3 +5,4 @@ Category=C4D_StaticBack
 Width=15
 Height=16
 Offset=-7,-8
+Rotate=1

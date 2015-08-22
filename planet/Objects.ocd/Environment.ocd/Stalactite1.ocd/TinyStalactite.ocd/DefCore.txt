@@ -4,6 +4,4 @@ Version=5,2,0,1
 Category=C4D_StaticBack
 Width=15
 Height=16
-Offset=-4,-4
-
-
+Offset=-7,-8

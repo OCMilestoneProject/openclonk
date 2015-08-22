@@ -19,7 +19,7 @@ func Construction()
 
 private func Initialize()
 {
-	SetGraphics(Format("%d", Random(4)));
+	SetMeshMaterial(Format("flower%d", Random(4)));
 	SetProperty("MeshTransformation", Trans_Rotate(RandomX(0,359),0,1,0));
 }
 

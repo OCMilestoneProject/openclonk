@@ -7,9 +7,9 @@
 
 #include Library_Plant
 
-private func SeedChance() { return 400; }
+private func SeedChance() { return 300; }
 private func SeedArea() { return 120; }
-private func SeedAmount() { return 4; }
+private func SeedAmount() { return 6; }
 
 func Construction()
 {
@@ -20,7 +20,7 @@ func Construction()
 private func Initialize()
 {
 	SetMeshMaterial(Format("flower%d", Random(4)));
-	SetProperty("MeshTransformation", Trans_Rotate(RandomX(0,359),0,1,0));
+	SetProperty("MeshTransformation", Trans_Mul(Trans_Scale(RandomX(850,1200)), Trans_Rotate(RandomX(0,359),0,1,0)));
 }
 
 public func Incineration()

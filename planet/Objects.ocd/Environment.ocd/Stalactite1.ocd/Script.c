@@ -44,7 +44,7 @@ public func Place(int amount, proplist rectangle, proplist settings)
 	var stalactites = [];
 	for (var i = 0; i < amount; i++)
 	{
-		var loc = FindLocation(Loc_Tunnel(), Loc_Not(Loc_Liquid()), Loc_Wall(CNAT_Top), Loc_Space(40, true), loc_area);
+		var loc = FindLocation(Loc_Tunnel(), Loc_Not(Loc_Liquid()), Loc_Wall(CNAT_Top), Loc_Space(40, CNAT_Bottom), loc_area);
 		if (!loc)
 			continue;
 		var mat = MaterialName(GetMaterial(loc.x, loc.y - 1));

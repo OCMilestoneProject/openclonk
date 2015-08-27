@@ -7,42 +7,38 @@ private func SeedChance() {	return 100; }
 private func SeedArea() { return 400; }
 private func SeedAmount() { return 12; }
 
+// Saved for GetTreetopPosition
+local mesh_rotation;
+
 private func Construction()
 {
 	inherited(...);
+	mesh_rotation = RandomX(0,359);
 	// -12000 offset to fix model origin which is aligned to geometry centre on export instead of blender's given origin :(
-	SetProperty("MeshTransformation", Trans_Mul(Trans_Translate(-12000), Trans_Rotate(RandomX(0,359),0,1,0)));
+	SetProperty("MeshTransformation", Trans_Mul(Trans_Translate(-12000), Trans_Rotate(mesh_rotation,0,1,0)));
 }
 
 private func Seed()
 {
 	if(!IsStanding()) return false;
 
-	// Find number of plants in seed area.
-	var size = SeedArea();
-	var amount = SeedAmount();
-	var area = Rectangle(size / -2, size / -2, size, size);
-	if (this.Confinement)
-		area = RectangleEnsureWithin(area, this.Confinement);
-	var plant_cnt = ObjectCount(Find_ID(GetID()), Find_InRect(area.x, area.y, area.w, area.h));
-	// If there are not much plants in the seed area compared to seed amount
-	// the chance of seeding is improved, if there are much the chance is reduced.
-	var chance = SeedChance();
-	var chance = chance / Max(1, amount - plant_cnt) + chance * Max(0, plant_cnt - amount);
-	// Place a coconut
-	if (!Random(chance) && GetCon() >= 100)
+	// Coconut trees always create coconut seeds
+	// The seed area checks are done by the coconut before creating the tree.
+	var chance = this->SeedChance();
+	if (!Random(chance) && GetCon() >= 100 && ObjectCount(Find_ID(Coconut)) < ObjectCount(Find_ID(Tree_Coconut)))
 	{
 		var seed = CreateObjectAbove(Coconut, 0, -35);
 		seed->SetXDir(-5 + Random(11));
 		seed->SetR(Random(360));
 		seed->SetRDir(RandomX(-5,5));
-
-		//one coconut for each tree
-		if(ObjectCount(Find_ID(Coconut)) > ObjectCount(Find_ID(Tree_Coconut)))
-		{
-			seed->RemoveObject();
-		}
+		seed->SetConfinement(this.Confinement);
 	}
+}
+
+public func GetTreetopPosition(pos)
+{
+	var offset = Sin(mesh_rotation/2, 20);
+	return Shape->Rectangle(-45+offset,-25, 50,10)->GetRandomPoint(pos);
 }
 
 /*-- Properties --*/

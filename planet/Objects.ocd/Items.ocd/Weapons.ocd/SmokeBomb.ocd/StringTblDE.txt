@@ -1,2 +1,3 @@
-Name=Stein
-Description=Wichtiges Baumaterial und Waffe.
+Name=Rauchbombe
+Description=Verteilt Rauch.
+UsageHelp=Anzünden um Rauch zu verteilen.

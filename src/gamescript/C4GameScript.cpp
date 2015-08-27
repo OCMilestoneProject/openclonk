@@ -387,12 +387,32 @@ static long FnGetMaterial(C4PropList * _this, long x, long y)
 	return GBackMat(x,y);
 }
 
+static long FnGetBackMaterial(C4PropList * _this, long x, long y)
+{
+	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
+	return ::Landscape.GetBackMat(x, y);
+}
+
 static C4String *FnGetTexture(C4PropList * _this, long x, long y)
 {
 	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
 
 	// Get texture
 	int32_t iTex = PixCol2Tex(GBackPix(x, y));
+	if (!iTex) return NULL;
+	// Get material-texture mapping
+	const C4TexMapEntry *pTex = ::TextureMap.GetEntry(iTex);
+	if (!pTex) return NULL;
+	// Return tex name
+	return String(pTex->GetTextureName());
+}
+
+static C4String *FnGetBackTexture(C4PropList * _this, long x, long y)
+{
+	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
+
+	// Get texture
+	int32_t iTex = PixCol2Tex(::Landscape.GetBackPix(x, y));
 	if (!iTex) return NULL;
 	// Get material-texture mapping
 	const C4TexMapEntry *pTex = ::TextureMap.GetEntry(iTex);
@@ -442,7 +462,7 @@ static bool FnGBackLiquid(C4PropList * _this, long x, long y)
 static bool FnGBackSky(C4PropList * _this, long x, long y)
 {
 	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
-	return !GBackIFT(x, y);
+	return Landscape.GetBackPix(x, y) == 0;
 }
 
 static long FnExtractMaterialAmount(C4PropList * _this, long x, long y, long mat, long amount, bool distant_first)
@@ -465,7 +485,7 @@ static C4Void FnBlastFree(C4PropList * _this, long iX, long iY, long iLevel, Nil
 	return C4Void();
 }
 
-static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iCustomFalloffDistance)
+static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iCustomFalloffDistance, long iPitch)
 {
 	// play here?
 	if (!iAtPlayer.IsNil())
@@ -490,12 +510,12 @@ static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, N
 		iX += pObj->GetX();
 		iY += pObj->GetY();
 	}
-	StartSoundEffectAt(FnStringPar(szSound),iX,iY,iLevel,iCustomFalloffDistance);
+	StartSoundEffectAt(FnStringPar(szSound), iX, iY, iLevel, iCustomFalloffDistance, iPitch);
 	// always return true (network safety!)
 	return true;
 }
 
-static bool FnSound(C4PropList * _this, C4String *szSound, bool fGlobal, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iLoop, long iCustomFalloffDistance)
+static bool FnSound(C4PropList * _this, C4String *szSound, bool fGlobal, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iLoop, long iCustomFalloffDistance, long iPitch)
 {
 	// play here?
 	if (!iAtPlayer.IsNil())
@@ -516,14 +536,26 @@ static bool FnSound(C4PropList * _this, C4String *szSound, bool fGlobal, Nillabl
 	// target object
 	C4Object *pObj = NULL;
 	if (!fGlobal) pObj = Object(_this);
-	// already playing?
-	if (iLoop >= 0 && GetSoundInstance(FnStringPar(szSound), pObj))
-		return false;
-	// try to play effect
+	// play/stop?
 	if (iLoop >= 0)
-		StartSoundEffect(FnStringPar(szSound),!!iLoop,iLevel,pObj, iCustomFalloffDistance);
+	{
+		// already playing?
+		C4SoundInstance *inst = GetSoundInstance(FnStringPar(szSound), pObj);
+		if (inst)
+		{
+			// then just update parameters
+			SoundUpdate(inst, iLevel, iPitch);
+		}
+		else
+		{
+			// try to play effect
+			StartSoundEffect(FnStringPar(szSound), !!iLoop, iLevel, pObj, iCustomFalloffDistance, iPitch);
+		}
+	}
 	else
-		StopSoundEffect(FnStringPar(szSound),pObj);
+	{
+		StopSoundEffect(FnStringPar(szSound), pObj);
+	}
 	// always return true (network safety!)
 	return true;
 }
@@ -646,12 +678,23 @@ static long FnMaterial(C4PropList * _this, C4String *mat_name)
 	return ::MaterialMap.Get(FnStringPar(mat_name));
 }
 
-C4Object* FnPlaceVegetation(C4PropList * _this, C4PropList * Def, long iX, long iY, long iWdt, long iHgt, long iGrowth)
+C4Object* FnPlaceVegetation(C4PropList * _this, C4PropList * Def, long iX, long iY, long iWdt, long iHgt, long iGrowth, C4PropList * shape)
 {
-	// Local call: relative coordinates
-	if (Object(_this)) { iX+=Object(_this)->GetX(); iY+=Object(_this)->GetY(); }
-	// Place vegetation
-	return Game.PlaceVegetation(Def,iX,iY,iWdt,iHgt,iGrowth);
+	if (shape)
+	{
+		// New-style call with scripted shape
+		C4PropList *out_pos = C4PropList::New(NULL);
+		C4Value vout_pos = C4VPropList(out_pos);
+		return Game.PlaceVegetation(Def, iX, iY, iWdt, iHgt, iGrowth, shape, out_pos);
+	}
+	else
+	{
+		// Call in old-style shape
+		// Local call: relative coordinates
+		if (Object(_this)) { iX += Object(_this)->GetX(); iY += Object(_this)->GetY(); }
+		// Place vegetation
+		return Game.PlaceVegetation(Def, iX, iY, iWdt, iHgt, iGrowth, NULL, NULL);
+	}
 }
 
 C4Object* FnPlaceAnimal(C4PropList * _this, C4PropList * Def)
@@ -1957,10 +2000,29 @@ static const int32_t DMQ_Sky = 0, // draw w/ sky IFT
                      DMQ_Sub = 1, // draw w/ tunnel IFT
                      DMQ_Bridge = 2; // draw only over materials you can bridge over
 
-static bool FnDrawMaterialQuad(C4PropList * _this, C4String *szMaterial, long iX1, long iY1, long iX2, long iY2, long iX3, long iY3, long iX4, long iY4, int draw_mode)
+static bool FnDrawMaterialQuad(C4PropList * _this, C4String *szMaterial, long iX1, long iY1, long iX2, long iY2, long iX3, long iY3, long iX4, long iY4, const C4Value& draw_mode)
 {
 	const char *szMat = FnStringPar(szMaterial);
-	return !! ::Landscape.DrawQuad(iX1, iY1, iX2, iY2, iX3, iY3, iX4, iY4, szMat, draw_mode == DMQ_Sub, draw_mode==DMQ_Bridge);
+
+	const char *szBackMat = NULL;
+	bool fBridge = false;
+	if (draw_mode.GetType() == C4V_Int)
+	{
+		// Default behaviour: Default background material
+		const int draw_mode_value = draw_mode.getInt();
+		switch(draw_mode_value)
+		{
+		case DMQ_Sky: break;
+		case DMQ_Sub: szBackMat = "Tunnel"; break; // TODO: Go via DefaultBkgMat
+		case DMQ_Bridge: fBridge = true; break;
+		}
+	}
+	else if (draw_mode.GetType() == C4V_String)
+	{
+		szBackMat = FnStringPar(draw_mode.getStr());
+	}
+
+	return !! ::Landscape.DrawQuad(iX1, iY1, iX2, iY2, iX3, iY3, iX4, iY4, szMat, szBackMat, fBridge);
 }
 
 static bool FnSetFilmView(C4PropList * _this, long iToPlr)
@@ -2629,7 +2691,9 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	AddFunc(pEngine, "SetCursor", FnSetCursor);
 	AddFunc(pEngine, "SetViewCursor", FnSetViewCursor);
 	AddFunc(pEngine, "GetMaterial", FnGetMaterial);
+	AddFunc(pEngine, "GetBackMaterial", FnGetBackMaterial);
 	AddFunc(pEngine, "GetTexture", FnGetTexture);
+	AddFunc(pEngine, "GetBackTexture", FnGetBackTexture);
 	AddFunc(pEngine, "GetAverageTextureColor", FnGetAverageTextureColor);
 	AddFunc(pEngine, "GetMaterialCount", FnGetMaterialCount);
 	AddFunc(pEngine, "GBackSolid", FnGBackSolid);

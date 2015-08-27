@@ -5,15 +5,25 @@
 	@author Armin, Win
 */
 
-private func Initialize()
+public func Construction()
 {
-	SetGraphics(Format("%d", Random(6)));
-	SetProperty("MeshTransformation", Trans_Mul(Trans_Scale(600 + Random(900)), Trans_Rotate(-25 + Random(50), 0, 1, 0)));
+	this.MeshTransformation = Trans_Rotate(Random(360), 0, 1, 0);
+	
+	var sibling = nil;
+	for (var bone in ["bone1", "bone2", "bone3"])
+	{
+		var transformation;
+		var rand = Random(2);
+		if (rand == 0) 
+			transformation = Trans_Rotate(RandomX(-20, 20), 1, 0, 0);
+		else if(rand == 1)
+			transformation = Trans_Rotate(RandomX(-20, 20), 0, 0, 1);
+		sibling = TransformBone(bone, transformation, 1, Anim_Const(1000), sibling);
+	}
 }
 
 private func Hit()
 {
-	//Sound();
 	RemoveObject();
 	return true;
 }
@@ -21,37 +31,64 @@ private func Hit()
 public func Place(int amount, proplist rectangle, proplist settings)
 {
 	// Only allow definition call.
-	if (this != Stalactite1)
+	if (GetType(this) != C4V_Def)
+	{
+		FatalError("Stalactite::Place must be called as a definition call!");
 		return;
+	}
 	// Default parameters.
-	if (!settings)
-		settings = { size = [100, 100] };
-	if (!settings.size)
-		settings.size = [100, 100];
 	var loc_area = nil;
 	if (rectangle)
 		loc_area = Loc_InRect(rectangle);
-	var loc_background = Loc_Tunnel();
-	if (settings.underground)
-		loc_background = Loc_Tunnel();
 
 	var stalactites = [];
 	for (var i = 0; i < amount; i++)
 	{
-		var size = RandomX(settings.size[0], settings.size[1]);
-		var loc = FindLocation(loc_background, Loc_Not(Loc_Liquid()), Loc_Wall(CNAT_Right), Loc_Wall(CNAT_Top), loc_area);
+		var loc = FindLocation(Loc_Tunnel(), Loc_Not(Loc_Liquid()), Loc_Wall(CNAT_Top), Loc_Space(40, true), loc_area);
 		if (!loc)
 			continue;
-		var mat = MaterialName(GetMaterial(loc.x, loc.y-30));
-		CreateStalactite(loc.x, loc.y + 25, mat);
-
-		// If possible, try to create a stalagmite below the stalactite.
-		if (Random(3))
+		var mat = MaterialName(GetMaterial(loc.x, loc.y - 1));
+		var stalactite = CreateStalactite(loc.x, loc.y - 2, mat);
+		
+		// Find the ground below and scale down in narrow tunnels.
+		var ground_y = nil;
+		for (var y = 10; y < 200; y += 10)
 		{
-			var xy = FindConstructionSite(Stalactite1, loc.x, loc.y+60);
-			if (xy)
-				if (MaterialName(GetMaterial(loc.x, xy[1] + 2 + 30)) == mat)
-					CreateStalactite(loc.x, xy[1]-28, mat, true);
+			if (!GBackSolid(loc.x, loc.y + y)) continue;
+			
+			// Search up and find actual surface.
+			var up = 0;
+			for (; up > -10; up -= 2)
+				if (!GBackSolid(loc.x, loc.y + y + up)) break;
+			
+			ground_y = loc.y + y + up;
+			break;
+		}
+		
+		var con = 100;
+		// Adjust size if there already is a stalactite very close.
+		if (ObjectCount(Find_AtPoint(loc.x, loc.y), Find_ID(this)) > 1)
+			con = RandomX(20, 50);
+			
+		var height;
+		if (ground_y)
+		{
+			height = ground_y - loc.y;
+			con = Min(con, BoundBy(100 * height / 60 / 2, 25, 100));
+			
+		}
+		
+		stalactite->SetCon(con, nil, true);
+		
+		// Create a stalagmite below?
+		if (ground_y && height > 70 && Random(3))
+		{
+			// And place!
+			if (MaterialName(GetMaterial(loc.x, ground_y + 2)) == mat)
+			{
+				var stalagmite = CreateStalactite(loc.x, ground_y + 2, mat, true);
+				stalagmite->SetCon(con);
+			}
 		}
 	}
 	return stalactites;
@@ -60,30 +97,52 @@ public func Place(int amount, proplist rectangle, proplist settings)
 private func CreateStalactite(int x, int y, string mat, bool stalagmite)
 {
 	var stalactite = CreateObject(Stalactite1, x, y);
-	var tinys = CreateObject(TinyStalactite, x, y - 22);
-	tinys->SetChild(stalactite);
 
 	// Ice stalactites are transparent and never use water sources.
 	if (mat == "Ice")
 	{
 		stalactite->SetClrModulation(RGBa(157, 202, 243, 160));
-		tinys->SetClrModulation(RGBa(157, 202, 243, 160));
 	}
 	else
 	{
-		stalactite->SetClrModulation(GetAverageTextureColor(mat));
-		tinys->SetClrModulation(GetAverageTextureColor(mat));
+		// Keep colour tone of the material, but increase lightness.
+		var colour = GetAverageTextureColor(mat);
+		if (colour != nil)
+		{
+			colour = RGB2HSL(colour);
+			var hue = (colour >> 16) & 0xff;
+			colour = HSL(hue, 100, 200);
+			stalactite->SetClrModulation(colour);
+		}
 		if (!stalagmite && Random(2))
-			tinys->DrawWaterSource();
+			stalactite->DrawWaterSource();
 	}
 
 	if (stalagmite)
 	{
 		stalactite->SetR(180);
-		tinys->SetPosition(x, y + 22);
-		tinys->SetR(180);
 	}
-	// todo stalactite->AdjustPosition();
+	
+	return stalactite;
+}
+
+private func DrawWaterSource()
+{
+	var xold = GetX();
+	var yold = GetY() - 2;
+	var xnew = xold;
+	var ynew = xnew;
+	for (var i = 0; i < RandomX(30, 140); i++)
+	{
+		ynew--;
+		xnew = xold + RandomX(-1, 1);
+		if (GBackSemiSolid(xnew-GetX(), ynew-GetY()))
+			DrawMaterialQuad("Water", xold,yold, xold+1,yold, xold+1,yold+1, xold,yold+1);	
+		else
+			return;
+		xold = xnew;
+		yold = ynew;
+	}
 }
 
 local Name = "$Name$";

@@ -1,0 +1,18 @@
+// Materials for Graphics
+
+material Bushy_Tree
+{
+	technique
+	{
+		pass
+		{
+			diffuse 0.80 0.80 0.80 1.00
+			
+			texture_unit
+			{
+				texture bushy.png
+			}
+		}
+	}
+}
+

@@ -271,8 +271,13 @@ global func FindLocationConditionCheckIsValid(flag, x, y)
 		var d1 = PathFree2(x, y, x + xd, y + yd);
 		var d2 = PathFree2(x, y, x - xd, y - yd);
 		var d = 0;
-		if (d1) d += Distance(x, y, d1[0], d1[1]);
-		if (d2) d += Distance(x, y, d2[0], d2[1]);
+		for (var hitpoint in [d1, d2])
+		{
+			if (hitpoint)
+				d += Distance(x, y, hitpoint[0], hitpoint[1]);
+			else // Obviously enough space already in one direction.
+				return true;
+		}
 		if (d >= flag[1]) return true;
 		return false;
 	}

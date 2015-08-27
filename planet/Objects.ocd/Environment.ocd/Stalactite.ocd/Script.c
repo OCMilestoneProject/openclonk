@@ -20,14 +20,36 @@ public func Construction()
 			transformation = Trans_Rotate(RandomX(-20, 20), 0, 0, 1);
 		sibling = TransformBone(bone, transformation, 1, Anim_Const(1000), sibling);
 	}
+	
+	AddTimer("DoWaterdrop", RandomX(36 * 10, 36 * 40));
 }
 
 private func Hit()
 {
-	Sound("Blast1");
+	var colour = GetClrModulation();
+	var particles = 
+	{
+		Size = PV_KeyFrames(0, 0, 0, 100, PV_Random(3, 5), 1000, 3),
+		R = (colour >> 16) & 0xff,
+		G = (colour >>  8) & 0xff,
+		B = (colour >>  0) & 0xff,
+		Alpha = PV_Linear(255, 0),
+		ForceY = PV_Gravity(100),
+		CollisionVertex = 0
+	};
+	
+	var width = GetCon() * 7 / 100;
+	var height = GetCon() * 60 / 100;
+	if (GetR() != 0) height *= -1;
+	
+	CreateParticle("SmokeDirty", PV_Random(-width, width), PV_Random(0, height), PV_Random(-5, 5), PV_Random(-5, 15), PV_Random(10, 60), particles, 200);
+	Sound("Rockfall*");
+
 	for (var i = 0; i < 4; i++)
 	{
-		var fragment = CreateObject(Rock);
+		var fragment = CreateObject(Rock, 0, height / 2, NO_OWNER);
+		fragment.Collectible = false;
+		fragment->SetController(GetController());
 		fragment->SetCon(50);
 		fragment->SetSpeed(RandomX(-15, 15), RandomX(-25, 10));
 		fragment->SetRDir(RandomX(-10, 10));
@@ -153,6 +175,12 @@ private func DrawWaterSource()
 		xold = xnew;
 		yold = ynew;
 	}
+}
+
+private func DoWaterdrop()
+{
+	if (Random(9)) return;
+	Sound("Waterdrop*");
 }
 
 local Name = "$Name$";

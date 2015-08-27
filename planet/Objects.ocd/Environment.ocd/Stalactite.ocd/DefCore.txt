@@ -1,5 +1,5 @@
 [DefCore]
-id=Stalactite1
+id=Stalactite
 Version=5,2,0,1
 Category=C4D_Object
 Width=15

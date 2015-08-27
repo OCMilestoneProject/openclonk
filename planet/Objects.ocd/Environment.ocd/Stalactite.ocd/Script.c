@@ -1,5 +1,5 @@
 /**
-	Stalactite1
+	Stalactite
 	Hangs from the ceiling
 
 	@author Armin, Win
@@ -96,7 +96,7 @@ public func Place(int amount, proplist rectangle, proplist settings)
 
 private func CreateStalactite(int x, int y, string mat, bool stalagmite)
 {
-	var stalactite = CreateObject(Stalactite1, x, y);
+	var stalactite = CreateObject(this, x, y);
 
 	// Ice stalactites are transparent and never use water sources.
 	if (mat == "Ice")

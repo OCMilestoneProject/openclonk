@@ -2,7 +2,7 @@
 	Stalactite
 	Hangs from the ceiling
 
-	@author Armin, Win
+	@author Armin, Win, Zapper
 */
 
 public func Construction()
@@ -24,6 +24,16 @@ public func Construction()
 
 private func Hit()
 {
+	Sound("Blast1");
+	for (var i = 0; i < 4; i++)
+	{
+		var fragment = CreateObject(Rock);
+		fragment->SetCon(50);
+		fragment->SetSpeed(RandomX(-15, 15), RandomX(-25, 10));
+		fragment->SetRDir(RandomX(-10, 10));
+		fragment->FadeOut(390, true);
+		fragment->SetClrModulation(this->GetClrModulation());
+	}
 	RemoveObject();
 	return true;
 }

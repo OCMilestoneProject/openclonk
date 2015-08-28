@@ -1,6 +1,6 @@
 /**
 	Ambience
-	Cares about the placement of purely visual objects.
+	Cares about the placement of purely visual objects and handles sound ambience
 	The placement uses categories and thus is forward-compatible.
 */
 
@@ -56,7 +56,7 @@ CreateEnvironmentObjects(["Desert", "BackgroundBirds"], Rectangle(0, 0, Landscap
 CreateEnvironmentObjects("Temperate", Rectangle(LandscapeWidth()/2, 0, LandscapeWidth()/2, LandscapeHeight()));
 */
 	what = what ?? "All";
-	area = area ?? Rectangle(0, 0, LandscapeWidth(), LandscapeHeight());
+	area = area ?? Shape->LandscapeRectangle();
 	amount_percentage = amount_percentage ?? 100;
 	
 	// might be a string to allow CreateEnvironmentObjects("All")
@@ -105,4 +105,24 @@ CreateEnvironmentObjects("Temperate", Rectangle(LandscapeWidth()/2, 0, Landscape
 		
 		p_id->Place(amount_percentage, area);
 	}
+}
+
+/* Sound ambience */
+
+local SoundModifier, CaveModifier;
+
+func ReleaseSoundModifier() { return ChangeSoundModifier(this, true); }
+func UpdateSoundModifier() { return ChangeSoundModifier(this, false); } // do not use
+
+func Definition()
+{
+	// Base sound modifier
+	SoundModifier = {
+		Release = Ambience.ReleaseSoundModifier,
+		Update = Ambience.UpdateSoundModifier,
+	};
+	// Modifiers for different ambiences
+	CaveModifier = new SoundModifier {
+		Type = C4SMT_Reverb,
+	};
 }

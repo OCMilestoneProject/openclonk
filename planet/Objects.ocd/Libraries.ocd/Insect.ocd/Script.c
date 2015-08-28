@@ -6,18 +6,17 @@
 	@author Clonkonaut
 --*/
 
-public func Place(int amount, proplist rectangle)
+public func Place(int amount, proplist area)
 {
 	// No calls to objects, only definitions
 	if (GetType(this) == C4V_C4Object) return;
 
-	if (!rectangle)
-		rectangle = Rectangle(0,0, LandscapeWidth(), LandscapeHeight());
+	if (!area) area = Shape->LandscapeRectangle();
 
 	var insects = CreateArray(), insect, position;
 	for (var i = 0 ; i < amount ; i++)
 	{
-		position = FindLocation(Loc_InRect(rectangle), Loc_Wall(CNAT_Bottom), Loc_Sky());
+		position = FindLocation(Loc_InArea(area), Loc_Wall(CNAT_Bottom), Loc_Sky());
 		if (position)
 		{
 			insect = CreateObjectAbove(this, position.x, position.y, NO_OWNER);
@@ -227,6 +226,9 @@ private func MoveToTarget()
 	// Priority is always to move to an interesting spot
 	if (!GetAttraction(coordinates))
 	{
+		// Insect may have died
+		if (!this || !GetAlive()) return;
+
 		if (!lib_insect_max_dist)
 			coordinates.x = Random(LandscapeWidth());
 		else
@@ -240,6 +242,9 @@ private func MoveToTarget()
 		}
 		coordinates.y = GetHorizonHeight(coordinates.x)- 30 - Random(60);
 	}
+	// Insect may have died
+	if (!this || !GetAlive()) return;
+
 	SetCommand("MoveTo", nil, coordinates.x, coordinates.y, nil, true);
 	AppendCommand("Call", this, nil,nil,nil,nil, "MissionComplete");
 }

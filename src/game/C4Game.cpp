@@ -86,6 +86,7 @@ static C4GameParameters GameParameters;
 static C4ScenarioParameterDefs GameScenarioParameterDefs;
 static C4ScenarioParameters GameStartupScenarioParameters;
 static C4RoundResults GameRoundResults;
+static C4Value GameGlobalSoundModifier;
 
 C4Game::C4Game():
 		ScenarioParameterDefs(GameScenarioParameterDefs),
@@ -101,7 +102,8 @@ C4Game::C4Game():
 		pFileMonitor(NULL),
 		pSec1Timer(new C4GameSec1Timer()),
 		fPreinited(false), StartupLogPos(0), QuitLogPos(0),
-		fQuitWithError(false)
+		fQuitWithError(false),
+		GlobalSoundModifier(GameGlobalSoundModifier)
 {
 	Default();
 }
@@ -226,8 +228,9 @@ bool C4Game::OpenScenario()
 #ifndef USE_CONSOLE
 #ifndef _DEBUG
 	if (C4S.Head.MissionAccess[0])
-		if (!SIsModule(Config.General.MissionAccess, C4S.Head.MissionAccess))
-			{ LogFatal(LoadResStr("IDS_PRC_NOMISSIONACCESS")); return false; }
+		if (!Application.isEditor)
+			if (!SIsModule(Config.General.MissionAccess, C4S.Head.MissionAccess))
+				{ LogFatal(LoadResStr("IDS_PRC_NOMISSIONACCESS")); return false; }
 #endif
 #endif
 
@@ -480,6 +483,9 @@ bool C4Game::Init()
 	// Gamma
 	pDraw->ApplyGamma();
 
+	// Sound modifier from savegames
+	if (GlobalSoundModifier) SetGlobalSoundModifier(GlobalSoundModifier._getPropList());
+
 	// Message board and upper board
 	if (!Application.isEditor)
 	{
@@ -603,6 +609,9 @@ void C4Game::Clear()
 
 	C4PropListNumbered::ClearShelve(); // may be nonempty if there was a fatal error during section load
 	ScriptEngine.Clear();
+	// delete any remaining prop lists from circular chains
+	C4PropListNumbered::ClearNumberedPropLists(); 
+	C4PropListScript::ClearScriptPropLists();
 	MainSysLangStringTable.Clear();
 	ScenarioLangStringTable.Clear();
 	CloseScenario();
@@ -614,6 +623,7 @@ void C4Game::Clear()
 	PlayerControlDefaultAssignmentSets.Clear();
 	PlayerControlDefs.Clear();
 	::MeshMaterialManager.Clear();
+	SetGlobalSoundModifier(NULL);
 	Application.SoundSystem.Init(); // clear it up and re-init it for startup menu use
 
 	// global fullscreen class is not cleared, because it holds the carrier window
@@ -1651,6 +1661,7 @@ void C4Game::CompileFunc(StdCompiler *pComp, CompileSettings comp, C4ValueNumber
 		pComp->Value(mkNamingAdapt(mkStringAdaptMA(CurrentScenarioSection),        "CurrentScenarioSection", ""));
 		pComp->Value(mkNamingAdapt(fResortAnyObject,      "ResortAnyObj",          false));
 		pComp->Value(mkNamingAdapt(iMusicLevel,           "MusicLevel",            100));
+		pComp->Value(mkNamingAdapt(mkParAdapt(GlobalSoundModifier, numbers),   "GlobalSoundModifier", C4Value()));
 		pComp->Value(mkNamingAdapt(NextMission,           "NextMission",           StdCopyStrBuf()));
 		pComp->Value(mkNamingAdapt(NextMissionText,       "NextMissionText",       StdCopyStrBuf()));
 		pComp->Value(mkNamingAdapt(NextMissionDesc,       "NextMissionDesc",       StdCopyStrBuf()));
@@ -2549,7 +2560,41 @@ bool C4Game::PlaceInEarth(C4ID id)
 	return false;
 }
 
-C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, int32_t iGrowth)
+static bool PlaceVegetation_GetRandomPoint(int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, C4PropList * shape_proplist, C4PropList * out_pos_proplist, int32_t *piTx, int32_t *piTy)
+{
+	// Helper for C4Game::PlaceVegetation: return random position in rectangle. Use shape_proplist if provided.
+	if (shape_proplist && out_pos_proplist)
+	{
+		C4AulParSet pars(C4VPropList(out_pos_proplist));
+		if (!shape_proplist->Call(P_GetRandomPoint, &pars)) return false;
+		*piTx = out_pos_proplist->GetPropertyInt(P_x);
+		*piTy = out_pos_proplist->GetPropertyInt(P_y);
+	}
+	else
+	{
+		*piTx = iX + Random(iWdt);
+		*piTy = iY + Random(iHgt);
+	}
+	return true;
+}
+
+static bool PlaceVegetation_IsPosInBounds(int32_t iTx, int32_t iTy, int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, C4PropList * shape_proplist)
+{
+	if (shape_proplist)
+	{
+		// check using shape proplist
+		C4AulParSet pars(C4VInt(iTx), C4VInt(iTy));
+		if (!shape_proplist->Call(P_IsPointContained, &pars)) return false;
+	}
+	else
+	{
+		// check using bounds rect
+		if (iTy < iY) return false;
+	}
+	return true;
+}
+
+C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, int32_t iGrowth, C4PropList * shape_proplist, C4PropList * out_pos_proplist)
 {
 	int32_t cnt,iTx,iTy,iMaterial;
 
@@ -2572,15 +2617,14 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 		for (cnt=0; cnt<20; cnt++)
 		{
 			// Random hit within target area
-			iTx=iX+Random(iWdt); iTy=iY+Random(iHgt);
-			// Above IFT
-			while ((iTy>0) && GBackIFT(iTx,iTy)) iTy--;
-			// Still inside bounds
-			if (iTy < iY)
-				continue;
+			if (!PlaceVegetation_GetRandomPoint(iX, iY, iWdt, iHgt, shape_proplist, out_pos_proplist, &iTx, &iTy)) break;
+			// Above tunnel
+			while ((iTy>0) && Landscape.GetBackPix(iTx,iTy) == 0) iTy--;
 			// Above semi solid
 			if (!AboveSemiSolid(iTx,iTy) || !Inside<int32_t>(iTy,50,GBackHgt-50))
 				continue;
+			// Still inside bounds?
+			if (!PlaceVegetation_IsPosInBounds(iTx, iTy, iX, iY, iWdt, iHgt, shape_proplist)) continue;
 			// Free above
 			if (GBackSemiSolid(iTx,iTy-pDef->Shape.Hgt) || GBackSemiSolid(iTx,iTy-pDef->Shape.Hgt/2))
 				continue;
@@ -2601,7 +2645,7 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 		// Underwater
 	case C4D_Place_Liquid:
 		// Random range
-		iTx=iX+Random(iWdt); iTy=iY+Random(iHgt);
+		if (!PlaceVegetation_GetRandomPoint(iX, iY, iWdt, iHgt, shape_proplist, out_pos_proplist, &iTx, &iTy)) return NULL;
 		// Find liquid
 		if (!FindSurfaceLiquid(iTx,iTy,pDef->Shape.Wdt,pDef->Shape.Hgt))
 			if (!FindLiquid(iTx,iTy,pDef->Shape.Wdt,pDef->Shape.Hgt))
@@ -2609,6 +2653,8 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 		// Liquid bottom
 		if (!SemiAboveSolid(iTx,iTy)) return NULL;
 		iTy+=3;
+		// Still inside bounds?
+		if (!PlaceVegetation_IsPosInBounds(iTx, iTy, iX, iY, iWdt, iHgt, shape_proplist)) return NULL;
 		// Create object
 		return CreateObjectConstruction(PropList,NULL,NO_OWNER,iTx,iTy,iGrowth);
 		break;
@@ -2618,12 +2664,14 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 		for (cnt=0; cnt<5; cnt++)
 		{
 			// Random range
-			iTx=iX+Random(iWdt); iTy=iY+Random(iHgt);
+			if (!PlaceVegetation_GetRandomPoint(iX, iY, iWdt, iHgt, shape_proplist, out_pos_proplist, &iTx, &iTy)) break;
 			// Find tunnel
 			if (!FindTunnel(iTx,iTy,pDef->Shape.Wdt,pDef->Shape.Hgt))
 				continue;
 			// Tunnel bottom
 			if (!AboveSemiSolid(iTx,iTy)) continue;
+			// Still inside bounds?
+			if (!PlaceVegetation_IsPosInBounds(iTx, iTy, iX, iY, iWdt, iHgt, shape_proplist)) continue;
 			// Soil check
 			iTy+=3; // two pix into ground
 			iMaterial = GBackMat(iTx,iTy);
@@ -2640,12 +2688,15 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 		for (cnt=0; cnt<20; cnt++)
 		{
 			// Random hit within target area
-			iTx=iX+Random(iWdt); iTy=iY+Random(iHgt);
+			if (!PlaceVegetation_GetRandomPoint(iX, iY, iWdt, iHgt, shape_proplist, out_pos_proplist, &iTx, &iTy)) break;
 			// Above semi solid
 			if (!AboveSemiSolid(iTx,iTy) || !Inside<int32_t>(iTy,50,GBackHgt-50))
 				continue;
 			// Free above
 			if (GBackSemiSolid(iTx,iTy-pDef->Shape.Hgt) || GBackSemiSolid(iTx,iTy-pDef->Shape.Hgt/2))
+				continue;
+			// Still inside bounds?
+			if (!PlaceVegetation_IsPosInBounds(iTx, iTy, iX, iY, iWdt, iHgt, shape_proplist))
 				continue;
 			// Free upleft and upright
 			if (GBackSemiSolid(iTx-pDef->Shape.Wdt/2,iTy-pDef->Shape.Hgt*2/3) || GBackSemiSolid(iTx+pDef->Shape.Wdt/2,iTy-pDef->Shape.Hgt*2/3))
@@ -2729,7 +2780,7 @@ void C4Game::InitVegetation()
 	// Place vegetation
 	if (vidnum>0)
 		for (cnt=0; cnt<amt; cnt++)
-			PlaceVegetation(C4Id2Def(vidlist[Random(vidnum)]),0,0,GBackWdt,GBackHgt,-1);
+			PlaceVegetation(C4Id2Def(vidlist[Random(vidnum)]),0,0,GBackWdt,GBackHgt,-1,NULL,NULL);
 }
 
 void C4Game::InitAnimals()
@@ -2787,14 +2838,14 @@ bool C4Game::LoadAdditionalSystemGroup(C4Group &parent_group)
 	char fn[_MAX_FNAME+1] = { 0 };
 	if (SysGroup.OpenAsChild(&parent_group, C4CFN_System))
 	{
-		C4LangStringTable SysGroupString;
-		C4Language::LoadComponentHost(&SysGroupString, SysGroup, C4CFN_ScriptStringTbl, Config.General.LanguageEx);
+		C4LangStringTable *pSysGroupString = new C4LangStringTable();
+		C4Language::LoadComponentHost(pSysGroupString, SysGroup, C4CFN_ScriptStringTbl, Config.General.LanguageEx);
 		// load custom scenario control definitions
 		if (SysGroup.FindEntry(C4CFN_PlayerControls))
 		{
 			Log("[!]Loading local scenario player control definitions...");
 			C4PlayerControlFile PlayerControlFile;
-			if (!PlayerControlFile.Load(SysGroup, C4CFN_PlayerControls, &SysGroupString))
+			if (!PlayerControlFile.Load(SysGroup, C4CFN_PlayerControls, pSysGroupString))
 			{
 				// non-fatal error here
 				Log("[!]Error loading scenario defined player controls");
@@ -2814,12 +2865,14 @@ bool C4Game::LoadAdditionalSystemGroup(C4Group &parent_group)
 			// host will be destroyed by script engine, so drop the references
 			C4ScriptHost *scr = new C4ExtraScriptHost();
 			scr->Reg2List(&ScriptEngine);
-			scr->Load(SysGroup, fn, Config.General.LanguageEx, &SysGroupString);
+			scr->Load(SysGroup, fn, Config.General.LanguageEx, pSysGroupString);
 		}
 		// if it's a physical group: watch out for changes
 		if (!SysGroup.IsPacked() && Game.pFileMonitor)
 			Game.pFileMonitor->AddDirectory(SysGroup.GetFullName().getData());
 		SysGroup.Close();
+		// release string table if no longer used
+		pSysGroupString->DelRef();
 	}
 	return true;
 }
@@ -2851,7 +2904,7 @@ bool C4Game::InitKeyboard()
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F5,   KEYS_Control), "DbgModeToggle",          KEYSCOPE_Generic,    new C4KeyCB  <C4Game>          (*this, &C4Game::ToggleDebugMode)));
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F6,   KEYS_Control), "DbgShowVtxToggle",       KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShowVertices)));
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F7,   KEYS_Control), "DbgShowActionToggle",    KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShowAction)));
-	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F8,   KEYS_Control), "DbgShowSolidMaskToggle", KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShowSolidMask)));
+	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F8,   KEYS_Control), "DbgShow8BitSurface", KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShow8BitSurface)));
 
 	// video recording - improve...
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_ADD,      KEYS_Alt), "VideoEnlarge",           KEYSCOPE_Generic,    new C4KeyCB  <C4Video>         (GraphicsSystem.Video, &C4Video::Enlarge)));
@@ -3662,4 +3715,21 @@ void C4Game::SetDefaultGamma()
 		else
 			pDraw->SetGamma(0x000000, 0x808080, 0xffffff, iRamp);
 	}
+}
+
+void C4Game::SetGlobalSoundModifier(C4PropList *new_modifier)
+{
+	// set in prop list (for savegames) and in sound system::
+	C4SoundModifier *mod;
+	if (new_modifier)
+	{
+		GlobalSoundModifier.SetPropList(new_modifier);
+		mod = ::Application.SoundSystem.Modifiers.Get(new_modifier, true);
+	}
+	else
+	{
+		GlobalSoundModifier.Set0();
+		mod = NULL;
+	}
+	::Application.SoundSystem.Modifiers.SetGlobalModifier(mod, NO_OWNER);
 }

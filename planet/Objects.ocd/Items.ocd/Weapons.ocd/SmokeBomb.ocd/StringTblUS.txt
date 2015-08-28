@@ -1,2 +1,3 @@
-Name=Rock
-Description=Basic construction material and weapon.
+Name=Smoke bomb
+Description=Spreads smoke.
+UsageHelp=Ignite to start spreading smoke.

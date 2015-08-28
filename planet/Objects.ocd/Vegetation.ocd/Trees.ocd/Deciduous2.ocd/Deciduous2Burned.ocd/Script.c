@@ -1,4 +1,4 @@
-/*-- Bushy Burned Tree --*/
+/*-- Another Burned Deciduous Tree --*/
 
 #include Library_Plant
 #include Library_Tree

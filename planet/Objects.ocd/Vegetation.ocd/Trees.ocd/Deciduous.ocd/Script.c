@@ -1,4 +1,4 @@
-/*-- Coniferous Tree --*/
+/*-- Deciduous Tree --*/
 
 #include Library_Plant
 #include Library_Tree
@@ -8,6 +8,11 @@ private func SeedArea() { return 400; }
 private func SeedAmount() { return 10; }
 
 local lib_tree_burned = Tree_Coniferous_Burned;
+
+public func GetTreetopPosition(pos)
+{
+	return Shape->Rectangle(-28,-20, 46,40)->GetRandomPoint(pos);
+}
 
 local Name = "$Name$";
 local Touchable = 0;

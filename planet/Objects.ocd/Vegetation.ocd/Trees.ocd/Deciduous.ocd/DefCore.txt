@@ -1,13 +1,13 @@
 [DefCore]
-id=Tree_Dec1
+id=Tree_Deciduous
 Version=6,1
 Category=C4D_StaticBack
 Width=46
-Height=65
-Offset=-30,-55
+Height=70
+Offset=-23,-35
 Vertices=9
 VertexX=0,0,0,0,0,0,0,0,0
-VertexY=45,30,20,10,0,-10,-20,-30,-45
+VertexY=35,28,20,10,0,-10,-20,-25,-30
 VertexCNAT=8,16,16,16,16,16,16,16,4
 VertexFriction=50,50,25,25,25,25,50,50,50
 Components=Wood=5

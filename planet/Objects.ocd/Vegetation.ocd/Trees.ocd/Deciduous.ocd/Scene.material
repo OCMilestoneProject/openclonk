@@ -16,7 +16,7 @@ material DecTreeMat
 			
 			texture_unit
 			{
-				texture decTreeDiff.png
+				texture deciduous.png
 				tex_address_mode wrap
 				filtering trilinear
 			}

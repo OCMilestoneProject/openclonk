@@ -1,0 +1,354 @@
+/*
+	LavaCore
+	The lava high life
+
+	Moves rythmically, spews lava, acts as platform
+	@Win
+*/
+
+local Name = "$Name$";
+local Plane = 50;
+local Description = "$Description$";
+
+// time is in frames
+
+local shell;
+
+local fossilized = 0;
+
+local move_vectorX = 0;
+local move_vectorY = 0;
+local move_speed = 10; // bear in  mind this is also multiplied by a random factor
+local move_random_dir = 3; // max random multiplier
+
+local move_interval = 50;
+local move_timer = 0;
+
+local move_surface_interval = 500;
+local move_surface_timer = 0;
+
+local stay_surface_time = 300;
+local stay_surface_timer = 0;
+local surfaced = 0;
+
+local shoot_interval = 4;
+local shoot_timer = 0;
+
+local out_of_lava_survive_time = 100;
+local out_of_lava_survive_timer = 0;
+
+//local shell_rotation;
+
+func Initialize()
+{
+	shell = CreateObjectAbove(LavaCoreShell);
+	shell->InitAttach(this);
+	SetAction("Swim");
+	SetComDir(COMD_None);
+	AddEffect("CoreBehaviour",this,1,1,this);
+}
+
+protected func FxCoreBehaviourTimer(object target, effect, int time)
+{
+	// when not surfacing normally, check if still swimming in lava. If not, turn to stone
+	var mat = MaterialName(GetMaterial(0, -3));
+	if(!surfaced)
+		if(mat != "Lava" && mat != "DuroLava")
+		{
+			out_of_lava_survive_timer++;
+			if(out_of_lava_survive_timer >= out_of_lava_survive_time)
+			{
+				Fossilize();
+			}
+			else
+				ContactTop();
+		}
+		else
+		{
+		out_of_lava_survive_timer = 0;
+		if(fossilized)
+			{
+				Revive();
+			}
+		}
+	
+	if(fossilized)
+		{
+		return -1;
+		}
+	
+	// todo: grow when not fully grown
+	// ...
+	
+	if(surfaced)
+	{
+		// Search for Clonks and other animals to fry
+		var prey = FindObject(Find_OCF(OCF_Alive), Find_Distance(55));
+		
+		if(prey != nil && prey->GetID() != LavaCore)
+		{
+			StopRotateShellToTop();
+			if(PathFree(GetX(), GetY(), prey->GetX(), prey->GetY()))
+			{
+				shoot_timer++;
+				if(shoot_timer >= shoot_interval)
+				{
+					AttackTarget(prey);
+				}
+				StopRotateShell();
+			}
+			else
+			{
+				StartRotateShell();
+			}
+		}
+		else
+			StartRotateShellToTop();
+		
+		// Stay still while surfaced
+		SetYDir(0);
+		SetXDir(0);
+		
+		// dive back down when time is up
+		stay_surface_timer++;
+		
+		if(stay_surface_timer >= stay_surface_time)
+		{
+			surfaced = 0;
+			move_surface_timer = 0;
+			stay_surface_timer = 0;
+			
+			ContactTop();
+		}
+	}
+	else
+	{
+		move_surface_timer++;
+		
+		// periodically surfaces
+		if(move_surface_timer >= move_surface_interval)
+		{
+			move_vectorX = 0;
+			move_vectorY = -1;
+			
+			MoveImpulse();
+			
+			if(mat == "Tunnel" || mat == nil)
+			{
+				surfaced = 1;
+			}
+			else
+				surfaced = 0;
+		}
+		else
+		{
+			move_timer++;
+			if(move_timer >= move_interval)
+			{
+				move_vectorX = RandomX(-1, 1);
+				move_vectorY = RandomX(-1, 1);
+			
+				MoveImpulse();
+			}
+			
+			// when detecting other Lavacores, swim in opposite directions. This keeps them spread evenly in a body of lava.
+			
+			var rival = FindObject(Find_ID(LavaCore), Find_Distance(90));
+			if(rival != nil && rival != this)
+				if(PathFree(GetX(), GetY(), rival->GetX(), rival->GetY()))
+				{
+					// Sync up surfacing times sometimes, other times, reset counter
+					if(!Random(2))
+						move_surface_timer = rival.move_surface_timer;
+					else
+						move_surface_timer = 0;
+						
+					if(rival->GetX() > GetX())
+						move_vectorX = -1;
+					else
+						move_vectorX = 1;
+					if(rival->GetY() > GetY())
+						move_vectorY = 1;
+					else
+						move_vectorY = -1;
+				
+					MoveImpulse();
+				}
+			
+			// dampen movement
+			if(GetXDir() > 0)
+				SetXDir(GetXDir() - 1);
+			else
+				SetXDir(GetXDir() + 1);
+			if(GetYDir() > 0)
+				SetYDir(GetYDir() - 1);
+			else
+				SetYDir(GetYDir() + 1);
+		}
+	}
+}
+
+/*
+	Starts and stops rotating the shell towards an enemy
+*/
+protected func StartRotateShell()
+{
+	shell->StartRotation();
+}
+
+protected func StopRotateShell()
+{
+	shell->StopRotation();
+}
+
+/*
+	Starts and stops rotating the shell over the top of the core when surfacing
+*/
+
+protected func StartRotateShellToTop()
+{
+	shell->StartRotationToTop();
+}
+
+protected func StopRotateShellToTop()
+{
+	shell->StopRotationToTop();
+}
+
+/*
+	Causes the object to move 
+*/
+protected func MoveImpulse()
+{
+	move_timer = 0;
+	// If we are being obstructed by the landscape while rising to the surface we have to wiggle a little
+	if(IsSurfacing() && GetContact(-1) & CNAT_Left)
+		{
+		move_vectorX = RandomX(-1, 1);
+		move_vectorY = 1;
+		}
+	if(IsSurfacing() && GetContact(-1) & CNAT_Right)
+		{
+		move_vectorX = -1;
+		move_vectorY = RandomX(-1, 1);
+		}
+	// Contact at top? We probably are in a cave or something, cancel the surfacing
+	if(IsSurfacing() && GetContact(-1) & CNAT_Top)
+		{
+		move_surface_timer = 0;
+		ContactTop();
+		return -1;
+		}
+	
+	
+	SetXDir(move_vectorX * move_speed * RandomX(1, move_random_dir));
+	SetYDir(move_vectorY * move_speed * RandomX(1, move_random_dir));
+	
+	shell->StartQuickRotation();
+}
+
+public func IsSurfacing()
+{
+	return move_surface_timer >= move_surface_interval;
+}
+
+protected func UpdateSwim()
+{
+	
+}
+
+// todo: animation when turning
+
+/*
+	Shoots Fx_MagmaBubbles at the victim ):
+*/
+
+protected func AttackTarget(object prey)
+{
+	var bubble = CreateObject(Fx_MagmaBubble);
+	bubble->SetXDir(prey->GetX() - GetX());
+	bubble->SetYDir(prey->GetY() - GetY());
+	bubble->DoCon(35);
+	shoot_timer = 0;
+}
+
+protected func ContactBottom()
+{
+	move_vectorX = RandomX(-1, 1);
+	move_vectorY = -1;
+	
+	MoveImpulse();
+}
+
+protected func ContactTop()
+{
+	move_vectorX = RandomX(-1, 1);
+	move_vectorY = 1;
+	
+	MoveImpulse();
+}
+
+protected func ContactLeft()
+{
+	move_vectorX = RandomX(-1, 1);
+	move_vectorY = 1;
+	
+	MoveImpulse();
+}
+
+protected func ContactRight()
+{
+	move_vectorX = -1;
+	move_vectorY = RandomX(-1, 1);
+	
+	MoveImpulse();
+}
+
+protected func Death()
+{
+	Explode(40);
+}
+
+/*
+	Called when the object was out of its lava pool for too long
+*/
+protected func Fossilize()
+{
+	fossilized = 1;
+}
+
+protected func Revive()
+{
+	fossilized = 0;
+}
+
+local ActMap = {
+
+Swim = {
+	Prototype = Action,
+	Name = "Swim",
+	Procedure = DFA_SWIM,
+	Speed = 100,
+	Accel = 16,
+	Decel = 16,
+	Length = 1,
+	Delay = 0,
+	FacetBase=1,
+	NextAction = "Swim",
+	StartCall = "UpdateSwim"
+},
+Dead = {
+	Prototype = Action,
+	Name = "Dead",
+	Procedure = DFA_NONE,
+	Speed = 10,
+	Length = 1,
+	Delay = 0,
+	FacetBase=1,
+	Directions = 2,
+	FlipDir = 1,
+	NextAction = "Hold",
+	NoOtherAction = 1,
+	ObjectDisabled = 1,
+}
+};

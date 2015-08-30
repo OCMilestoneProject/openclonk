@@ -33,7 +33,7 @@ public func GetChance()
 
 protected func FxIntMeteorControlTimer(object target, proplist effect, int time)
 {
-	if (Random(100) < effect.chance && !Random(10))
+	if (Random(100) < effect.chance /*&& !Random(10)*/)
 	{
 		// Launch a meteor.
 		var meteor = CreateObjectAbove(AlienMeteor);
@@ -73,7 +73,7 @@ public func Launch(int x, int y, int size, int xdir, int ydir, id spawn)
 	SetYDir(ydir);
 	// Set random rotation.
 	//SetR(Random(360));
-	SetRDir(RandomX(-1, 1));
+	//SetRDir(RandomX(-1, 1));
 	// Safety check.
 	if (!IsLaunchable())
 		return false;
@@ -81,6 +81,10 @@ public func Launch(int x, int y, int size, int xdir, int ydir, id spawn)
 	spawnID = spawn;
 	// Set right action.
 	AddEffect("IntMeteor", this, 100, 1, this);
+	
+	SetLightRange(1000, 4000);
+	
+	
 	return true;
 }
 
@@ -104,32 +108,14 @@ protected func FxIntMeteorTimer()
 	// Smoke trail.
 	CreateParticle("Smoke", PV_Random(-2, 2), PV_Random(-2, 2), PV_Random(-3, 3), PV_Random(-3, 3), 30 + Random(60), Particles_SmokeTrail(), 5);
 	// Fire trail.
-	var trail = 
-	{
-		R = 255,
-		B = 255,
-		G = 255,
-		Alpha = 230,
-		Size = size/3,
-		Stretch = 1000,
-		Phase = 0,
-		Rotation = 0,
-		ForceX = -GetXDir(),
-		ForceY = -GetYDir(),
-		DampingX = 1000,
-		DampingY = 1000,
-		BlitMode = GFX_BLIT_Additive,
-		CollisionVertex = 0,
-		OnCollision = PC_Die(),
-		Attach = ATTACH_Front | ATTACH_MoveRelative
-	};
+	
 	var fire = 
 	{
 		R = 255,
 		B = 255,
 		G = 255,
-		Alpha = 100,
-		Size = 15,
+		Alpha = PV_Linear(255,0),
+		Size = PV_Linear(30,150),
 		Stretch = 1000,
 		Phase = 0,
 		Rotation = -GetR() + RandomX(-15,15),
@@ -142,20 +128,76 @@ protected func FxIntMeteorTimer()
 		OnCollision = PC_Die(),
 		Attach = nil
 	};
-
-	CreateParticle("BlueFireTrail", RandomX(-1,1), -15, 0, 0, 1000, trail, 1);
+	var sparkright = 
+	{
+		R = 255,
+		B = 255,
+		G = 255,
+		Alpha = PV_KeyFrames(0, 0, 0, 500, 255, 1000, 0),
+		Size = PV_Linear(20,100),
+		Stretch = 1000,
+		Phase = 0,
+		Rotation = 60 + RandomX(-10,10),
+		ForceX = 0,
+		ForceY = 0,
+		DampingX = 1000,
+		DampingY = 1000,
+		BlitMode = GFX_BLIT_Additive,
+		CollisionVertex = 0,
+		OnCollision = PC_Die(),
+		Attach = ATTACH_Back | ATTACH_MoveRelative
+	};
+	var sparkleft = 
+	{
+		R = 255,
+		B = 255,
+		G = 255,
+		Alpha = PV_KeyFrames(0, 0, 0, 500, 255, 1000, 0),
+		Size = PV_Linear(30,100),
+		Stretch = 1000,
+		Phase = 0,
+		Rotation = -60 + RandomX(-10,10),
+		ForceX = 0,
+		ForceY = 0,
+		DampingX = 1000,
+		DampingY = 1000,
+		BlitMode = GFX_BLIT_Additive,
+		CollisionVertex = 0,
+		OnCollision = PC_Die(),
+		Attach = ATTACH_Back | ATTACH_MoveRelative
+	};
+	var trail = 
+	{
+		R = 255,
+		B = 255,
+		G = 255,
+		Alpha = PV_Linear(255,0),
+		Size = GetCon()/3,
+		Stretch = 1000,
+		Phase = 0,
+		Rotation = 0,
+		ForceX = 0,
+		ForceY = 0,
+		DampingX = 1000,
+		DampingY = 1000,
+		BlitMode = GFX_BLIT_Additive,
+		CollisionVertex = 0,
+		OnCollision = PC_Die(),
+		Attach = ATTACH_Front | ATTACH_MoveRelative
+	};
+	
+	CreateParticle("BlueFireTrail", RandomX(-1,1), -15, 0, -GetYDir(), 7, trail, 1);
+	
+	CreateParticle("BlueSpark", 10, 15, 100 + GetXDir(), -GetYDir(), 20, sparkright, 1);
+	CreateParticle("BlueSpark", -10, 15, -100 + GetXDir(), -GetYDir(), 20, sparkleft, 1);
 		
-	for(var i = 0; i < 40; i++)
+	for(var i = 0; i < 4; i++)
 		{
-		CreateParticle("BlueFire", RandomX(-10,10), RandomX(-20,-35), 0, 0, 70, fire, 1);
+		CreateParticle("BlueFire", RandomX(-8,8), RandomX(-15,-35), 0, 0, 30, fire, 1);
 		}
 	//CreateParticle("MagicSpark", 0, 0, PV_Random(-20, 20), PV_Random(-20, 20), 16, Particles_SparkFire(), 4);
 	
 	// Sound.
-
-	// Burning and friction decrease size.
-	if (size > 10 && !Random(5))
-		DoCon(-1);
 
 	return 1;
 }

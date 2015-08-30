@@ -6,7 +6,7 @@
 */
 
 local Name = "$Name$";
-local Plane = 250;
+local Plane = 500;
 local Description = "$Description$";
 
 local rota_interval = 2;

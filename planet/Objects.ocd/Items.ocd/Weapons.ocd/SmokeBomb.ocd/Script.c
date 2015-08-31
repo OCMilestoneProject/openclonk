@@ -59,7 +59,7 @@ protected func FxIntSmokeBombStart(object target, proplist effect, int temp)
 		ForceY = PV_Random(-2, 2),
 		DampingX = PV_Linear(PV_Random(900, 1000), 500),
 		DampingY = PV_Linear(PV_Random(900, 1000), 500),
-		Rotation = RandomX(-7, 7),
+		Rotation = PV_Random(-3, 3),
 		Size = PV_KeyFrames(0, 0, 4, 100, 12, 1000, 32),
 		Phase = PV_Random(0, 15)
 	};

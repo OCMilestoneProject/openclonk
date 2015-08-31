@@ -13,9 +13,9 @@ public func SetChance(int chance, id spawnobject)
 {
 	if (this != AlienMeteor)
 		return;
-	var effect = GetEffect("IntMeteorControl");
+	var effect = GetEffect("IntAlienMeteorControl");
 	if (!effect)
-	 	effect = AddEffect("IntMeteorControl", nil, 100, 20, nil, AlienMeteor);
+	 	effect = AddEffect("IntAlienMeteorControl", nil, 100, 20, nil, AlienMeteor);
 	effect.chance = chance;
 	effect.spawn = spawnobject;
 	return;
@@ -25,13 +25,13 @@ public func GetChance()
 {
 	if (this != AlienMeteor)
 		return;
-	var effect = GetEffect("IntMeteorControl");
+	var effect = GetEffect("IntAlienMeteorControl");
 	if (effect)
 		return effect.chance;
 	return;
 }
 
-protected func FxIntMeteorControlTimer(object target, proplist effect, int time)
+protected func FxIntAlienMeteorControlTimer(object target, proplist effect, int time)
 {
 	if (Random(100) < effect.chance /*&& !Random(10)*/)
 	{
@@ -48,7 +48,7 @@ protected func FxIntMeteorControlTimer(object target, proplist effect, int time)
 }
 
 // Scenario saving
-func FxIntMeteorControlSaveScen(obj, fx, props)
+func FxIntAlienMeteorControlSaveScen(obj, fx, props)
 {
 	props->Add("AlienMeteor", "AlienMeteor->SetChance(%d)", fx.chance);
 	return true;
@@ -71,9 +71,6 @@ public func Launch(int x, int y, int size, int xdir, int ydir, id spawn)
 	// Set the initial velocity.
 	SetXDir(xdir);
 	SetYDir(ydir);
-	// Set random rotation.
-	//SetR(Random(360));
-	//SetRDir(RandomX(-1, 1));
 	// Safety check.
 	if (!IsLaunchable())
 		return false;
@@ -81,9 +78,9 @@ public func Launch(int x, int y, int size, int xdir, int ydir, id spawn)
 	spawnID = spawn;
 	// Set right action.
 	AddEffect("IntMeteor", this, 100, 1, this);
-	
-	SetLightRange(1000, 4000);
-	
+	// Emits light
+	SetLightRange(400, 100);
+	SetLightColor(RGB(100, 254, 255));
 	
 	return true;
 }
@@ -105,10 +102,7 @@ protected func FxIntMeteorTimer()
 	var ydir = GetYDir(100);
 	ydir -= size * ydir ** 2 / 11552000; // Magic number.
 	SetYDir(ydir, 100);
-	// Smoke trail.
-	CreateParticle("Smoke", PV_Random(-2, 2), PV_Random(-2, 2), PV_Random(-3, 3), PV_Random(-3, 3), 30 + Random(60), Particles_SmokeTrail(), 5);
 	// Fire trail.
-	
 	var fire = 
 	{
 		R = 255,
@@ -195,7 +189,6 @@ protected func FxIntMeteorTimer()
 		{
 		CreateParticle("BlueFire", RandomX(-8,8), RandomX(-15,-35), 0, 0, 30, fire, 1);
 		}
-	//CreateParticle("MagicSpark", 0, 0, PV_Random(-20, 20), PV_Random(-20, 20), 16, Particles_SparkFire(), 4);
 	
 	// Sound.
 
@@ -204,25 +197,13 @@ protected func FxIntMeteorTimer()
 
 protected func Hit(int xdir, int ydir)
 {
-	var size = 10 + GetCon();
-	var speed2 = 20 + (xdir ** 2 + ydir ** 2) / 10000;
-	// Some fire sparks.
-	var particles =
-	{
-		Prototype = Particles_Fire(),
-		Attach = nil
-	};
-	//CreateParticle("Fire", PV_Random(-size / 4, size / 4), PV_Random(-size / 4, size / 4), PV_Random(-size/4, size/4), PV_Random(-size/4, size/4), 30, particles, 20 + size);
-	// Explode meteor, explode size scales with the energy of the meteor.	
-	var dam = size * speed2 / 500;
-	dam = BoundBy(size/2, 5, 30);
 	CreateObjectAbove(spawnID, 0, 0, GetOwner());
-	Explode(dam);
+	Explode(45);
 	return;
 }
 
 // Scenario saving
-func FxIntMeteorSaveScen(obj, fx, props)
+func FxIntAlienMeteorSaveScen(obj, fx, props)
 {
 	props->AddCall("AlienMeteor", obj, "AddEffect", "\"IntMeteor\"", obj, 100, 1, obj);
 	return true;

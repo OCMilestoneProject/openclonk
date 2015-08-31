@@ -33,7 +33,7 @@ public func GetChance()
 
 protected func FxIntAlienMeteorControlTimer(object target, proplist effect, int time)
 {
-	if (Random(100) < effect.chance /*&& !Random(10)*/)
+	if (Random(100) < effect.chance && !Random(10))
 	{
 		// Launch a meteor.
 		var meteor = CreateObjectAbove(AlienMeteor);

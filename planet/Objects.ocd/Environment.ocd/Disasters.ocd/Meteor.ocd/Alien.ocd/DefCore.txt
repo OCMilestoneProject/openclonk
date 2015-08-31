@@ -1,5 +1,5 @@
 [DefCore]
-id=AlienMeteor
+id=Meteor_Alien
 Version=6,0
 Category=C4D_Object|C4D_Environment
 Width=27

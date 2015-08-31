@@ -57,6 +57,8 @@ private func FxIntMeteorControlStart(object target, effect fx, temp, id spawn_id
 	fx.spawn_amount = spawn_amount;
 }
 
+
+
 private func FxIntMeteorControlTimer(object target, effect fx, int time)
 {
 	if (Random(100) < fx.chance && !Random(10))
@@ -120,6 +122,9 @@ public func OnAfterLaunch()
 	// Set random rotation.
 	SetR(Random(360));
 	SetRDir(RandomX(-10, 10));
+	// Emit light
+	SetLightRange(300, 100);
+	SetLightColor(RGB(100, 230, 120));
 	// Set right action.
 	AddEffect("IntMeteor", this, 100, 1, this);
 }
@@ -134,7 +139,55 @@ private func IsLaunchable()
 	return true;
 }
 
-protected func FxIntMeteorTimer()
+private func FxIntMeteorStart(object target, effect fx, bool temp)
+{
+	if (temp) return;
+	fx.smoketrail = 
+	{
+		R = 255,
+		B = PV_KeyFrames(0,  0,100,    30,0,  100,255, 1000,255),
+		G = PV_KeyFrames(0,  0,150,  30,0, 100,255, 1000,255),
+		
+		Alpha = PV_KeyFrames(1000, 0, 0, 30, 255, 1000, 0),
+		Size = PV_Linear(20,60),
+		Stretch = 1000,
+		Phase = PV_Random(0,4),
+		Rotation = PV_Random(-GetR() - 15, -GetR() + 15),
+		DampingX = 1000,
+		DampingY = 1000,
+		BlitMode = 0,
+		CollisionVertex = 0,
+		OnCollision = PC_Stop(),
+		Attach = nil
+	};
+	fx.brighttrail = 
+	{
+		Prototype = fx.smoketrail,
+		Alpha = PV_Linear(180,0),
+		Size = PV_Linear(20,30),
+		BlitMode = GFX_BLIT_Additive,
+	};
+	fx.frontburn = 
+	{
+		R = 255,
+		B = 50,
+		G = 190,
+		
+		Alpha = PV_KeyFrames(0, 0, 0, 500, 25, 1000, 0),
+		Size = PV_Linear(4,5),
+		Stretch = 1000,
+		Phase = PV_Random(0,4),
+		Rotation = PV_Random(-GetR() - 15, -GetR() + 15),
+		DampingX = 1000,
+		DampingY = 1000,
+		BlitMode = GFX_BLIT_Additive,
+		CollisionVertex = 0,
+		OnCollision = PC_Stop(),
+		Attach = ATTACH_Front | ATTACH_MoveRelative
+	};
+}
+
+protected func FxIntMeteorTimer(object target, effect fx, bool temp)
 {
 	var size = GetCon();
 	// Air drag.
@@ -142,10 +195,12 @@ protected func FxIntMeteorTimer()
 	ydir -= size * ydir ** 2 / 11552000; // Magic number.
 	SetYDir(ydir, 100);
 	// Smoke trail.
-	CreateParticle("Smoke", PV_Random(-2, 2), PV_Random(-2, 2), PV_Random(-3, 3), PV_Random(-3, 3), 30 + Random(60), Particles_SmokeTrail(), 5);
-	// Fire trail.
-	CreateParticle("MagicSpark", 0, 0, PV_Random(-20, 20), PV_Random(-20, 20), 16, Particles_SparkFire(), 4);
-	CreateParticle("Fire", PV_Random(-size / 8, size / 8), PV_Random(-size / 8, size / 8), PV_Random(-1, 1), PV_Random(-1, 1), 30, Particles_FireTrail(), 6 + size / 10);
+	CreateParticle("SmokeThick", 0, 0, PV_Random(-3, 3), PV_Random(-3, 3), 200, fx.smoketrail, 5);
+	// Flash
+	CreateParticle("SmokeThick", 0, -4, PV_Random(-3, 3), PV_Random(-3, 3), 3, fx.brighttrail, 2);
+	// left and right burn
+	CreateParticle("FireDense", PV_Random(-5, 5), 15, PV_Random(-5, -20), PV_Random(-15, -30), 20, fx.frontburn, 30);
+	CreateParticle("FireDense", PV_Random(-5, 5), 15, PV_Random(5, 20), PV_Random(-15, -30), 20, fx.frontburn, 30);
 	// Sound.
 
 	// Burning and friction decrease size.

@@ -9,8 +9,9 @@
 
 public func OnAfterLaunch()
 {
-	// Adjust rotation to point into movement direction.
-	SetR(Angle(0, 0, GetXDir(), GetYDir()));
+	// Adjust rotation to point into movement direction. 
+	// You can't do this unless you also change the rotation of the trail -Win
+	//SetR(Angle(0, 0, GetXDir(), GetYDir()));
 	// Emits light
 	SetLightRange(400, 100);
 	SetLightColor(RGB(100, 254, 255));
@@ -47,7 +48,7 @@ private func FxIntMeteorStart(object target, effect fx, bool temp)
 		Size = PV_Linear(20,100),
 		Stretch = 1000,
 		Phase = 0,
-		Rotation = PV_Random(50, 70),
+		Rotation = 30,
 		ForceX = 0,
 		ForceY = 0,
 		DampingX = 1000,
@@ -61,7 +62,7 @@ private func FxIntMeteorStart(object target, effect fx, bool temp)
 	{
 		Prototype = fx.sparkright,
 		Size = PV_Linear(30,100),
-		Rotation = PV_Random(-70, -50),
+		Rotation = -30,
 	};
 	fx.trail = 
 	{

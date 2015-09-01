@@ -403,7 +403,7 @@ void C4SoundInstance::Execute()
 		Mix_Volume(iChannel, (iVol * MIX_MAX_VOLUME) / (100 * 256));
 		Mix_SetPanning(iChannel, Clamp((100 - iPan) * 256 / 100, 0, 255), Clamp((100 + iPan) * 256 / 100, 0, 255));
 #elif AUDIO_TK == AUDIO_TK_OPENAL
-		alSource3f(iChannel, AL_POSITION, Clamp<float>(float(iPan)/100.0f, -1.0f, +1.0f), 0, 0.7f);
+		alSource3f(iChannel, AL_POSITION, Clamp<float>(float(iPan)/100.0f, -1.0f, +1.0f), 0, -0.7f);
 		alSourcef(iChannel, AL_GAIN, float(iVol) / (100.0f*256.0f));
 		if (pitch_dirty)
 		{
@@ -467,11 +467,13 @@ void C4SoundInstance::SetModifier(C4SoundModifier *new_modifier, bool is_global)
 		{
 			if (modifier)
 			{
+#if AUDIO_TK == AUDIO_TK_OPENAL
 				modifier->ApplyTo(iChannel);
+#endif
 			}
 			else
 			{
-#if AUDIO_TK == AUDIO_TK_OPENAL
+#if (AUDIO_TK == AUDIO_TK_OPENAL) && defined(HAVE_ALEXT)
 				alSource3i(iChannel, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL);
 #endif
 			}

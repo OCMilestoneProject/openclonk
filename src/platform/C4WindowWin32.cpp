@@ -167,7 +167,7 @@ LRESULT APIENTRY FullScreenWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_CHAR:
 	{
 		// UTF-8 has 1 to 4 data bytes, and we need a terminating \0
-		char c[5] = {0};
+		char c[5] = {0,0,0,0,0};
 		if(!WideCharToMultiByte(CP_UTF8, 0L, reinterpret_cast<LPCWSTR>(&wParam), 1, c, 4, 0, 0))
 			return 0;
 		// GUI: forward
@@ -574,7 +574,7 @@ C4Window * C4Window::Init(C4Window::WindowKind windowKind, C4AbstractApp * pApp,
 	else if (windowKind == W_Fullscreen)
 	{
 		// Register window class
-		WNDCLASSEXW WndClass = {0};
+		auto WndClass = WNDCLASSEXW();
 		WndClass.cbSize        = sizeof(WNDCLASSEX);
 		WndClass.style         = CS_DBLCLKS;
 		WndClass.lpfnWndProc   = FullScreenWinProc;
@@ -708,7 +708,7 @@ bool C4Window::RestorePosition(const char *szWindowName, const char *szSubKey, b
 
 void C4Window::SetTitle(const char *szToTitle)
 {
-	if (hWindow) SetWindowTextW(hWindow, szToTitle ? GetWideChar(szToTitle) : L"");
+	if (hWindow) SetWindowTextW(hWindow, (!szToTitle) ? L"" : GetWideChar(szToTitle));
 }
 
 bool C4Window::GetSize(C4Rect * pRect)
@@ -727,7 +727,7 @@ void C4Window::SetSize(unsigned int cx, unsigned int cy)
 	if (hWindow)
 	{
 		// If bordered, add border size
-		RECT rect = {0, 0, cx, cy};
+		RECT rect = { 0, 0, static_cast<LONG>(cx), static_cast<LONG>(cy) };
 		::AdjustWindowRectEx(&rect, GetWindowLong(hWindow, GWL_STYLE), FALSE, GetWindowLong(hWindow, GWL_EXSTYLE));
 		cx = rect.right - rect.left;
 		cy = rect.bottom - rect.top;
@@ -828,7 +828,7 @@ bool C4AbstractApp::FlushMessages()
 void C4AbstractApp::SetLastErrorFromOS()
 {
 	LPWSTR buffer = 0;
-	DWORD rv = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
+	FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
 		0, ::GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&buffer), 0, 0);
 	sLastError.Take(StdStrBuf(buffer));
 	LocalFree(buffer);
@@ -873,7 +873,7 @@ void C4AbstractApp::RestoreVideoMode()
 {
 }
 
-bool C4AbstractApp::SetVideoMode(unsigned int iXRes, unsigned int iYRes, unsigned int iColorDepth, unsigned int iRefreshRate, unsigned int iMonitor, bool fFullScreen)
+bool C4AbstractApp::SetVideoMode(int iXRes, int iYRes, unsigned int iColorDepth, unsigned int iRefreshRate, unsigned int iMonitor, bool fFullScreen)
 {
 #ifndef USE_CONSOLE
 	SetWindowLong(pWindow->hWindow, GWL_EXSTYLE,
@@ -925,7 +925,7 @@ bool C4AbstractApp::SetVideoMode(unsigned int iXRes, unsigned int iYRes, unsigne
 			SetLastErrorFromOS();
 			return false;
 		}
-		int orientation = dmode.dmDisplayOrientation;
+		unsigned long orientation = dmode.dmDisplayOrientation;
 		if (iXRes == -1 && iYRes == -1)
 		{
 			dspMode=dmode;
@@ -935,7 +935,7 @@ bool C4AbstractApp::SetVideoMode(unsigned int iXRes, unsigned int iYRes, unsigne
 		int i=0;
 		if (!fFound) while (EnumDisplaySettingsW(Mon.GetWideChar(), i++, &dmode))
 				// compare enumerated mode with requested settings
-				if (dmode.dmPelsWidth==iXRes && dmode.dmPelsHeight==iYRes && dmode.dmBitsPerPel==iColorDepth && dmode.dmDisplayOrientation==orientation
+				if (static_cast<int>(dmode.dmPelsWidth) == iXRes && static_cast<int>(dmode.dmPelsHeight) == iYRes && dmode.dmBitsPerPel == iColorDepth && dmode.dmDisplayOrientation == orientation
 				        && (iRefreshRate == 0 || dmode.dmDisplayFrequency == iRefreshRate))
 				{
 					fFound=true;

@@ -517,7 +517,7 @@ static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, N
 		iX += pObj->GetX();
 		iY += pObj->GetY();
 	}
-	StartSoundEffectAt(FnStringPar(szSound), iX, iY, iLevel, iCustomFalloffDistance, iPitch);
+	StartSoundEffectAt(FnStringPar(szSound), iX, iY, iLevel, iCustomFalloffDistance, iPitch, modifier);
 	// always return true (network safety!)
 	return true;
 }
@@ -2713,7 +2713,7 @@ static bool FnGainScenarioAchievement(C4PropList * _this, C4String *achievement_
 			if (!plr->GainScenarioAchievement(achievement_name->GetCStr(), value, for_scenario ? for_scenario->GetCStr() : NULL))
 				result = false;
 	}
-	return true;
+	return result;
 }
 
 static long FnGetPXSCount(C4PropList * _this, Nillable<long> iMaterial, Nillable<long> iX0, Nillable<long> iY0, Nillable<long> iWdt, Nillable<long> iHgt)
@@ -3020,6 +3020,7 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "C4FO_Func"                 ,C4V_Int,     C4FO_Func           },
 	{ "C4FO_Layer"                ,C4V_Int,     C4FO_Layer          },
 	{ "C4FO_InArray"              ,C4V_Int,     C4FO_InArray        },
+	{ "C4FO_Property"             ,C4V_Int,     C4FO_Property       },
 
 	{ "MD_DragSource"             ,C4V_Int,     C4MC_MD_DragSource  },
 	{ "MD_DropTarget"             ,C4V_Int,     C4MC_MD_DropTarget  },

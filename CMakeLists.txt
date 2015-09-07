@@ -266,6 +266,7 @@ set(OC_CLONK_SOURCES
 	src/gui/C4GuiListBox.cpp
 	src/gui/C4GuiMenu.cpp
 	src/gui/C4GuiTabular.cpp
+	src/gui/C4ScriptGuiWindow.cpp
 	src/gui/C4KeyboardInput.cpp
 	src/gui/C4KeyboardInput.h
 	src/gui/C4LoaderScreen.cpp
@@ -284,6 +285,8 @@ set(OC_CLONK_SOURCES
 	src/gui/C4PlayerInfoListBox.h
 	src/gui/C4Scoreboard.cpp
 	src/gui/C4Scoreboard.h
+	src/gui/C4ScriptGuiWindow.cpp
+	src/gui/C4ScriptGuiWindow.h
 	src/gui/C4StartupAboutDlg.cpp
 	src/gui/C4StartupAboutDlg.h
 	src/gui/C4Startup.cpp
@@ -1085,6 +1088,7 @@ add_executable(c4script
 	include/c4script/c4script.h
 	src/script/C4ScriptMain.cpp
 	src/script/C4ScriptStandalone.cpp
+	src/script/C4ScriptStandaloneStubs.cpp
 )
 
 target_link_libraries(openclonk

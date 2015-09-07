@@ -32,6 +32,7 @@
 #include <C4GraphicsSystem.h>
 #include <C4Log.h>
 #include <C4MessageInput.h>
+#include <C4ScriptGuiWindow.h>
 #include <C4MouseControl.h>
 #include <C4Player.h>
 #include <C4PlayerList.h>
@@ -516,7 +517,7 @@ static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, N
 		iX += pObj->GetX();
 		iY += pObj->GetY();
 	}
-	StartSoundEffectAt(FnStringPar(szSound), iX, iY, iLevel, iCustomFalloffDistance, iPitch);
+	StartSoundEffectAt(FnStringPar(szSound), iX, iY, iLevel, iCustomFalloffDistance, iPitch, modifier);
 	// always return true (network safety!)
 	return true;
 }
@@ -2183,16 +2184,22 @@ static bool FnRemoveEffect(C4PropList * _this, C4String *psEffectName, C4Object 
 {
 	// evaluate parameters
 	const char *szEffect = FnStringPar(psEffectName);
-	// get effects
-	C4Effect *pEffect = pTarget ? pTarget->pEffects : Game.pGlobalEffects;
+	// if the user passed an effect, it can be used straight-away
+	C4Effect *pEffect = pEffect2;
+	// otherwise, the correct effect will be searched in the target's effects or in the global ones
+	if (!pEffect)
+	{
+		pEffect = pTarget ? pTarget->pEffects : Game.pGlobalEffects;
+		// the object has no effects attached, nothing to look for
+		if (!pEffect) return 0;
+		// name/wildcard given: find effect by name
+		if (szEffect && *szEffect)
+			pEffect = pEffect->Get(szEffect, 0);
+	}
+
+	// neither passed nor found - nothing to remove!
 	if (!pEffect) return 0;
-	// name/wildcard given: find effect by name
-	if (szEffect && *szEffect)
-		pEffect = pEffect->Get(szEffect, 0);
-	else
-		pEffect = pEffect2;
-	// effect found?
-	if (!pEffect) return 0;
+
 	// kill it
 	if (fDoNoCalls)
 		pEffect->SetDead();
@@ -2455,9 +2462,9 @@ static C4Void FnHideSettlementScoreInEvaluation(C4PropList * _this, bool fHide)
 
 static bool FnCustomMessage(C4PropList * _this, C4String *pMsg, C4Object *pObj, Nillable<long> iOwner, long iOffX, long iOffY, long dwClr, C4ID idDeco, C4PropList *pSrc, long dwFlags, long iHSize)
 {
-	// safeties
+	// safeties: for global messages pSrc needs to be object/definition. For object-local messages, any proplist is OK
 	if (pSrc)
-		if(!pSrc->GetDef() && !pSrc->GetObject() && !pSrc->GetPropertyPropList(P_Source)) return false;
+		if(!pSrc->GetDef() && !pSrc->GetObject() && !pSrc->GetPropertyPropList(P_Source) && !pObj) return false;
 	if (!pMsg) return false;
 	if (pObj && !pObj->Status) return false;
 	const char *szMsg = pMsg->GetCStr();
@@ -2495,6 +2502,67 @@ static bool FnCustomMessage(C4PropList * _this, C4String *pMsg, C4Object *pObj, 
 	if (dwFlags & C4GM_DropSpeech) sMsg.SplitAtChar('$', NULL);
 	// create it!
 	return ::Messages.New(iType,sMsg,pObj,iOwner,iOffX,iOffY,(uint32_t)dwClr, idDeco, pSrc, dwFlags, iHSize);
+}
+
+static int FnGuiOpen(C4PropList * _this, C4PropList *menu)
+{
+	C4ScriptGuiWindow *window = new C4ScriptGuiWindow;
+
+	::Game.ScriptGuiRoot->AddChild(window);
+
+	if (!window->CreateFromPropList(menu, true))
+	{
+		::Game.ScriptGuiRoot->RemoveChild(window, false);
+		return 0;
+	}
+
+	return window->GetID();
+}
+
+static bool FnGuiUpdateTag(C4PropList * _this, C4String *tag, int32_t guiID, int32_t childID, C4Object *target)
+{
+	C4ScriptGuiWindow *window = ::Game.ScriptGuiRoot->GetChildByID(guiID);
+	if (!window) return false;
+	if (childID) // note: valid child IDs are always non-zero
+	{
+		C4ScriptGuiWindow *subwindow = window->GetSubWindow(childID, target);
+		if (!subwindow) return false;
+		subwindow->SetTag(tag);
+		return true;
+	}
+	window->SetTag(tag);
+	return true;
+}
+
+static bool FnGuiClose(C4PropList *_this, int32_t guiID, int32_t childID, C4Object *target)
+{
+	C4ScriptGuiWindow *window = ::Game.ScriptGuiRoot->GetChildByID(guiID);
+	if (!window) return false;
+	if (childID) // note: valid child IDs are always non-zero
+	{
+		C4ScriptGuiWindow *subwindow = window->GetSubWindow(childID, target);
+		if (!subwindow) return false;
+		subwindow->Close();
+		return true;
+	}
+	window->Close();
+	return true;
+}
+
+static bool FnGuiUpdate(C4PropList *_this, C4PropList *update, int32_t guiID, int32_t childID, C4Object *target)
+{
+	if (!update) return false;
+	C4ScriptGuiWindow *window = ::Game.ScriptGuiRoot->GetChildByID(guiID);
+	if (!window) return false;
+	if (childID) // note: valid child IDs are always non-zero
+	{
+		C4ScriptGuiWindow *subwindow = window->GetSubWindow(childID, target);
+		if (!subwindow) return false;
+		subwindow->CreateFromPropList(update, false, true);
+		return true;
+	}
+	window->CreateFromPropList(update, false, true);
+	return true;
 }
 
 // undocumented!
@@ -2645,7 +2713,7 @@ static bool FnGainScenarioAchievement(C4PropList * _this, C4String *achievement_
 			if (!plr->GainScenarioAchievement(achievement_name->GetCStr(), value, for_scenario ? for_scenario->GetCStr() : NULL))
 				result = false;
 	}
-	return true;
+	return result;
 }
 
 static long FnGetPXSCount(C4PropList * _this, Nillable<long> iMaterial, Nillable<long> iX0, Nillable<long> iY0, Nillable<long> iWdt, Nillable<long> iHgt)
@@ -2828,6 +2896,10 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	AddFunc(pEngine, "ExtractMaterialAmount", FnExtractMaterialAmount);
 	AddFunc(pEngine, "GetEffectCount", FnGetEffectCount);
 	AddFunc(pEngine, "CustomMessage", FnCustomMessage);
+	AddFunc(pEngine, "GuiOpen", FnGuiOpen);
+	AddFunc(pEngine, "GuiUpdateTag", FnGuiUpdateTag);
+	AddFunc(pEngine, "GuiClose", FnGuiClose);
+	AddFunc(pEngine, "GuiUpdate", FnGuiUpdate);
 	AddFunc(pEngine, "PauseGame", FnPauseGame, false);
 	AddFunc(pEngine, "PathFree", FnPathFree);
 	AddFunc(pEngine, "PathFree2", FnPathFree2);
@@ -2948,6 +3020,7 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "C4FO_Func"                 ,C4V_Int,     C4FO_Func           },
 	{ "C4FO_Layer"                ,C4V_Int,     C4FO_Layer          },
 	{ "C4FO_InArray"              ,C4V_Int,     C4FO_InArray        },
+	{ "C4FO_Property"             ,C4V_Int,     C4FO_Property       },
 
 	{ "MD_DragSource"             ,C4V_Int,     C4MC_MD_DragSource  },
 	{ "MD_DropTarget"             ,C4V_Int,     C4MC_MD_DropTarget  },
@@ -2980,6 +3053,7 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "MSG_WidthRel"              ,C4V_Int,      C4GM_WidthRel },
 	{ "MSG_XRel"                  ,C4V_Int,      C4GM_XRel },
 	{ "MSG_YRel"                  ,C4V_Int,      C4GM_YRel },
+	{ "MSG_Zoom"                  ,C4V_Int,      C4GM_Zoom },
 
 	{ "C4PT_User"                 ,C4V_Int,      C4PT_User },
 	{ "C4PT_Script"               ,C4V_Int,      C4PT_Script },
@@ -3009,6 +3083,20 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "C4SMT_Echo"                ,C4V_Int,      C4SoundModifier::C4SMT_Echo },
 	{ "C4SMT_Equalizer"           ,C4V_Int,      C4SoundModifier::C4SMT_Equalizer },
 
+	{ "GUI_SetTag"               ,C4V_Int,      C4ScriptGuiWindowActionID::SetTag },
+	{ "GUI_Call"                 ,C4V_Int,      C4ScriptGuiWindowActionID::Call },
+	{ "GUI_GridLayout"           ,C4V_Int,      C4ScriptGuiWindowStyleFlag::GridLayout },
+	{ "GUI_VerticalLayout"       ,C4V_Int,      C4ScriptGuiWindowStyleFlag::VerticalLayout },
+	{ "GUI_TextVCenter"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextVCenter },
+	{ "GUI_TextHCenter"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextHCenter },
+	{ "GUI_TextRight"            ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextRight },
+	{ "GUI_TextBottom"           ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextBottom },
+	{ "GUI_TextTop"              ,C4V_Int,      C4ScriptGuiWindowStyleFlag::None }, // note that top and left are considered default
+	{ "GUI_TextLeft"             ,C4V_Int,      C4ScriptGuiWindowStyleFlag::None }, // they are only included for completeness
+	{ "GUI_FitChildren"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::FitChildren },
+	{ "GUI_Multiple"             ,C4V_Int,      C4ScriptGuiWindowStyleFlag::Multiple },
+	{ "GUI_IgnoreMouse"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::IgnoreMouse },
+	{ "GUI_NoCrop"               ,C4V_Int,      C4ScriptGuiWindowStyleFlag::NoCrop },
 	{ NULL, C4V_Nil, 0}
 };
 

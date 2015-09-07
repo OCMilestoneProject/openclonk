@@ -173,7 +173,6 @@ void C4Object::Default()
 	Controller=NO_OWNER;
 	LastEnergyLossCausePlayer=NO_OWNER;
 	Category=0;
-	NoCollectDelay=0;
 	Con=0;
 	Mass=OwnMass=0;
 	Damage=0;
@@ -394,6 +393,7 @@ void C4Object::AssignRemoval(bool fExitContents)
 		else
 		{
 			Contents.Remove(cobj);
+			cobj->Contained = NULL;
 			cobj->AssignRemoval();
 		}
 	}
@@ -824,7 +824,6 @@ void C4Object::SetOCF()
 	if ((OCF & OCF_FullCon) || Def->IncompleteActivity)
 		if ((Def->Collection.Wdt>0) && (Def->Collection.Hgt>0))
 			if (!pActionDef || (!pActionDef->GetPropertyInt(P_ObjectDisabled)))
-				if (NoCollectDelay==0)
 					OCF|=OCF_Collection;
 	// OCF_Alive
 	if (Alive) OCF|=OCF_Alive;
@@ -905,7 +904,6 @@ void C4Object::UpdateOCF()
 	if ((OCF & OCF_FullCon) || Def->IncompleteActivity)
 		if ((Def->Collection.Wdt>0) && (Def->Collection.Hgt>0))
 			if (!pActionDef || (!pActionDef->GetPropertyInt(P_ObjectDisabled)))
-				if (NoCollectDelay==0)
 					OCF|=OCF_Collection;
 	// OCF_NotContained
 	if (!Contained)
@@ -1374,7 +1372,7 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	// 4. Call collection for container
 	// 5. Call entrance for object.
 
-	// No target or target is self
+	// No valid target or target is self
 	if (!pTarget || (pTarget==this)) return false;
 	// check if entrance is allowed
 	if (!! Call(PSF_RejectEntrance, &C4AulParSet(C4VObj(pTarget)))) return false;
@@ -1395,7 +1393,12 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	if (Contained) if (!Exit(GetX(),GetY())) return false;
 	if (Contained || !Status || !pTarget->Status) return false;
 	// Failsafe updates
-	CloseMenu(true);
+	if (Menu)
+	{
+		CloseMenu(true);
+		// CloseMenu might do bad stuff
+		if (Contained || !Status || !pTarget->Status) return false;
+	}
 	SetOCF();
 	// Set container
 	Contained=pTarget;
@@ -1838,7 +1841,15 @@ void C4Object::ClearPointers(C4Object *pObj)
 	if(pMeshInstance) pMeshInstance->ClearPointers(pObj);
 	// effects
 	if (pEffects) pEffects->ClearPointers(pObj);
-	// contents/contained: not necessary, because it's done in AssignRemoval and StatusDeactivate
+	// contents/contained: although normally not necessery because it's done in AssignRemoval and StatusDeactivate,
+	// it is also required during game destruction (because ClearPointers might do script callbacks)
+	// Perform silent exit to avoid additional callbacks
+	if (Contained == pObj)
+	{
+		Contained->Contents.Remove(this);
+		Contained = NULL;
+	}
+	Contents.Remove(pObj);
 	// Action targets
 	if (Action.Target==pObj) Action.Target=NULL;
 	if (Action.Target2==pObj) Action.Target2=NULL;
@@ -2269,7 +2280,6 @@ void C4Object::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 	pComp->Value(mkNamingAdapt( Plane,                            "Plane",              0                 ));
 
 	pComp->Value(mkNamingAdapt( iLastAttachMovementFrame,         "LastSolidAtchFrame", -1                ));
-	pComp->Value(mkNamingAdapt( NoCollectDelay,                   "NoCollectDelay",     0                 ));
 	pComp->Value(mkNamingAdapt( Con,                              "Size",               0                 ));
 	pComp->Value(mkNamingAdapt( OwnMass,                          "OwnMass",            0                 ));
 	pComp->Value(mkNamingAdapt( Mass,                             "Mass",               0                 ));
@@ -2733,8 +2743,6 @@ void C4Object::SetCommand(int32_t iCommand, C4Object *pTarget, C4Value iTx, int3
                           C4Object *pTarget2, bool fControl, C4Value iData,
                           int32_t iRetries, C4String *szText)
 {
-	// Decrease NoCollectDelay
-	if (NoCollectDelay>0) NoCollectDelay--;
 	// Clear stack
 	ClearCommands();
 	// Close menu

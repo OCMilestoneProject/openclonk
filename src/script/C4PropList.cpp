@@ -670,6 +670,19 @@ int32_t C4PropList::GetPropertyInt(C4PropertyName n, int32_t default_val) const
 	return default_val;
 }
 
+bool C4PropList::GetPropertyBoolByS(C4String * k, bool default_val) const
+{
+	if (Properties.Has(k))
+	{
+		return Properties.Get(k).Value.getBool();
+	}
+	if (GetPrototype())
+	{
+		return GetPrototype()->GetPropertyBoolByS(k, default_val);
+	}
+	return default_val;
+}
+
 C4PropList *C4PropList::GetPropertyPropList(C4PropertyName n) const
 {
 	C4String * k = &Strings.P[n];
@@ -702,7 +715,9 @@ C4ValueArray * C4PropList::GetProperties() const
 	const C4Property * p = Properties.First();
 	while (p)
 	{
+		assert(p->Key != nullptr && "Proplist key is nullpointer");
 		(*a)[i++] = C4VString(p->Key);
+		assert(((*a)[i - 1].GetType() == C4V_String) && "Proplist key is non-string");
 		p = Properties.Next(p);
 	}
 	return a;

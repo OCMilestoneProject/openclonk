@@ -57,6 +57,7 @@
 #include <C4RankSystem.h>
 #include <C4RoundResults.h>
 #include <C4GameMessage.h>
+#include <C4ScriptGuiWindow.h>
 #include <C4Material.h>
 #include <C4Network2Reference.h>
 #include <C4Weather.h>
@@ -103,7 +104,8 @@ C4Game::C4Game():
 		pSec1Timer(new C4GameSec1Timer()),
 		fPreinited(false), StartupLogPos(0), QuitLogPos(0),
 		fQuitWithError(false),
-		GlobalSoundModifier(GameGlobalSoundModifier)
+		GlobalSoundModifier(GameGlobalSoundModifier),
+		ScriptGuiRoot(0)
 {
 	Default();
 }
@@ -578,6 +580,7 @@ void C4Game::Clear()
 	Landscape.Clear();
 	PXS.Clear();
 	if (pGlobalEffects) { delete pGlobalEffects; pGlobalEffects=NULL; }
+	if (ScriptGuiRoot) { delete ScriptGuiRoot; ScriptGuiRoot = nullptr; }
 	Particles.Clear();
 	::MaterialMap.Clear();
 	TextureMap.Clear(); // texture map *MUST* be cleared after the materials, because of the patterns!
@@ -617,7 +620,7 @@ void C4Game::Clear()
 	PlayerControlDefaultAssignmentSets.Clear();
 	PlayerControlDefs.Clear();
 	::MeshMaterialManager.Clear();
-	Application.SoundSystem.Init(); // clear it up and re-init it for startup menu use
+	Application.SoundSystem.Clear(); // will be re-inited by application pre-init if running from startup system
 
 	// global fullscreen class is not cleared, because it holds the carrier window
 	// but the menu must be cleared (maybe move Fullscreen.Menu somewhere else?)
@@ -643,7 +646,7 @@ void C4Game::Clear()
 
 	fPreinited = false;
 	C4PropListNumbered::ResetEnumerationIndex();
-	
+
 	// FIXME: remove this
 	Default();
 }
@@ -906,6 +909,7 @@ void C4Game::ClearPointers(C4Object * pObj)
 	::MessageInput.ClearPointers(pObj);
 	::Console.ClearPointers(pObj);
 	::MouseControl.ClearPointers(pObj);
+	ScriptGuiRoot->ClearPointers(pObj);
 	TransferZones.ClearPointers(pObj);
 	if (pGlobalEffects)
 		pGlobalEffects->ClearPointers(pObj);
@@ -1470,6 +1474,8 @@ void C4Game::Default()
 	DebugPassword.Clear();
 	DebugHost.Clear();
 	DebugWait = false;
+	assert(!ScriptGuiRoot);
+	ScriptGuiRoot = nullptr;
 }
 
 void C4Game::Evaluate()
@@ -1671,6 +1677,32 @@ void C4Game::CompileFunc(StdCompiler *pComp, CompileSettings comp, C4ValueNumber
 		pComp->Value(mkNamingAdapt(Weather, "Weather"));
 		pComp->Value(mkNamingAdapt(Landscape, "Landscape"));
 		pComp->Value(mkNamingAdapt(Landscape.Sky, "Sky"));
+
+		// save custom GUIs only if a real savegame and not for editor-scenario-saves or section changes
+		if (!comp.fScenarioSection)
+		{
+			pComp->Name("GUI");
+			if (pComp->isCompiler())
+			{
+				C4Value val;
+				pComp->Value(mkNamingAdapt(mkParAdapt(val, numbers), "ScriptGUIs", C4VNull));
+				// if loading, assume
+				assert(ScriptGuiRoot->GetID() == 0); // ID of 0 means "had no subwindows ever" aka "is fresh" for root
+				// we will need to denumerate and create the actual GUI post-loading
+				// for now, just remember our enumerated ID
+				if (val.GetType() == C4V_Enum)
+				{
+					int enumID = val._getInt();
+					ScriptGuiRoot->SetEnumeratedID(enumID);
+				}
+			}
+			else
+			{
+				C4Value *val = new C4Value(ScriptGuiRoot->ToC4Value());
+				pComp->Value(mkNamingAdapt(mkParAdapt(*val, numbers), "ScriptGUIs", C4VNull));
+			}
+			pComp->NameEnd();
+		}
 	}
 
 	if (comp.fPlayers)
@@ -1862,11 +1894,9 @@ bool C4Game::DoKeyboardInput(C4KeyCode vk_code, C4KeyEventType eEventType, bool 
 		PressedKeys[vk_code] = false;
 	}
 #endif
-	// reduce stuff like Ctrl+RightCtrl to simply RightCtrl
-	if (fCtrl && (vk_code == K_CONTROL_L || vk_code == K_CONTROL_R)) fCtrl = false;
-	if (fShift && (vk_code == K_SHIFT_L || vk_code == K_SHIFT_R)) fShift = false;
 	// compose key
 	C4KeyCodeEx Key(vk_code, C4KeyShiftState(fAlt*KEYS_Alt + fCtrl*KEYS_Control + fShift*KEYS_Shift), fRepeated);
+	Key.FixShiftKeys();
 	// compose keyboard scope
 	DWORD InScope = 0;
 	if (fPlrCtrlOnly)
@@ -2172,6 +2202,10 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 		if (!InitMaterialTexture())
 			{ LogFatal(LoadResStr("IDS_PRC_MATERROR")); return false; }
 		SetInitProgress(60);
+
+		// prepare script menus
+		assert(!ScriptGuiRoot);
+		ScriptGuiRoot = new C4ScriptGuiWindow();
 	}
 
 	// Load section sounds
@@ -2241,6 +2275,7 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 	if (!fLoadSection) ScriptEngine.Denumerate(numbers);
 	if (!fLoadSection && pGlobalEffects) pGlobalEffects->Denumerate(numbers);
 	numbers->Denumerate();
+	if (!fLoadSection) ScriptGuiRoot->Denumerate(numbers);
 	// Object.PostLoad must happen after number->Denumerate(), becuase UpdateFace() will access Action proplist,
 	// which might have a non-denumerated prototype otherwise
 	Objects.PostLoad(fLoadSection, numbers);
@@ -2290,6 +2325,7 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 		SetMusicLevel(iMusicLevel);
 		SetInitProgress(97);
 	}
+
 	return true;
 }
 

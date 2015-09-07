@@ -11,10 +11,9 @@ VertexY=0,0,0,-22,21,-16,-16,14,14
 VertexFriction=1,50,50,50,50,50,50,50,50
 VertexCNAT=16,1,2,4,8,1,2,1,2
 Value=1
-Mass=10
+Mass=200
 Components=LavaCore=1
 ContactCalls=1
 StretchGrowth=1
 Oversize=1
 IncompleteActivity=1
-Float=1

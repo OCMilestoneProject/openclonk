@@ -7,8 +7,8 @@
 
 
 // HUD margin and size in tenths of em.
-static const GUI_Controller_Wealth_IconSize = 60;
-static const GUI_Controller_Wealth_IconMargin = 10;
+static const GUI_Controller_Wealth_IconSize = 30;
+static const GUI_Controller_Wealth_IconMargin = 5;
 
 // Local variables to keep track of the wealth HUD menu.
 local wealth_gui_target;
@@ -52,10 +52,14 @@ public func Destruction()
 // Callback when the wealth has changed: update the wealth HUD menu.
 public func OnWealthChanged(int plr)
 {
-	var wealth = GetWealth(plr);
-	wealth_gui_menu.GraphicsName = GetGraphicsName(wealth);
-	wealth_gui_menu.Text = Format("%d", wealth);
-	GuiUpdate(wealth_gui_menu, wealth_gui_id);
+	// Only update wealth when it is the right player.
+	if (plr == GetOwner())
+	{
+		var wealth = GetWealth(plr);
+		wealth_gui_menu.GraphicsName = GetGraphicsName(wealth);
+		wealth_gui_menu.Text = Format("%d", wealth);
+		GuiUpdate(wealth_gui_menu, wealth_gui_id);
+	}
 	return _inherited(plr, ...);
 }
 

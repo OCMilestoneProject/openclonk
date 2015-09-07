@@ -53,11 +53,24 @@ private func CheckWoodObject(object target)
 
 /*-- Production --*/
 
+// Overload production menu entries to show helpful hint to player.
+public func GetProductionMenuEntries()
+{
+	return [{symbol = Wood, custom =
+				{
+					Right = "100%", Bottom = "4em",
+					text = {Left = "2em", Text = "$AutoProduction$", Style = GUI_TextVCenter | GUI_TextHCenter},
+					image = {Right = "2em", Bottom = "2em", Symbol = Wood}
+				}
+			}];
+}
+
 private func IgnoreKnowledge() { return true; }
 
 public func Saw(object target)
 {
-	target->Enter(this);
+	if (target->Contained() != this)
+		target->Enter(this);
 	var output = target->GetComponent(Wood);
 	target->Split2Components();
 	AddToQueue(Wood, output);
@@ -115,9 +128,10 @@ public func CollectTrees()
 	return;
 }
 
-protected func Collection()
+protected func Collection(object obj)
 {
 	Sound("Clonk");
+	Saw(obj);
 }
 
 public func FxSawingTimer(object target, proplist effect, int time)

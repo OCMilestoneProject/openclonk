@@ -8,10 +8,19 @@
 local Name = "$Name$";
 local Description = "$Description$";
 
-static const InteractionMenu_SideBarSize = 80; // in tenth-em
+static const InteractionMenu_SideBarSize = 40; // in tenth-em
 
 static const InteractionMenu_Contents = 2;
 static const InteractionMenu_Custom = 4;
+
+/*
+	This contains an array with a proplist for every player number.
+	The attributes are also always attached to every interaction menu on creation (menu.minimized = InteractionMenu_Attributes[plr].minimized;).
+	The following properties are either used or nil:
+		minimized (bool): whether the player minimized the menu.
+			A minimized menu does not show some elements (like the description box).
+*/
+static InteractionMenu_Attributes;
 
 local current_objects;
 
@@ -89,6 +98,21 @@ func CreateFor(object cursor)
 {
 	var obj = CreateObject(GUI_ObjectInteractionMenu, AbsX(0), AbsY(0), cursor->GetOwner());
 	obj.Visibility = VIS_Owner;
+	
+	if (InteractionMenu_Attributes == nil)
+		InteractionMenu_Attributes = [];
+	
+	// Transfer some attributes from the player configuration.
+	if (GetLength(InteractionMenu_Attributes) > cursor->GetOwner())
+	{
+		var config = InteractionMenu_Attributes[cursor->GetOwner()];
+		obj.minimized = GetProperty("minimized", config) ?? false; 
+	}
+	else
+	{
+		obj.minimized = false;
+	}
+	
 	obj->Init(cursor);
 	cursor->SetMenu(obj);
 	return obj;
@@ -106,15 +130,15 @@ func Init(object cursor)
 	EffectCall(cursor, checking_effect, "Timer");
 }
 
-func FxIntCheckObjectsStart(target, effect, temp)
+func FxIntCheckObjectsStart(target, effect fx, temp)
 {
 	if (temp) return;
-	EffectCall(target, effect, "Timer");
+	EffectCall(target, fx, "Timer");
 }
 
-func FxIntCheckObjectsTimer(target, effect, timer)
+func FxIntCheckObjectsTimer(target, effect fx)
 {
-	var new_objects = FindObjects(Find_AtPoint(target->GetX(), target->GetY()), Find_NoContainer(),
+	var new_objects = FindObjects(Find_AtPoint(target->GetX(), target->GetY()), Find_NoContainer(), Find_Layer(target->GetObjectLayer()),
 		// Find only vehicles and structures (plus Clonks ("livings") and helper objects). This makes sure that no C4D_Object-containers (extra slot) are shown.
 		Find_Or(Find_Category(C4D_Vehicle), Find_Category(C4D_Structure), Find_OCF(OCF_Alive), Find_ActionTarget(target), Find_Func("IsContainerEx")),
 		// But these objects still need to either be a container or provide an own interaction menu.
@@ -145,14 +169,8 @@ func UpdateObjects(array new_objects)
 		if (current_menus[i].forced) continue;
 		
 		var target = current_menus[i].target;
-		var found = false;
-		for (var obj in new_objects)
-		{
-			if (target != obj) continue;
-			found = true;
-			break;
-		}
-		if (found) continue;
+		// Still existant? Nothing to do!
+		if (GetIndexOf(new_objects, target) != -1) continue;
 		// not found? close!
 		// sub menus close automatically (and remove their dummy) due to a clever usage of OnClose
 		current_menus[i].menu_object->RemoveObject();
@@ -240,8 +258,8 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	var sidebar_size_em = ToEmString(InteractionMenu_SideBarSize);
 	var part_menu =
 	{
-		Left = "0%", Right = "50%-2em",
-		Bottom = "100%-14em",
+		Left = "0%", Right = "50%-1em",
+		Bottom = "100%-7em",
 		sidebar = sidebar, main = main,
 		Target = current_menus[slot].menu_object,
 		ID = 1
@@ -249,8 +267,13 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	
 	if (slot == 1)
 	{
-		part_menu.Left = "50%+2em";
+		part_menu.Left = "50%+1em";
 		part_menu.Right = "100%";
+	}
+	
+	if (this.minimized)
+	{
+		part_menu.Bottom = nil; // maximum height
 	}
 	
 
@@ -272,18 +295,29 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 			Target = this,
 			Decoration = GUI_MenuDeco,
 			BackgroundColor = RGB(0, 0, 0),
+			minimize_button = 
+			{
+				Bottom = "100%",
+				Top = "100% - 1em",
+				Right = "4em",
+				Text = "$Minimize$",
+				BackgroundColor = {Std = RGB(50, 50, 50), OnHover = RGB(200, 0, 0)},
+				OnMouseIn = GuiAction_SetTag("OnHover"),
+				OnMouseOut = GuiAction_SetTag("Std"),
+				OnClick = GuiAction_Call(this, "OnToggleMinimizeClicked")
+			},
 			center_column =
 			{
-				Left = "50%-2em",
-				Right = "50%+2em",
+				Left = "50%-1em",
+				Right = "50%+1em",
 				Top = "1.75em",
-				Bottom = "100%-14em",
+				Bottom = "100%-7em",
 				Style = GUI_VerticalLayout,
 				move_all_left =
 				{
 					Target = current_center_column_target,
 					ID = 10 + 0,
-					Right = "4em", Bottom = "6em",
+					Right = "2em", Bottom = "3em",
 					Style = GUI_TextHCenter | GUI_TextVCenter,
 					Symbol = Icon_MoveItems, GraphicsName = "Left",
 					Tooltip = "",
@@ -296,7 +330,7 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 				{
 					Target = current_center_column_target,
 					ID = 10 + 1,
-					Right = "4em", Bottom = "6em",
+					Right = "2em", Bottom = "3em",
 					Style = GUI_TextHCenter | GUI_TextVCenter,
 					Symbol = Icon_MoveItems,
 					Tooltip = "",
@@ -308,21 +342,21 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 			},
 			description_box =
 			{
-				Top = "100%-10em",
+				Top = "100%-5em",
 				Margin = [sidebar_size_em, "0em"],
 				BackgroundColor = RGB(25, 25, 25),
 				symbol_part =
 				{
-					Right = "10em",
+					Right = "5em",
 					Symbol = nil,
-					Margin = "1em",
+					Margin = "0.5em",
 					ID = 1,
 					Target = current_description_box.symbol_target
 				},
 				desc_part =
 				{
-					Left = "10em",
-					Margin = "1em",
+					Left = "5em",
+					Margin = "0.5em",
 					ID = 1,
 					Target = current_description_box.target,
 					real_contents = // nested one more time so it can dynamically be replaced without messing up the layout
@@ -333,6 +367,16 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 				}
 			}
 		};
+		
+		// Special setup for a minimized menu.
+		if (this.minimized)
+		{
+			root_menu.Top = "75%";
+			root_menu.minimize_button.Text = "$Maximize$";
+			root_menu.center_column.Bottom = nil; // full size
+			root_menu.description_box = nil;
+		}
+		
 		current_main_menu_id = GuiOpen(root_menu);
 	}
 	else // menu already exists and only one part has to be added
@@ -361,6 +405,27 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	{
 		GuiUpdate({Symbol = Icon_Cancel}, current_main_menu_id, 1 + 1 - slot, obj);
 	}
+}
+
+// Toggles the menu state between minimized and maximized.
+public func OnToggleMinimizeClicked()
+{
+	var config = nil;
+	if (GetLength(InteractionMenu_Attributes) <= GetOwner())
+	{
+		config = {minimized = false};
+		InteractionMenu_Attributes[GetOwner()] = config;
+	}
+	else
+	{
+		config = InteractionMenu_Attributes[GetOwner()];
+	}
+	config.minimized = !(GetProperty("minimized", config) ?? false);
+	
+	// Reopen with new layout..
+	var cursor = this.cursor;
+	RemoveObject();
+	GUI_ObjectInteractionMenu->CreateFor(cursor);
 }
 
 // Tries to put all items from the other menu's target into the target of menu menu_id. Returns nil.
@@ -469,8 +534,8 @@ func CreateSideBar(int slot)
 			OnMouseOut = GuiAction_SetTag("Std"),
 			OnClick = GuiAction_Call(this, "OnSidebarEntrySelected", {slot = slot, obj = obj}),
 			Text = obj->GetName(),
-			obj_symbol = {Symbol = obj, Margin = "0.5em", Priority = 1},
-			obj_symbol_deactivated = {Symbol = deactivation_symbol, Margin = "1.0em", Priority = 2, Target = obj, ID = 1 + slot}
+			obj_symbol = {Symbol = obj, Margin = "0.25em", Priority = 1},
+			obj_symbol_deactivated = {Symbol = deactivation_symbol, Margin = "0.5em", Priority = 2, Target = obj, ID = 1 + slot}
 		};
 		
 		GuiAddSubwindow(entry, sidebar);
@@ -505,18 +570,32 @@ func OnSidebarEntrySelected(data, int player, int ID, int subwindowID, object ta
 */
 func CreateMainMenu(object obj, int slot)
 {
-	var container =
+	var big_menu =
 	{
 		Target = CreateDummy(),
 		Priority = 5,
 		Right = Format("100%% %s", ToEmString(-InteractionMenu_SideBarSize)),
-		Style = GUI_VerticalLayout,
-		BackgroundColor = RGB(25, 25, 25)
+		container =
+		{
+			Top = "1em",
+			Style = GUI_VerticalLayout,
+			BackgroundColor = RGB(25, 25, 25),
+		},
+		headline = 
+		{
+			Bottom = "1em",
+			Text = obj->GetName(),
+			Style = GUI_TextHCenter | GUI_TextVCenter,
+			BackgroundColor = 0xff000000
+		}
+		
 	};
+	var container = big_menu.container;
+	
 	if (slot == 0)
 	{
-		container.Left = ToEmString(InteractionMenu_SideBarSize);
-		container.Right = "100%";
+		big_menu.Left = ToEmString(InteractionMenu_SideBarSize);
+		big_menu.Right = "100%";
 	}
 	
 	// Do virtually nothing if the building is not ready to be interacted with. This can be caused by several things.
@@ -528,7 +607,7 @@ func CreateMainMenu(object obj, int slot)
 	{
 		container.Style = GUI_TextVCenter | GUI_TextHCenter;
 		container.Text = error_message;
-		return container;
+		return big_menu;
 	}
 	
 	var menus = obj->~GetInteractionMenus(cursor) ?? [];
@@ -567,11 +646,10 @@ func CreateMainMenu(object obj, int slot)
 		}
 		menu.menu_object = CreateObject(MenuStyle_Grid);
 		
-		menu.menu_object.Top = "+2em";
+		menu.menu_object.Top = "+1em";
 		menu.menu_object.Priority = 2;
 		menu.menu_object->SetPermanent();
 		menu.menu_object->SetFitChildren();
-		//menu.menu_object.Bottom = "4em";
 		menu.menu_object->SetMouseOverCallback(this, "OnMenuEntryHover");
 		for (var e = 0; e < GetLength(menu.entries); ++e)
 		{
@@ -589,15 +667,15 @@ func CreateMainMenu(object obj, int slot)
 			{
 				Priority = 1,
 				Style = GUI_TextVCenter | GUI_TextHCenter,
-				Bottom = "+1.5em",
+				Bottom = "+0.75em",
 				Text = menu.title,
 				BackgroundColor = 0xa0000000,
 				//Decoration = menu.decoration
-				hline = {Bottom = "0.1em", BackgroundColor = RGB(100, 100, 100)}
+				hline = {Bottom = "0.05em", BackgroundColor = RGB(100, 100, 100)}
 			},
-			Margin = [nil, nil, nil, "0.5em"],
+			Margin = [nil, nil, nil, "0.25em"],
 			real_menu = menu.menu_object,
-			spacer = {Left = "0em", Right = "0em", Bottom = "6em"} // guarantees a minimum height
+			spacer = {Left = "0em", Right = "0em", Bottom = "3em"} // guarantees a minimum height
 		};
 		if (menu.flag == InteractionMenu_Contents)
 			all.BackgroundColor = RGB(0, 50, 0);
@@ -615,7 +693,7 @@ func CreateMainMenu(object obj, int slot)
 		AddEffect("IntRefreshContentsMenu", this, 1, 1, this, nil, obj, slot, i);
 	}
 	
-	return container;
+	return big_menu;
 }
 
 func GetEntryInformation(proplist menu_info, int entry_index)
@@ -806,11 +884,11 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 				custom = MenuStyle_Grid->MakeEntryProplist(symbol, nil);
 				// Pack it into a larger frame to allow for another button below.
 				// The entries with contents are sorted to the back of the inventory menu. This makes for a nicer layout.
-				custom = {Right = custom.Right, Bottom = "8em", top = custom, Priority = 10000 + obj->GetValue()};
+				custom = {Right = custom.Right, Bottom = "4em", top = custom, Priority = 10000 + obj->GetValue()};
 				// Then add a little container-symbol (that can be clicked).
 				custom.bottom =
 				{
-					Top = "4em",
+					Top = "2em",
 					BackgroundColor = {Std = 0, Selected = RGBa(255, 100, 100, 100)},
 					OnMouseIn = GuiAction_SetTag("Selected"),
 					OnMouseOut = GuiAction_SetTag("Std"),
@@ -831,7 +909,7 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 					custom.bottom.contents = 
 					{
 						Symbol = obj->Contents(0)->GetID(),
-						Margin = "0.25em",
+						Margin = "0.125em",
 						Priority = 2
 					};
 					// Possibly add text for stackable items - this is an special exception for the Library_Stackable.
@@ -843,8 +921,8 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 						custom.bottom.contents.Style = GUI_TextBottom | GUI_TextRight;
 					}
 					// Also make the chest smaller, so that the contents symbol is not obstructed.
-					custom.bottom.container.Bottom = "2em";
-					custom.bottom.container.Left = "2em";
+					custom.bottom.container.Bottom = "1em";
+					custom.bottom.container.Left = "1em";
 				}
 			}
 			// Add to menu!

@@ -50,8 +50,18 @@
 #define MenuDebugLogF(...) ((void)0)
 
 // This in in EM! Also, golden ratio
-const float C4ScriptGuiWindow::standardWidth = 100.0f;
-const float C4ScriptGuiWindow::standardHeight = 61.8f;
+const float C4ScriptGuiWindow::standardWidth = 50.0f;
+const float C4ScriptGuiWindow::standardHeight = 31.0f;
+
+float C4ScriptGuiWindow::Em2Pix(float em)
+{
+	return static_cast<float>(::GraphicsResource.FontRegular.GetFontHeight()) * em;
+}
+
+float C4ScriptGuiWindow::Pix2Em(float pix)
+{
+	return pix / static_cast<float>(::GraphicsResource.FontRegular.GetFontHeight());
+}
 
 C4ScriptGuiWindowAction::~C4ScriptGuiWindowAction()
 {
@@ -265,7 +275,7 @@ bool C4ScriptGuiWindowAction::ExecuteCommand(int32_t actionID, C4ScriptGuiWindow
 			from = static_cast<C4ScriptGuiWindow*>(from->GetParent());
 		}
 		MenuDebugLogF("command synced.. target: %x, targetObj: %x, func: %s", target, target->GetObject(), text->GetCStr());
-		C4AulParSet Pars(value, C4VInt(player), C4VInt(main->GetID()), C4VInt(parent->GetID()), C4VObj(parent->target));
+		C4AulParSet Pars(value, C4VInt(player), C4VInt(main->GetID()), C4VInt(parent->GetID()), (parent->target && parent->target->Status) ? C4VObj(parent->target) : C4VNull);
 		target->Call(text->GetCStr(), &Pars);
 		return true;
 	}
@@ -437,7 +447,7 @@ void C4ScriptGuiWindowProperty::Set(const C4Value &value, C4String *tag)
 
 	if (isTaggedPropList)
 	{
-		C4ValueArray *properties = proplist->GetProperties();
+		std::unique_ptr<C4ValueArray> properties(proplist->GetProperties());
 		properties->SortStrings();
 		for (int32_t i = 0; i < properties->GetSize(); ++i)
 		{
@@ -681,6 +691,8 @@ C4ScriptGuiWindow::~C4ScriptGuiWindow()
 
 	if (pScrollBar)
 		delete pScrollBar;
+	if (name)
+		name->DecRef();
 }
 
 // helper function
@@ -972,11 +984,14 @@ bool C4ScriptGuiWindow::CreateFromPropList(C4PropList *proplist, bool resetStdTa
 	assert((parent || isLoading) && "GuiWindow created from proplist without parent (fails for ID tag)");
 
 	bool layoutUpdateRequired = false; // needed for position changes etc
-	// get properties from proplist and check for those, that match an allowed property to set them
-	C4ValueArray *properties = proplist->GetProperties();
+
+	// Get properties from proplist and check for those, that match an allowed property to set them;
+	// We take ownership here. Automatically destroy the object when we're done.
+	std::unique_ptr<C4ValueArray> properties(proplist->GetProperties());
 	properties->SortStrings();
 	C4String *stdTag = &Strings.P[P_Std];
-	for (int32_t i = 0; i < properties->GetSize(); ++i)
+	const int32_t propertySize = properties->GetSize();
+	for (int32_t i = 0; i < propertySize; ++i)
 	{
 		const C4Value &entry = properties->GetItem(i);
 		C4String *key = entry.getStr();
@@ -984,8 +999,6 @@ bool C4ScriptGuiWindow::CreateFromPropList(C4PropList *proplist, bool resetStdTa
 		MenuDebugLogF("--%s\t\t(I am %d)", key->GetCStr(), id);
 		C4Value property;
 		proplist->GetPropertyByS(key, &property);
-
-		C4Value value;
 
 		if(&Strings.P[P_Left] == key)
 		{
@@ -1105,7 +1118,11 @@ bool C4ScriptGuiWindow::CreateFromPropList(C4PropList *proplist, bool resetStdTa
 				if (!child)
 				{
 					child = new C4ScriptGuiWindow();
-					child->name = childName;
+					if (childName != nullptr)
+					{
+						child->name = childName;
+						child->name->IncRef();
+					}
 					AddChild(child);
 					freshlyAdded = true;
 				}
@@ -1267,13 +1284,15 @@ void C4ScriptGuiWindow::RemoveChild(C4ScriptGuiWindow *child, bool close, bool a
 	if (!all && !IsRoot())
 		RequestLayoutUpdate();
 
-	if (child && close)
+	if (child)
 	{
 		child->wasRemoved = true;
-		child->Close();
+		if (close) child->Close();
 		if (child->GetID() != 0)
 			ChildWithIDRemoved(child);
 		RemoveElement(static_cast<C4GUI::Element*>(child));
+		// RemoveElement does NOT delete the child itself.
+		delete child;
 	}
 	else if (close) // close all children
 	{

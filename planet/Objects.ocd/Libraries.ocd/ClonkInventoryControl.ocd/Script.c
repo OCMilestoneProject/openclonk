@@ -127,6 +127,13 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 	
 	if (hot > 0)
 	{
+		// Do not stop picking-up but nullify object selection.
+		// That way, you can still drop during pickup, but you won't automatically pickup stuff when you try to drop.
+		if (this.inventory.is_picking_up)
+		{
+			SetNextPickupItem(nil);
+		}
+		
 		this->~DropInventoryItem(hot-1);
 		return true;
 	}
@@ -228,8 +235,8 @@ private func SetNextPickupItem(object to)
 private func FindNextPickupObject(object start_from, int x_dir)
 {
 	if (!start_from) start_from = this;
-	var sort = Sort_Func("Library_ClonkInventoryControl_Sort_Priority", start_from->GetX()); 
-	var objects = FindObjects(Find_Distance(20), Find_Or(Find_Category(C4D_Object), Find_Category(C4D_Living)), Find_NoContainer(), Find_Func("GetProperty", "Collectible"), sort);
+	var sort = Sort_Func("Library_ClonkInventoryControl_Sort_Priority", start_from->GetX());
+	var objects = FindObjects(Find_Distance(20), Find_NoContainer(), Find_Property("Collectible"), Find_Layer(this->GetObjectLayer()), sort);
 	var len = GetLength(objects);
 	// Find object next to the current one.
 	var index = GetIndexOf(objects, start_from);

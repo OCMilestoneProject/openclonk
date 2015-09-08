@@ -1,0 +1,3 @@
+Name=Lavacore
+
+Description=The lava high life

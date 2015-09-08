@@ -35,6 +35,6 @@ slice(light+1)
 #else
 	// For objects, ambient brightness is coming from the front
 	vec3 ambientDir = vec3(0.0, 0.0, 1.0);
-	light = mix(light, max((dot(normal, ambientDir)+1.0)/2.0, 0.0), ambient);
+	light = mix(light, max(max(dot(normal, ambientDir), 0.0), cullMode * max(dot(-normal, ambientDir), 0.0)), ambient);
 #endif
 }

@@ -25,7 +25,7 @@ public func GetCarryMode(clonk) { return CARRY_Musket; }
 
 public func GetCarryTransform()
 {
-	return Trans_Mul(Trans_Rotate(220, 0, 0, 1), Trans_Rotate(-30, 1, 0, 0), Trans_Rotate(26, 0, 1, 0));
+	return Trans_Mul(Trans_Rotate(220, 0, 1, 0), Trans_Rotate(30, 0, 0, 1), Trans_Rotate(-26, 1, 0, 0));
 }
 
 public func GetCarryPhase() { return 600; }
@@ -35,10 +35,20 @@ public func IsInventorProduct() { return true; }
 
 /*-- Usage --*/
 
+func RejectUse(object clonk)
+{
+	return clonk->GetProcedure() == "ATTACH";
+}
+
+// used by this object
+func ReadyToBeUsed(proplist data)
+{
+	var clonk = data.clonk;
+	return !RejectUse(clonk) && !GetEffect("IntReload", this);
+}
+
 protected func ControlUse(object clonk, x, y)
 {
-	if (clonk->GetProcedure() == "ATTACH")
-		return true;
 	if (!GetEffect("IntReload", this) && !GetEffect("IntBurstWind", this))
 	{
 		if (!GBackLiquid())
@@ -46,6 +56,7 @@ protected func ControlUse(object clonk, x, y)
 		return true;
 	}
 	clonk->Message("$MsgReloading$");
+	clonk->PauseUse(this, "ReadyToBeUsed", {clonk = clonk});
 	return true;
 }
 

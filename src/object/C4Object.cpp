@@ -173,7 +173,6 @@ void C4Object::Default()
 	Controller=NO_OWNER;
 	LastEnergyLossCausePlayer=NO_OWNER;
 	Category=0;
-	NoCollectDelay=0;
 	Con=0;
 	Mass=OwnMass=0;
 	Damage=0;
@@ -193,7 +192,8 @@ void C4Object::Default()
 	OnFire=0;
 	InLiquid=0;
 	EntranceStatus=0;
-	Audible=0;
+	Audible=AudiblePan=0;
+	AudiblePlayer = NO_OWNER;
 	t_contact=0;
 	OCF=0;
 	Action.Default();
@@ -302,7 +302,7 @@ bool C4Object::Init(C4PropList *pDef, C4Object *pCreator,
 	UpdateFace(true);
 
 	// Initial audibility
-	Audible=::Viewports.GetAudibility(GetX(), GetY(), &AudiblePan);
+	Audible=::Viewports.GetAudibility(GetX(), GetY(), &AudiblePan, 0, &AudiblePlayer);
 
 	// Initial OCF
 	SetOCF();
@@ -393,6 +393,7 @@ void C4Object::AssignRemoval(bool fExitContents)
 		else
 		{
 			Contents.Remove(cobj);
+			cobj->Contained = NULL;
 			cobj->AssignRemoval();
 		}
 	}
@@ -823,7 +824,6 @@ void C4Object::SetOCF()
 	if ((OCF & OCF_FullCon) || Def->IncompleteActivity)
 		if ((Def->Collection.Wdt>0) && (Def->Collection.Hgt>0))
 			if (!pActionDef || (!pActionDef->GetPropertyInt(P_ObjectDisabled)))
-				if (NoCollectDelay==0)
 					OCF|=OCF_Collection;
 	// OCF_Alive
 	if (Alive) OCF|=OCF_Alive;
@@ -904,7 +904,6 @@ void C4Object::UpdateOCF()
 	if ((OCF & OCF_FullCon) || Def->IncompleteActivity)
 		if ((Def->Collection.Wdt>0) && (Def->Collection.Hgt>0))
 			if (!pActionDef || (!pActionDef->GetPropertyInt(P_ObjectDisabled)))
-				if (NoCollectDelay==0)
 					OCF|=OCF_Collection;
 	// OCF_NotContained
 	if (!Contained)
@@ -1373,7 +1372,7 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	// 4. Call collection for container
 	// 5. Call entrance for object.
 
-	// No target or target is self
+	// No valid target or target is self
 	if (!pTarget || (pTarget==this)) return false;
 	// check if entrance is allowed
 	if (!! Call(PSF_RejectEntrance, &C4AulParSet(C4VObj(pTarget)))) return false;
@@ -1394,7 +1393,12 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	if (Contained) if (!Exit(GetX(),GetY())) return false;
 	if (Contained || !Status || !pTarget->Status) return false;
 	// Failsafe updates
-	CloseMenu(true);
+	if (Menu)
+	{
+		CloseMenu(true);
+		// CloseMenu might do bad stuff
+		if (Contained || !Status || !pTarget->Status) return false;
+	}
 	SetOCF();
 	// Set container
 	Contained=pTarget;
@@ -1837,7 +1841,15 @@ void C4Object::ClearPointers(C4Object *pObj)
 	if(pMeshInstance) pMeshInstance->ClearPointers(pObj);
 	// effects
 	if (pEffects) pEffects->ClearPointers(pObj);
-	// contents/contained: not necessary, because it's done in AssignRemoval and StatusDeactivate
+	// contents/contained: although normally not necessery because it's done in AssignRemoval and StatusDeactivate,
+	// it is also required during game destruction (because ClearPointers might do script callbacks)
+	// Perform silent exit to avoid additional callbacks
+	if (Contained == pObj)
+	{
+		Contained->Contents.Remove(this);
+		Contained = NULL;
+	}
+	Contents.Remove(pObj);
 	// Action targets
 	if (Action.Target==pObj) Action.Target=NULL;
 	if (Action.Target2==pObj) Action.Target2=NULL;
@@ -1885,7 +1897,7 @@ void C4Object::Draw(C4TargetFacet &cgo, int32_t iByPlayer, DrawMode eDrawMode, f
 	if (!IsVisible(iByPlayer, !!eDrawMode)) return;
 
 	// Line
-	if (Def->Line) { DrawLine(cgo); return; }
+	if (Def->Line) { DrawLine(cgo, iByPlayer); return; }
 
 	// background particles (bounds not checked)
 	if (BackParticles) BackParticles->Draw(cgo, this);
@@ -1905,7 +1917,7 @@ void C4Object::Draw(C4TargetFacet &cgo, int32_t iByPlayer, DrawMode eDrawMode, f
 			fYStretchObject=true;
 
 	// Set audibility
-	if (!eDrawMode) SetAudibilityAt(cgo, GetX(), GetY());
+	if (!eDrawMode) SetAudibilityAt(cgo, GetX(), GetY(), iByPlayer);
 
 	// Output boundary
 	if (!fYStretchObject && !eDrawMode && !(Category & C4D_Parallax))
@@ -2017,7 +2029,7 @@ void C4Object::Draw(C4TargetFacet &cgo, int32_t iByPlayer, DrawMode eDrawMode, f
 	// Debug Display ///////////////////////////////////////////////////////////////////////////////
 
 	// Don't draw (show solidmask)
-	if (::GraphicsSystem.ShowSolidMask)
+	if (::GraphicsSystem.Show8BitSurface != 0)
 		if (SolidMask.Wdt)
 		{
 			// DrawSolidMask(cgo); - no need to draw it, because the 8bit-surface will be shown
@@ -2147,7 +2159,7 @@ void C4Object::DrawTopFace(C4TargetFacet &cgo, int32_t iByPlayer, DrawMode eDraw
 	    || !Inside<float>(offY, cgo.Y - Shape.Hgt, cgo.Y + cgo.Hgt))
 		return;
 	// Don't draw (show solidmask)
-	if (::GraphicsSystem.ShowSolidMask && SolidMask.Wdt) return;
+	if (::GraphicsSystem.Show8BitSurface != 0 && SolidMask.Wdt) return;
 	// Contained
 	if (Contained) if (eDrawMode!=ODM_Overlay) return;
 	// Construction sign
@@ -2201,15 +2213,15 @@ void C4Object::DrawTopFace(C4TargetFacet &cgo, int32_t iByPlayer, DrawMode eDraw
 #endif
 }
 
-void C4Object::DrawLine(C4TargetFacet &cgo)
+void C4Object::DrawLine(C4TargetFacet &cgo, int32_t at_player)
 {
 	// Nothing to draw if the object has less than two vertices
 	if (Shape.VtxNum < 2)
 		return;
 #ifndef USE_CONSOLE
 	// Audibility
-	SetAudibilityAt(cgo, Shape.VtxX[0],Shape.VtxY[0]);
-	SetAudibilityAt(cgo, Shape.VtxX[Shape.VtxNum-1],Shape.VtxY[Shape.VtxNum-1]);
+	SetAudibilityAt(cgo, Shape.VtxX[0], Shape.VtxY[0], at_player);
+	SetAudibilityAt(cgo, Shape.VtxX[Shape.VtxNum - 1], Shape.VtxY[Shape.VtxNum - 1], at_player);
 	// additive mode?
 	PrepareDrawing();
 	// Draw line segments
@@ -2268,7 +2280,6 @@ void C4Object::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 	pComp->Value(mkNamingAdapt( Plane,                            "Plane",              0                 ));
 
 	pComp->Value(mkNamingAdapt( iLastAttachMovementFrame,         "LastSolidAtchFrame", -1                ));
-	pComp->Value(mkNamingAdapt( NoCollectDelay,                   "NoCollectDelay",     0                 ));
 	pComp->Value(mkNamingAdapt( Con,                              "Size",               0                 ));
 	pComp->Value(mkNamingAdapt( OwnMass,                          "OwnMass",            0                 ));
 	pComp->Value(mkNamingAdapt( Mass,                             "Mass",               0                 ));
@@ -2601,6 +2612,12 @@ void C4Object::SetSolidMask(int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, 
 	if (CheckSolidMaskRect()) UpdateSolidMask(false);
 }
 
+void C4Object::SetHalfVehicleSolidMask(bool set)
+{
+	if (!pSolidMaskData) return;
+	pSolidMaskData->SetHalfVehicle(set);
+}
+
 bool C4Object::CheckSolidMaskRect()
 {
 	// Ensure SolidMask rect lies within bounds of SolidMask bitmap in definition
@@ -2726,8 +2743,6 @@ void C4Object::SetCommand(int32_t iCommand, C4Object *pTarget, C4Value iTx, int3
                           C4Object *pTarget2, bool fControl, C4Value iData,
                           int32_t iRetries, C4String *szText)
 {
-	// Decrease NoCollectDelay
-	if (NoCollectDelay>0) NoCollectDelay--;
 	// Clear stack
 	ClearCommands();
 	// Close menu
@@ -4147,13 +4162,18 @@ void C4Object::UpdateLight()
 	if (Landscape.pFoW) Landscape.pFoW->Add(this);
 }
 
-void C4Object::SetAudibilityAt(C4TargetFacet &cgo, int32_t iX, int32_t iY)
+void C4Object::SetAudibilityAt(C4TargetFacet &cgo, int32_t iX, int32_t iY, int32_t player)
 {
 	// target pos (parallax)
 	float offX, offY, newzoom;
 	GetDrawPosition(cgo, iX, iY, cgo.Zoom, offX, offY, newzoom);
-	Audible = Max<int>(Audible, Clamp(100 - 100 * Distance(cgo.X + cgo.Wdt / 2, cgo.Y + cgo.Hgt / 2, offX, offY) / 700, 0, 100));
-	AudiblePan = Clamp<int>(200 * (offX - cgo.X - (cgo.Wdt / 2)) / cgo.Wdt, -100, 100);
+	int32_t audible_at_pos = Clamp(100 - 100 * Distance(cgo.X + cgo.Wdt / 2, cgo.Y + cgo.Hgt / 2, offX, offY) / 700, 0, 100);
+	if (audible_at_pos > Audible)
+	{
+		Audible = audible_at_pos;
+		AudiblePan = Clamp<int>(200 * (offX - cgo.X - (cgo.Wdt / 2)) / cgo.Wdt, -100, 100);
+		AudiblePlayer = player;
+	}
 }
 
 bool C4Object::IsVisible(int32_t iForPlr, bool fAsOverlay) const

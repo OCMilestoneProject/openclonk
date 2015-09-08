@@ -67,6 +67,8 @@
 #pragma warning(disable: 4521) // multiple copy constructors specified
 // Get non-standard <cmath> constants (M_PI etc.)
 #	define _USE_MATH_DEFINES
+// Use IPv4 functions (inet_ntoa) since we don't support IPv6 yet.
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #endif
 
 
@@ -142,10 +144,10 @@ namespace std { template<typename T> inline T &move (T &t) { return t; } }
 #  if defined(SIGTRAP)
 #    define BREAKPOINT_HERE raise(SIGTRAP);
 #  else
-#    define BREAKPOINT_HERE
+#    define BREAKPOINT_HERE ((void)0)
 #  endif
 #else
-#  define BREAKPOINT_HERE
+#  define BREAKPOINT_HERE ((void)0)
 #endif
 
 

@@ -702,7 +702,7 @@ namespace C4GUI
 		// get dialog with matching handle
 		Dialog *pDlg;
 		for (Element *pEl = pLast; pEl; pEl = pEl->GetPrev())
-			if (pDlg = pEl->GetDlg())
+			if ((pDlg = pEl->GetDlg()))
 				if (pDlg->pWindow && pDlg->pWindow->hWindow == hWindow)
 					return pDlg;
 		return NULL;
@@ -832,6 +832,7 @@ namespace C4GUI
 		float fY = float(iPxY) / fZoom;
 		// forward to mouse
 		Mouse.Input(iButton, fX, fY, dwKeyParam);
+
 		// dragging
 		if (Mouse.pDragElement)
 		{

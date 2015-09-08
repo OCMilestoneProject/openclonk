@@ -5,6 +5,8 @@
 	Tosses objects farther than a clonk can. Requires no fuel.
 --*/
 
+#include Library_ElevatorControl
+
 local aim_anim;
 local turn_anim;
 local olddir;
@@ -79,67 +81,59 @@ public func ControlUseStart(object clonk)
 	return true;
 }
 
-public func ControlUseAltStart(object clonk)
-{
-	return true;
-}
+public func HoldingEnabled() { return true; }
 
-public func HoldingEnabled()	{	return true;	}
-
-public func ControlUseAnyHolding(object clonk, int x, int y)
-{
-	ArmAnimation(x,y);
-}
 
 public func ControlUseHolding(object clonk, int x, int y)
 {
-	ControlUseAnyHolding(clonk,x,y);
-}
-
-public func ControlUseAltHolding(object clonk, int x, int y)
-{
-	ControlUseAnyHolding(clonk,x,y);
+	ArmAnimation(x, y);
+	ShowTrajectory(DefinePower(x, y));
+	return true;
 }
 
 public func DefinePower(int x, int y)
 {
-	var angle = Angle(0,0,x,y);
+	var angle = Angle(0, 0, x, y);
 	
 	//balancing stats
 	var padding = 20;
 
-	var x2 = Sin(padding,angle);
-	var y2 = -Cos(padding,angle);
-	var power = Distance(x2,y2,x2+x,y2+y) - padding;
-
-	if(power > 100) power = 100;
-	if(power < 20) power = 20;
-	
+	var x2 = Sin(padding, angle);
+	var y2 = -Cos(padding, angle);
+	var power = Distance(x2, y2, x2 + x, y2 + y) - padding;
+	power = BoundBy(power, 20, 100);
 	return power;
 }
 
 public func ArmAnimation(int x, int y)
 {
-	var power = DefinePower(x,y);
+	var power = DefinePower(x, y);
 	SetAnimationPosition(aim_anim, Anim_Const(759 - (power * 759 / 100)));
+}
+
+public func ShowTrajectory(int power)
+{
+	var exit = GetProjectileExit();
+	var x = GetX() + exit[0];
+	var y = GetY() + exit[1];
+	var angle = exit[2] + GetR();
+	var xdir = Sin(angle, power);
+	var ydir = -Cos(angle, power);
+	Trajectory->Create(this, x, y, xdir, ydir);
+	return;
 }
 
 public func ControlUseStop(object clonk, int x, int y)
 {
-	DoFire(clonk,DefinePower(x,y),0);
-}
-
-public func ControlUseAltStop(object clonk, int x, int y)
-{
-	DoFire(clonk,DefinePower(x,y),1);
+	DoFire(clonk, DefinePower(x,y));
 }
 
 public func ContainedUse(object clonk, int x, int y)
 {
-	DoFire(clonk, 70, nil);
+	DoFire(clonk, 70);
 }
 
-protected func DoFire(object clonk, int power, int hand)
+protected func DoFire(object clonk, int power)
 {
 	//Fire the catapult!
 //	PlayAnimation("Launch", 5, Anim_Linear(0,0, GetAnimationLength("Launch"), 10, ANIM_Remove), Anim_Const(1000));
@@ -149,16 +143,18 @@ protected func DoFire(object clonk, int power, int hand)
 	Sound("Catapult_Launch");
 
 	var projectile = nil;
-	if(Contents(0))	projectile = Contents(0); //Is clonk sitting in the catapult? Then (s)he shall be the projectile!
+	if (Contents(0))
+		projectile = Contents(0); //Is clonk sitting in the catapult? Then (s)he shall be the projectile!
 	else
-		if(clonk->GetHandItem(hand)) projectile = clonk->GetHandItem(hand); //otherwise, fire what is in the clonk's hand
-	if(projectile)
+		if(clonk->GetHandItem(0)) 
+			projectile = clonk->GetHandItem(0); //otherwise, fire what is in the clonk's hand
+	if (projectile)
 	{
 		//finding the spot of the catapult's arm depending on rotation
-		var i = 1;
-		if(dir == 0) i = -1; 
-		var x = 8*i;
-		var y = -28;
+		var exit = GetProjectileExit();
+		var x = exit[0];
+		var y = exit[1];
+		var angle = exit[2] + GetR();
 
 		projectile->Exit();
 		//Put the ammo at the catapult's arm
@@ -172,10 +168,22 @@ protected func DoFire(object clonk, int power, int hand)
 		}
 
 		//Catapult is facing left or right?
-		var angle = -45;
-		if(dir == 1) angle = 45;
 		projectile->SetVelocity(angle + GetR(), power);
 	}
+	
+	// Remove trajectory display.
+	Trajectory->Remove(this);
+}
+
+private func GetProjectileExit()
+{
+	var xdir = 1;
+	if (dir == 0) 
+		xdir = -1;
+	var x = 8 * xdir;
+	var y = -28;
+	var angle = 45 * xdir;
+	return [x, y, angle];
 }
 
 public func ActivateEntrance(object clonk)
@@ -196,8 +204,9 @@ public func ActivateEntrance(object clonk)
 		SetAnimationPosition(aim_anim, Anim_Const(150));
 		clonk->Enter(this);
 		SetOwner(clonk->GetController());
-		clonkmesh = AttachMesh(clonk,"shot","skeleton_body",Trans_Mul(Trans_Rotate(180,0,1,0), Trans_Translate(0,-3000,-1000)),AM_DrawBefore);
+		clonkmesh = AttachMesh(clonk,"shot","skeleton_body",Trans_Mul(Trans_Rotate(180, 1, 0, 0), Trans_Translate(-3000, 1000, 0)),AM_DrawBefore);
 		clonk->PlayAnimation("CatapultSit", 5, Anim_Const(0), Anim_Const(1000));
+		ShowTrajectory(70);
 	}
 }
 

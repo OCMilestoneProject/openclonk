@@ -35,6 +35,8 @@ MerchantAPump2=Then just throw the source pipe into liquid and the drain pipe to
 MerchantQCatapult=Why do I need the catapult?
 MerchantACatapult1=A catapult has many uses. You can fling things like pipe ends. If you're daring, you could even try to catapult yourself over the lava lake!
 MerchantACatapult2=That...sounds scary. I like it!
+MerchantQGold=How do I get clunkers?
+MerchantAGold=Blast gold nuggets {{Nugget}} out of the gold mine below. Then build a flagpole {{Flagpole}} and throw nuggets onto it. You'll get more clunkers by melting it to bars {{GoldBar}} in a foundry {{Foundry}} before.
 MerchantQDone=Goodbye.
 
 # Gyro
@@ -45,7 +47,8 @@ Gyro4=You see, fuel has gotten pretty rare and expensive recently. To save money
 Gyro5=That sounds pretty dangerous.
 Gyro6=Bah, if your aim is good, you can just hop into a catapult and off you go! It's a really good way to reach distant locations quickly. Only a few people seem to know this secret! And even fewer actually do it!
 Gyro7=I wonder why...
-Gyro8=Well, to be fair... it is pretty dangerous. I almost flung myself into the lava lake because I couldn't find my glasses. Fortunately I missed it by just a few inches and landed here. Stubbed my toe pretty bad though. Should have put on my safety-sandals...
+Gyro8=Well, to be fair... it is pretty dangerous. I almost flung myself into the lava lake because I couldn't find my glasses. Fortunately I missed it by just a few inches and landed here.
+Gyro9=Stubbed my toe pretty bad though. Should have put on my safety-sandals...
 
 # Outro
 Outro1=It's done! The plane is back.

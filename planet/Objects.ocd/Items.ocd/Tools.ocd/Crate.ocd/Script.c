@@ -15,9 +15,9 @@ public func GetCarryPhase() { return 800; }
 public func GetCarryTransform(clonk)
 {
 	if(GetCarrySpecial(clonk))
-		return Trans_Translate(0, 3500, -6500);
+		return Trans_Translate(3500, 6500, 0);
 	
-	return Trans_Translate(-1500, 0, 0);
+	return Trans_Translate(0, 0, -1500);
 }
 
 protected func Construction()
@@ -71,6 +71,7 @@ func Hit()
 }
 
 local Name = "$Name$";
+local Description = "$Description$";
 local Collectible = false;
 local ContainBlast = true;
 local Touchable = 2;

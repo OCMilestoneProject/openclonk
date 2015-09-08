@@ -116,7 +116,7 @@ void C4GraphicsSystem::Execute()
 		return;
 	}
 
-	
+
 	// Reset object audibility
 	::Objects.ResetAudibility();
 
@@ -149,9 +149,6 @@ void C4GraphicsSystem::Execute()
 		::pGUI->Render(false);
 	}
 
-	// gamma update
-	pDraw->ApplyGamma();
-
 	// Video record & status (fullsrceen)
 	if (!Application.isEditor)
 		Video.Execute();
@@ -171,8 +168,9 @@ void C4GraphicsSystem::Default()
 	ShowEntrance=false;
 	ShowPathfinder=false;
 	ShowNetstatus=false;
-	ShowSolidMask=false;
+	Show8BitSurface=0;
 	ShowLights=false;
+	ShowMenuInfo=false;
 	ShowHelp=false;
 	FlashMessageText[0]=0;
 	FlashMessageTime=0; FlashMessageX=FlashMessageY=0;
@@ -194,8 +192,6 @@ bool C4GraphicsSystem::InitLoaderScreen(const char *szLoaderSpec)
 	if (!pNewLoader->Init(szLoaderSpec)) { delete pNewLoader; return false; }
 	if (pLoaderScreen) delete pLoaderScreen;
 	pLoaderScreen = pNewLoader;
-	// apply user gamma for loader
-	pDraw->ApplyGamma();
 	// done, success
 	return true;
 }
@@ -310,8 +306,9 @@ void C4GraphicsSystem::DeactivateDebugOutput()
 	ShowEntrance=false;
 	ShowPathfinder=false; // allow pathfinder! - why this??
 	ShowLights=false;
-	ShowSolidMask=false;
+	Show8BitSurface=0;
 	ShowNetstatus=false;
+	ShowMenuInfo=false;
 }
 
 void C4GraphicsSystem::DrawHoldMessages()
@@ -404,8 +401,8 @@ void C4GraphicsSystem::DrawHelp()
 	strText.AppendFormat("\n\n[%s]\n\n", "Debug");
 	strText.AppendFormat("<c ffff00>%s</c> - %s\n", GetKeyboardInputName("DbgModeToggle").getData(), LoadResStr("IDS_CTL_DEBUGMODE"));
 	strText.AppendFormat("<c ffff00>%s</c> - %s\n", GetKeyboardInputName("DbgShowVtxToggle").getData(), "Entrance+Vertices");
-	strText.AppendFormat("<c ffff00>%s</c> - %s\n", GetKeyboardInputName("DbgShowActionToggle").getData(), "Actions/Commands/Pathfinder");
-	strText.AppendFormat("<c ffff00>%s</c> - %s\n", GetKeyboardInputName("DbgShowSolidMaskToggle").getData(), "SolidMasks");
+	strText.AppendFormat("<c ffff00>%s</c> - %s\n", GetKeyboardInputName("DbgShowActionToggle").getData(), "Actions/Commands/Pathfinder/Lights/Menus");
+	strText.AppendFormat("<c ffff00>%s</c> - %s\n", GetKeyboardInputName("DbgShow8BitSurface").getData(), "8-bit surfaces");
 	pDraw->TextOut(strText.getData(), ::GraphicsResource.FontRegular, 1.0, FullScreen.pSurface,
 	                           iX + iWdt/2 + 64, iY + 64, C4Draw::DEFAULT_MESSAGE_COLOR, ALeft);
 }
@@ -428,7 +425,7 @@ bool C4GraphicsSystem::ToggleShowVertices()
 bool C4GraphicsSystem::ToggleShowAction()
 {
 	if (!Game.DebugMode && !Console.Active) { FlashMessage(LoadResStr("IDS_MSG_NODEBUGMODE")); return false; }
-	if (!(ShowAction || ShowCommand || ShowPathfinder || ShowLights))
+	if (!(ShowAction || ShowCommand || ShowPathfinder || ShowLights || ShowMenuInfo))
 		{ ShowAction = true; FlashMessage("Actions"); }
 	else if (ShowAction)
 		{ ShowAction = false; ShowCommand = true; FlashMessage("Commands"); }
@@ -437,15 +434,22 @@ bool C4GraphicsSystem::ToggleShowAction()
 	else if (ShowPathfinder)
 		{ ShowPathfinder = false; ShowLights = true; FlashMessage("Lights"); }
 	else if (ShowLights)
-		{ ShowLights = false; FlashMessageOnOff("Actions/Commands/Pathfinder/Lights", false); }
+		{ ShowLights = false; ShowMenuInfo = true; FlashMessage("Menu Info"); }
+	else if (ShowMenuInfo)
+		{ ShowMenuInfo = false; FlashMessageOnOff("Actions/Commands/Pathfinder/Lights/Menus", false); }
 	return true;
 }
 
-bool C4GraphicsSystem::ToggleShowSolidMask()
+bool C4GraphicsSystem::ToggleShow8BitSurface()
 {
 	if (!Game.DebugMode && !Console.Active) { FlashMessage(LoadResStr("IDS_MSG_NODEBUGMODE")); return false; }
-	Toggle(ShowSolidMask);
-	FlashMessageOnOff("SolidMasks", !!ShowSolidMask);
+	Show8BitSurface = (Show8BitSurface + 1) % 3;
+	if (Show8BitSurface == 0)
+		FlashMessage("Default view");
+	else if (Show8BitSurface == 1)
+		FlashMessage("Foreground 8-bit landscape");
+	else if (Show8BitSurface == 2)
+		FlashMessage("Background 8-bit landscape");
 	return true;
 }
 

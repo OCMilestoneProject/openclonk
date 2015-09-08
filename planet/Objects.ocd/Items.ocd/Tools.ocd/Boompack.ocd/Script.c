@@ -26,9 +26,9 @@ public func GetCarryPhase() { return 700; }
 public func GetCarryTransform(clonk)
 {
 	if(GetCarrySpecial(clonk))
-		return Trans_Translate(0, 0, -6500);
+		return Trans_Translate(0, 6500, 0);
 	
-	return Trans_Translate(-1500, 0, 0);
+	return Trans_Translate(0, 0, -1500);
 }
 
 protected func Construction()
@@ -82,19 +82,19 @@ func ControlJump(object clonk)
 	return true;
 }
 
-func ControlUseStart(object clonk, int x, int y)
+public func RejectUse(object clonk)
 {
-	// forward control to item
-	if(clonk->GetProcedure()=="ATTACH") return false;
+	// If the Clonk is on the boompack, we won't stop the command here, but forward it later.
+	if (clonk->GetProcedure() == "ATTACH") return false;
+	// Only allow during walking or jumping.
+	return clonk->GetProcedure() != "WALK" && clonk->GetProcedure() != "FLIGHT";
 }
+
 
 func ControlUse(object clonk, int x, int y)
 {
 	// forward control to item
 	if(clonk->GetProcedure()=="ATTACH") return false;
-
-	// only use during walk or jump
-	if(clonk->GetProcedure()!="WALK" && clonk->GetProcedure()!="FLIGHT") return true;
 
 	var angle=Angle(0,0,x,y);
 	Launch(angle,clonk);
@@ -174,7 +174,7 @@ public func OnMount(clonk)
 	var iDir = 1;
 	if(clonk->GetDir() == 1) iDir = -1;
 	clonk->PlayAnimation("PosRocket", 10, Anim_Const(0), Anim_Const(1000));
-	riderattach = AttachMesh(clonk, "main", "pos_tool1", Trans_Mul(Trans_Translate(2000, -1000, -2000*iDir), Trans_Rotate(90*iDir,0,1,0)));
+	riderattach = AttachMesh(clonk, "main", "pos_tool1", Trans_Mul(Trans_Translate(-1000,2000*iDir,2000), Trans_Rotate(-90*iDir,1,0,0)));
 	
 	//Modify picture transform to fit icon on clonk mount
 	//clean pic transform rotations

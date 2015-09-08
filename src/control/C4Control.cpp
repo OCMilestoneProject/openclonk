@@ -39,6 +39,7 @@
 #include <C4PlayerList.h>
 #include <C4GameObjects.h>
 #include <C4GameControl.h>
+#include <C4ScriptGuiWindow.h>
 #include "gui/C4MessageInput.h"
 #include "object/C4DefList.h"
 
@@ -310,8 +311,6 @@ void C4ControlMsgBoardReply::CompileFunc(StdCompiler *pComp)
 // *** C4ControlMsgBoardCmd
 void C4ControlMsgBoardCmd::Execute() const
 {
-	C4Player *source_player = ::Players.Get(player);
-
 	// don't handle this if the game isn't actually running
 	if (!::Game.IsRunning) return;
 
@@ -541,6 +540,44 @@ void C4ControlPlayerCommand::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(iTarget2, "Target2", 0));
 	pComp->Value(mkNamingAdapt(iData, "Data", 0));
 	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iAddMode), "AddMode", 0));
+	C4ControlPacket::CompileFunc(pComp);
+}
+// *** C4ControlMenuCommand
+
+C4ControlMenuCommand::C4ControlMenuCommand(int32_t actionID, int32_t player, int32_t menuID, int32_t subwindowID, C4Object *target, int32_t actionType)
+	: actionID(actionID), player(player), menuID(menuID), subwindowID(subwindowID), target(target ? target->Number : 0), actionType(actionType)
+{
+
+}
+
+void C4ControlMenuCommand::Execute() const
+{
+	// invalid action? The action needs to be in bounds!
+	if (actionType < 0 || actionType >= C4ScriptGuiWindowPropertyName::_lastProp)
+	{
+		// this could only come from a malicious attempt to crash the engine!
+		Log("Warning: invalid action type for C4ControlMenuCommand!");
+		return;
+	}
+	C4ScriptGuiWindow *menu = ::Game.ScriptGuiRoot->GetChildByID(menuID);
+	// menu was closed?
+	if (!menu) return;
+
+	C4Object *obj = target ? ::Objects.ObjectPointer(target) : 0;
+	// target has been removed in the meantime? abort now
+	if (target && !obj) return;
+
+	menu->ExecuteCommand(actionID, player, subwindowID, actionType, obj);
+}
+
+void C4ControlMenuCommand::CompileFunc(StdCompiler *pComp)
+{
+	pComp->Value(mkNamingAdapt(mkIntPackAdapt(actionID), "ID", -1));
+	pComp->Value(mkNamingAdapt(mkIntPackAdapt(player), "Player", -1));
+	pComp->Value(mkNamingAdapt(mkIntPackAdapt(menuID), "Menu", 0));
+	pComp->Value(mkNamingAdapt(mkIntPackAdapt(subwindowID), "Window", 0));
+	pComp->Value(mkNamingAdapt(mkIntPackAdapt(actionType), "Action", 0));
+	pComp->Value(mkNamingAdapt(target, "Target", 0));
 	C4ControlPacket::CompileFunc(pComp);
 }
 
@@ -1371,9 +1408,10 @@ void C4ControlEMMoveObject::CompileFunc(StdCompiler *pComp)
 
 C4ControlEMDrawTool::C4ControlEMDrawTool(C4ControlEMDrawAction eAction, int32_t iMode,
     int32_t iX, int32_t iY, int32_t iX2, int32_t iY2, int32_t iGrade,
-    bool fIFT, const char *szMaterial, const char *szTexture)
+    const char *szMaterial, const char *szTexture, const char *szBackMaterial, const char *szBackTexture)
 		: eAction(eAction), iMode(iMode), iX(iX), iY(iY), iX2(iX2), iY2(iY2), iGrade(iGrade),
-		fIFT(fIFT), Material(szMaterial, true), Texture(szTexture, true)
+		Material(szMaterial, true), Texture(szTexture, true),
+		BackMaterial(szBackMaterial, true), BackTexture(szBackTexture, true)
 {
 
 }
@@ -1392,21 +1430,23 @@ void C4ControlEMDrawTool::Execute() const
 	// assert validity of parameters
 	if (!Material.getSize()) return;
 	const char *szMaterial = Material.getData(),
-	                         *szTexture = Texture.getData();
+	           *szTexture = Texture.getData();
+	const char *szBackMaterial = BackMaterial.getData(),
+	           *szBackTexture = BackTexture.getData();
 	// perform action
 	switch (eAction)
 	{
 	case EMDT_Brush: // brush tool
 		if (!Texture.getSize()) break;
-		::Landscape.DrawBrush(iX, iY, iGrade, szMaterial, szTexture, fIFT);
+		::Landscape.DrawBrush(iX, iY, iGrade, szMaterial, szTexture, szBackMaterial, szBackTexture);
 		break;
 	case EMDT_Line: // line tool
 		if (!Texture.getSize()) break;
-		::Landscape.DrawLine(iX,iY,iX2,iY2, iGrade, szMaterial, szTexture, fIFT);
+		::Landscape.DrawLine(iX,iY,iX2,iY2, iGrade, szMaterial, szTexture, szBackMaterial, szBackTexture);
 		break;
 	case EMDT_Rect: // rect tool
 		if (!Texture.getSize()) break;
-		::Landscape.DrawBox(iX,iY,iX2,iY2, iGrade, szMaterial, szTexture, fIFT);
+		::Landscape.DrawBox(iX,iY,iX2,iY2, iGrade, szMaterial, szTexture, szBackMaterial, szBackTexture);
 		break;
 	case EMDT_Fill: // fill tool
 	{
@@ -1435,9 +1475,10 @@ void C4ControlEMDrawTool::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(iX2, "X2", 0));
 	pComp->Value(mkNamingAdapt(iY2, "Y2", 0));
 	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iGrade),  "Grade", 0));
-	pComp->Value(mkNamingAdapt(fIFT, "IFT", false));
 	pComp->Value(mkNamingAdapt(Material, "Material", ""));
 	pComp->Value(mkNamingAdapt(Texture, "Texture", ""));
+	pComp->Value(mkNamingAdapt(BackMaterial, "BackMaterial", ""));
+	pComp->Value(mkNamingAdapt(BackTexture, "BackTexture", ""));
 	C4ControlPacket::CompileFunc(pComp);
 }
 

@@ -1,4 +1,4 @@
-material Tree_Coniferous
+material Fir
 {
 	receive_shadows off
 	technique

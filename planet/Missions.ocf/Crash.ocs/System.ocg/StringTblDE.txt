@@ -35,6 +35,8 @@ MerchantAPump2=Wirf dann einfach das andere Ende des zuflussrohrs ins Wasser und
 MerchantQCatapult=Wozu brauche ich ein Katapult?
 MerchantACatapult1=Ein Katapult hat viele Anwendungen. Man kann Dinge wie Leitungsenden durch die Gegend werfen. Und wenn du mutig bist, kannst du selbst ins Katapult steigen und dich über den Lavasee schleudern.
 MerchantACatapult2=Das...klingt gefährlich. Das gefällt mir!
+MerchantQGold=Wie bekomme ich Clunker?
+MerchantAGold=Sprenge Goldklumpen {{Nugget}} aus der Goldader, baue einen Flaggenmast {{Flagpole}} und wirf Goldklumpen darauf. Mehr Clunker bekommst du, wenn du sie vorher im Hochofen {{Foundry}} zu Barren {{GoldBar}} schmilzt.
 MerchantQDone=Tschüss.
 
 # Gyro
@@ -45,7 +47,8 @@ Gyro4=Nun, Treibstoff ist in letzter Zeit ziemlich teuer und knapp geworden. Um 
 Gyro5=Das klingt ziemlich gefährlich!
 Gyro6=Ach was. Ich steige ins Katapult, ziele und ab geht's! Man kommt echt schnell an sonst schwer erreichbare Orte. Nur wenige Clonks scheinen dieses Geheimnis zu kennen! Und noch weniger nutzen es.
 Gyro7=Warum nur...
-Gyro8=Nun, um ehrlich zu sein...ist es schon etwas gefährlich. Ich wäre fast in den Lavasee geschleudert, weil ich zum Zielen meine Brille nicht finden konnte. Zum Glück habe ich es doch knapp verpasst und bin nun hier gelandet. Habe mir nur den Zeh gestoßen. Hätte ich doch meine Sicherheitssandalen getragen...
+Gyro8=Nun, um ehrlich zu sein...ist es schon etwas gefährlich. Ich wäre fast in den Lavasee geschleudert, weil ich zum Zielen meine Brille nicht finden konnte. Zum Glück habe ich es doch knapp verpasst und bin nun hier gelandet.
+Gyro9=Habe mir nur den Zeh gestoßen. Hätte ich doch meine Sicherheitssandalen getragen...
 
 # Outro
 Outro1=Es ist vollbracht! Das Flugzeug ist zurück.

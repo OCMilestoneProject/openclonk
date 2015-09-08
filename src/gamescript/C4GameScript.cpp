@@ -32,6 +32,7 @@
 #include <C4GraphicsSystem.h>
 #include <C4Log.h>
 #include <C4MessageInput.h>
+#include <C4ScriptGuiWindow.h>
 #include <C4MouseControl.h>
 #include <C4Player.h>
 #include <C4PlayerList.h>
@@ -387,12 +388,32 @@ static long FnGetMaterial(C4PropList * _this, long x, long y)
 	return GBackMat(x,y);
 }
 
+static long FnGetBackMaterial(C4PropList * _this, long x, long y)
+{
+	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
+	return ::Landscape.GetBackMat(x, y);
+}
+
 static C4String *FnGetTexture(C4PropList * _this, long x, long y)
 {
 	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
 
 	// Get texture
 	int32_t iTex = PixCol2Tex(GBackPix(x, y));
+	if (!iTex) return NULL;
+	// Get material-texture mapping
+	const C4TexMapEntry *pTex = ::TextureMap.GetEntry(iTex);
+	if (!pTex) return NULL;
+	// Return tex name
+	return String(pTex->GetTextureName());
+}
+
+static C4String *FnGetBackTexture(C4PropList * _this, long x, long y)
+{
+	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
+
+	// Get texture
+	int32_t iTex = PixCol2Tex(::Landscape.GetBackPix(x, y));
 	if (!iTex) return NULL;
 	// Get material-texture mapping
 	const C4TexMapEntry *pTex = ::TextureMap.GetEntry(iTex);
@@ -442,7 +463,7 @@ static bool FnGBackLiquid(C4PropList * _this, long x, long y)
 static bool FnGBackSky(C4PropList * _this, long x, long y)
 {
 	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
-	return !GBackIFT(x, y);
+	return Landscape.GetBackPix(x, y) == 0;
 }
 
 static long FnExtractMaterialAmount(C4PropList * _this, long x, long y, long mat, long amount, bool distant_first)
@@ -465,7 +486,7 @@ static C4Void FnBlastFree(C4PropList * _this, long iX, long iY, long iLevel, Nil
 	return C4Void();
 }
 
-static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iCustomFalloffDistance)
+static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iCustomFalloffDistance, long iPitch, C4PropList *modifier_props)
 {
 	// play here?
 	if (!iAtPlayer.IsNil())
@@ -483,6 +504,12 @@ static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, N
 	// default sound level
 	if (iLevel.IsNil() || iLevel>100)
 		iLevel=100;
+	// modifier from prop list
+	C4SoundModifier *modifier;
+	if (modifier_props)
+		modifier = Application.SoundSystem.Modifiers.Get(modifier_props, true);
+	else
+		modifier = NULL;
 	// target object
 	C4Object *pObj = Object(_this);
 	if (pObj)
@@ -490,12 +517,12 @@ static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, N
 		iX += pObj->GetX();
 		iY += pObj->GetY();
 	}
-	StartSoundEffectAt(FnStringPar(szSound),iX,iY,iLevel,iCustomFalloffDistance);
+	StartSoundEffectAt(FnStringPar(szSound), iX, iY, iLevel, iCustomFalloffDistance, iPitch, modifier);
 	// always return true (network safety!)
 	return true;
 }
 
-static bool FnSound(C4PropList * _this, C4String *szSound, bool fGlobal, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iLoop, long iCustomFalloffDistance)
+static bool FnSound(C4PropList * _this, C4String *szSound, bool fGlobal, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iLoop, long iCustomFalloffDistance, long iPitch, C4PropList *modifier_props)
 {
 	// play here?
 	if (!iAtPlayer.IsNil())
@@ -513,18 +540,70 @@ static bool FnSound(C4PropList * _this, C4String *szSound, bool fGlobal, Nillabl
 	// default sound level
 	if (iLevel.IsNil() || iLevel>100)
 		iLevel=100;
+	// modifier from prop list
+	C4SoundModifier *modifier;
+	if (modifier_props)
+		modifier = Application.SoundSystem.Modifiers.Get(modifier_props, true);
+	else
+		modifier = NULL;
 	// target object
 	C4Object *pObj = NULL;
 	if (!fGlobal) pObj = Object(_this);
-	// already playing?
-	if (iLoop >= 0 && GetSoundInstance(FnStringPar(szSound), pObj))
-		return false;
-	// try to play effect
+	// play/stop?
 	if (iLoop >= 0)
-		StartSoundEffect(FnStringPar(szSound),!!iLoop,iLevel,pObj, iCustomFalloffDistance);
+	{
+		// already playing?
+		C4SoundInstance *inst = GetSoundInstance(FnStringPar(szSound), pObj);
+		if (inst)
+		{
+			// then just update parameters
+			SoundUpdate(inst, iLevel, iPitch);
+		}
+		else
+		{
+			// try to play effect
+			StartSoundEffect(FnStringPar(szSound), !!iLoop, iLevel, pObj, iCustomFalloffDistance, iPitch, modifier);
+		}
+	}
 	else
-		StopSoundEffect(FnStringPar(szSound),pObj);
+	{
+		StopSoundEffect(FnStringPar(szSound), pObj);
+	}
 	// always return true (network safety!)
+	return true;
+}
+
+static bool FnChangeSoundModifier(C4PropList * _this, C4PropList *modifier_props, bool release)
+{
+	// internal function to be used by sound library: Updates sound modifier
+	C4SoundModifier *modifier = Application.SoundSystem.Modifiers.Get(modifier_props, false);
+	// modifier not found. May be due to savegame resume.
+	// In that case, creation/updates will happen automatically next time Sound() is called
+	// always return true for sync safety because the internal C4SoundModifierList is not synchronized
+	if (!modifier) return true;
+	if (release)
+		modifier->Release();
+	else
+		modifier->Update();
+	return true;
+}
+
+static bool FnSetGlobalSoundModifier(C4PropList * _this, C4PropList *modifier_props, Nillable<long> at_player)
+{
+	// set modifier to be applied to all future sounds
+	if (at_player.IsNil())
+	{
+		// no player given: Global modifier for all players.
+		Game.SetGlobalSoundModifier(modifier_props);
+	}
+	else
+	{
+		// modifier for all viewports of a player
+		C4Player *plr = ::Players.Get(at_player);
+		if (!plr) return false;
+		plr->SetSoundModifier(modifier_props);
+	}
+	// always true on valid params for sync safety
 	return true;
 }
 
@@ -1903,15 +1982,18 @@ static long FnReloadParticle(C4PropList * _this, C4String *szParticleName)
 	return Game.ReloadParticle(FnStringPar(szParticleName));
 }
 
-static bool FnSetGamma(C4PropList * _this, long dwClr1, long dwClr2, long dwClr3, long iRampIndex)
+static bool FnSetGamma(C4PropList * _this, long iRed, long iGreen, long iBlue, long iRampIndex)
 {
-	pDraw->SetGamma(dwClr1, dwClr2, dwClr3, iRampIndex);
+	pDraw->SetGamma(float(iRed) / 100,
+	                float(iGreen) / 100,
+	                float(iBlue) / 100,
+	                iRampIndex);
 	return true;
 }
 
 static bool FnResetGamma(C4PropList * _this, long iRampIndex)
 {
-	pDraw->SetGamma(0x000000, 0x808080, 0xffffff, iRampIndex);
+	::Game.SetDefaultGamma();
 	return true;
 }
 
@@ -1968,10 +2050,29 @@ static const int32_t DMQ_Sky = 0, // draw w/ sky IFT
                      DMQ_Sub = 1, // draw w/ tunnel IFT
                      DMQ_Bridge = 2; // draw only over materials you can bridge over
 
-static bool FnDrawMaterialQuad(C4PropList * _this, C4String *szMaterial, long iX1, long iY1, long iX2, long iY2, long iX3, long iY3, long iX4, long iY4, int draw_mode)
+static bool FnDrawMaterialQuad(C4PropList * _this, C4String *szMaterial, long iX1, long iY1, long iX2, long iY2, long iX3, long iY3, long iX4, long iY4, const C4Value& draw_mode)
 {
 	const char *szMat = FnStringPar(szMaterial);
-	return !! ::Landscape.DrawQuad(iX1, iY1, iX2, iY2, iX3, iY3, iX4, iY4, szMat, draw_mode == DMQ_Sub, draw_mode==DMQ_Bridge);
+
+	const char *szBackMat = NULL;
+	bool fBridge = false;
+	if (draw_mode.GetType() == C4V_Int)
+	{
+		// Default behaviour: Default background material
+		const int draw_mode_value = draw_mode.getInt();
+		switch(draw_mode_value)
+		{
+		case DMQ_Sky: break;
+		case DMQ_Sub: szBackMat = "Tunnel"; break; // TODO: Go via DefaultBkgMat
+		case DMQ_Bridge: fBridge = true; break;
+		}
+	}
+	else if (draw_mode.GetType() == C4V_String)
+	{
+		szBackMat = FnStringPar(draw_mode.getStr());
+	}
+
+	return !! ::Landscape.DrawQuad(iX1, iY1, iX2, iY2, iX3, iY3, iX4, iY4, szMat, szBackMat, fBridge);
 }
 
 static bool FnSetFilmView(C4PropList * _this, long iToPlr)
@@ -2083,16 +2184,22 @@ static bool FnRemoveEffect(C4PropList * _this, C4String *psEffectName, C4Object 
 {
 	// evaluate parameters
 	const char *szEffect = FnStringPar(psEffectName);
-	// get effects
-	C4Effect *pEffect = pTarget ? pTarget->pEffects : Game.pGlobalEffects;
+	// if the user passed an effect, it can be used straight-away
+	C4Effect *pEffect = pEffect2;
+	// otherwise, the correct effect will be searched in the target's effects or in the global ones
+	if (!pEffect)
+	{
+		pEffect = pTarget ? pTarget->pEffects : Game.pGlobalEffects;
+		// the object has no effects attached, nothing to look for
+		if (!pEffect) return 0;
+		// name/wildcard given: find effect by name
+		if (szEffect && *szEffect)
+			pEffect = pEffect->Get(szEffect, 0);
+	}
+
+	// neither passed nor found - nothing to remove!
 	if (!pEffect) return 0;
-	// name/wildcard given: find effect by name
-	if (szEffect && *szEffect)
-		pEffect = pEffect->Get(szEffect, 0);
-	else
-		pEffect = pEffect2;
-	// effect found?
-	if (!pEffect) return 0;
+
 	// kill it
 	if (fDoNoCalls)
 		pEffect->SetDead();
@@ -2355,9 +2462,9 @@ static C4Void FnHideSettlementScoreInEvaluation(C4PropList * _this, bool fHide)
 
 static bool FnCustomMessage(C4PropList * _this, C4String *pMsg, C4Object *pObj, Nillable<long> iOwner, long iOffX, long iOffY, long dwClr, C4ID idDeco, C4PropList *pSrc, long dwFlags, long iHSize)
 {
-	// safeties
+	// safeties: for global messages pSrc needs to be object/definition. For object-local messages, any proplist is OK
 	if (pSrc)
-		if(!pSrc->GetDef() && !pSrc->GetObject() && !pSrc->GetPropertyPropList(P_Source)) return false;
+		if(!pSrc->GetDef() && !pSrc->GetObject() && !pSrc->GetPropertyPropList(P_Source) && !pObj) return false;
 	if (!pMsg) return false;
 	if (pObj && !pObj->Status) return false;
 	const char *szMsg = pMsg->GetCStr();
@@ -2395,6 +2502,67 @@ static bool FnCustomMessage(C4PropList * _this, C4String *pMsg, C4Object *pObj, 
 	if (dwFlags & C4GM_DropSpeech) sMsg.SplitAtChar('$', NULL);
 	// create it!
 	return ::Messages.New(iType,sMsg,pObj,iOwner,iOffX,iOffY,(uint32_t)dwClr, idDeco, pSrc, dwFlags, iHSize);
+}
+
+static int FnGuiOpen(C4PropList * _this, C4PropList *menu)
+{
+	C4ScriptGuiWindow *window = new C4ScriptGuiWindow;
+
+	::Game.ScriptGuiRoot->AddChild(window);
+
+	if (!window->CreateFromPropList(menu, true))
+	{
+		::Game.ScriptGuiRoot->RemoveChild(window, false);
+		return 0;
+	}
+
+	return window->GetID();
+}
+
+static bool FnGuiUpdateTag(C4PropList * _this, C4String *tag, int32_t guiID, int32_t childID, C4Object *target)
+{
+	C4ScriptGuiWindow *window = ::Game.ScriptGuiRoot->GetChildByID(guiID);
+	if (!window) return false;
+	if (childID) // note: valid child IDs are always non-zero
+	{
+		C4ScriptGuiWindow *subwindow = window->GetSubWindow(childID, target);
+		if (!subwindow) return false;
+		subwindow->SetTag(tag);
+		return true;
+	}
+	window->SetTag(tag);
+	return true;
+}
+
+static bool FnGuiClose(C4PropList *_this, int32_t guiID, int32_t childID, C4Object *target)
+{
+	C4ScriptGuiWindow *window = ::Game.ScriptGuiRoot->GetChildByID(guiID);
+	if (!window) return false;
+	if (childID) // note: valid child IDs are always non-zero
+	{
+		C4ScriptGuiWindow *subwindow = window->GetSubWindow(childID, target);
+		if (!subwindow) return false;
+		subwindow->Close();
+		return true;
+	}
+	window->Close();
+	return true;
+}
+
+static bool FnGuiUpdate(C4PropList *_this, C4PropList *update, int32_t guiID, int32_t childID, C4Object *target)
+{
+	if (!update) return false;
+	C4ScriptGuiWindow *window = ::Game.ScriptGuiRoot->GetChildByID(guiID);
+	if (!window) return false;
+	if (childID) // note: valid child IDs are always non-zero
+	{
+		C4ScriptGuiWindow *subwindow = window->GetSubWindow(childID, target);
+		if (!subwindow) return false;
+		subwindow->CreateFromPropList(update, false, true);
+		return true;
+	}
+	window->CreateFromPropList(update, false, true);
+	return true;
 }
 
 // undocumented!
@@ -2525,6 +2693,12 @@ static int32_t FnGetStartupPlayerCount(C4PropList * _this)
 	return ::Game.StartupPlayerCount;
 }
 
+static int32_t FnGetStartupTeamCount(C4PropList * _this)
+{
+	// returns number of non-empty teams when game was initially started
+	return ::Game.StartupTeamCount;
+}
+
 static bool FnGainScenarioAchievement(C4PropList * _this, C4String *achievement_name, Nillable<long> avalue, Nillable<long> player, C4String *for_scenario)
 {
 	// safety
@@ -2545,7 +2719,7 @@ static bool FnGainScenarioAchievement(C4PropList * _this, C4String *achievement_
 			if (!plr->GainScenarioAchievement(achievement_name->GetCStr(), value, for_scenario ? for_scenario->GetCStr() : NULL))
 				result = false;
 	}
-	return true;
+	return result;
 }
 
 static long FnGetPXSCount(C4PropList * _this, Nillable<long> iMaterial, Nillable<long> iX0, Nillable<long> iY0, Nillable<long> iWdt, Nillable<long> iHgt)
@@ -2597,6 +2771,8 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	AddFunc(pEngine, "CheckConstructionSite", FnCheckConstructionSite);
 	AddFunc(pEngine, "Sound", FnSound);
 	AddFunc(pEngine, "SoundAt", FnSoundAt);
+	AddFunc(pEngine, "ChangeSoundModifier", FnChangeSoundModifier);
+	AddFunc(pEngine, "SetGlobalSoundModifier", FnSetGlobalSoundModifier);
 	AddFunc(pEngine, "Music", FnMusic);
 	AddFunc(pEngine, "MusicLevel", FnMusicLevel);
 	AddFunc(pEngine, "SetPlayList", FnSetPlayList);
@@ -2640,7 +2816,9 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	AddFunc(pEngine, "SetCursor", FnSetCursor);
 	AddFunc(pEngine, "SetViewCursor", FnSetViewCursor);
 	AddFunc(pEngine, "GetMaterial", FnGetMaterial);
+	AddFunc(pEngine, "GetBackMaterial", FnGetBackMaterial);
 	AddFunc(pEngine, "GetTexture", FnGetTexture);
+	AddFunc(pEngine, "GetBackTexture", FnGetBackTexture);
 	AddFunc(pEngine, "GetAverageTextureColor", FnGetAverageTextureColor);
 	AddFunc(pEngine, "GetMaterialCount", FnGetMaterialCount);
 	AddFunc(pEngine, "GBackSolid", FnGBackSolid);
@@ -2724,6 +2902,10 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	AddFunc(pEngine, "ExtractMaterialAmount", FnExtractMaterialAmount);
 	AddFunc(pEngine, "GetEffectCount", FnGetEffectCount);
 	AddFunc(pEngine, "CustomMessage", FnCustomMessage);
+	AddFunc(pEngine, "GuiOpen", FnGuiOpen);
+	AddFunc(pEngine, "GuiUpdateTag", FnGuiUpdateTag);
+	AddFunc(pEngine, "GuiClose", FnGuiClose);
+	AddFunc(pEngine, "GuiUpdate", FnGuiUpdate);
 	AddFunc(pEngine, "PauseGame", FnPauseGame, false);
 	AddFunc(pEngine, "PathFree", FnPathFree);
 	AddFunc(pEngine, "PathFree2", FnPathFree2);
@@ -2733,6 +2915,7 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	AddFunc(pEngine, "GetPlayerControlEnabled", FnGetPlayerControlEnabled);
 	AddFunc(pEngine, "GetPlayerControlAssignment", FnGetPlayerControlAssignment);
 	AddFunc(pEngine, "GetStartupPlayerCount", FnGetStartupPlayerCount);
+	AddFunc(pEngine, "GetStartupTeamCount", FnGetStartupTeamCount);
 	AddFunc(pEngine, "PlayerObjectCommand", FnPlayerObjectCommand);
 	AddFunc(pEngine, "EditCursor", FnEditCursor);
 	AddFunc(pEngine, "GainScenarioAchievement", FnGainScenarioAchievement);
@@ -2844,6 +3027,7 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "C4FO_Func"                 ,C4V_Int,     C4FO_Func           },
 	{ "C4FO_Layer"                ,C4V_Int,     C4FO_Layer          },
 	{ "C4FO_InArray"              ,C4V_Int,     C4FO_InArray        },
+	{ "C4FO_Property"             ,C4V_Int,     C4FO_Property       },
 
 	{ "MD_DragSource"             ,C4V_Int,     C4MC_MD_DragSource  },
 	{ "MD_DropTarget"             ,C4V_Int,     C4MC_MD_DropTarget  },
@@ -2876,6 +3060,7 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "MSG_WidthRel"              ,C4V_Int,      C4GM_WidthRel },
 	{ "MSG_XRel"                  ,C4V_Int,      C4GM_XRel },
 	{ "MSG_YRel"                  ,C4V_Int,      C4GM_YRel },
+	{ "MSG_Zoom"                  ,C4V_Int,      C4GM_Zoom },
 
 	{ "C4PT_User"                 ,C4V_Int,      C4PT_User },
 	{ "C4PT_Script"               ,C4V_Int,      C4PT_Script },
@@ -2900,6 +3085,25 @@ C4ScriptConstDef C4ScriptGameConstMap[]=
 	{ "ATTACH_Back"               ,C4V_Int,      C4ATTACH_Back },
 	{ "ATTACH_MoveRelative"       ,C4V_Int,      C4ATTACH_MoveRelative },
 
+	// sound modifier type
+	{ "C4SMT_Reverb"              ,C4V_Int,      C4SoundModifier::C4SMT_Reverb },
+	{ "C4SMT_Echo"                ,C4V_Int,      C4SoundModifier::C4SMT_Echo },
+	{ "C4SMT_Equalizer"           ,C4V_Int,      C4SoundModifier::C4SMT_Equalizer },
+
+	{ "GUI_SetTag"               ,C4V_Int,      C4ScriptGuiWindowActionID::SetTag },
+	{ "GUI_Call"                 ,C4V_Int,      C4ScriptGuiWindowActionID::Call },
+	{ "GUI_GridLayout"           ,C4V_Int,      C4ScriptGuiWindowStyleFlag::GridLayout },
+	{ "GUI_VerticalLayout"       ,C4V_Int,      C4ScriptGuiWindowStyleFlag::VerticalLayout },
+	{ "GUI_TextVCenter"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextVCenter },
+	{ "GUI_TextHCenter"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextHCenter },
+	{ "GUI_TextRight"            ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextRight },
+	{ "GUI_TextBottom"           ,C4V_Int,      C4ScriptGuiWindowStyleFlag::TextBottom },
+	{ "GUI_TextTop"              ,C4V_Int,      C4ScriptGuiWindowStyleFlag::None }, // note that top and left are considered default
+	{ "GUI_TextLeft"             ,C4V_Int,      C4ScriptGuiWindowStyleFlag::None }, // they are only included for completeness
+	{ "GUI_FitChildren"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::FitChildren },
+	{ "GUI_Multiple"             ,C4V_Int,      C4ScriptGuiWindowStyleFlag::Multiple },
+	{ "GUI_IgnoreMouse"          ,C4V_Int,      C4ScriptGuiWindowStyleFlag::IgnoreMouse },
+	{ "GUI_NoCrop"               ,C4V_Int,      C4ScriptGuiWindowStyleFlag::NoCrop },
 	{ NULL, C4V_Nil, 0}
 };
 

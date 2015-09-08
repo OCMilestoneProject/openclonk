@@ -70,6 +70,7 @@ public:
 		shader.LoadSlices(&::GraphicsResource.Files, "UtilShader.glsl");
 		shader.LoadSlices(&::GraphicsResource.Files, "ObjectBaseShader.glsl");
 		shader.LoadSlices(&::GraphicsResource.Files, "MeshShader.glsl");
+		shader.LoadSlices(&::GraphicsResource.Files, "GammaShader.glsl");
 
 		// Note that these shader slices are always loaded, even if lighting
 		// is disabled. The shaders then assume a default light if HAVE_LIGHT
@@ -593,12 +594,17 @@ void C4Def::LoadSounds(C4Group &hGroup, C4SoundSystem* pSoundSystem)
 		pSoundSystem->LoadEffects(hGroup);
 }
 
-void C4Def::Draw(C4Facet &cgo, bool fSelected, DWORD iColor, C4Object *pObj, int32_t iPhaseX, int32_t iPhaseY, C4DrawTransform* trans)
+void C4Def::Draw(C4Facet &cgo, bool fSelected, DWORD iColor, C4Object *pObj, int32_t iPhaseX, int32_t iPhaseY, C4DrawTransform* trans, const char *graphicsName)
 {
 	if(fSelected)
 		pDraw->DrawBoxDw(cgo.Surface, cgo.X, cgo.Y, cgo.X + cgo.Wdt - 1, cgo.Y + cgo.Hgt - 1, C4RGB(0xca, 0, 0));
 
 	C4DefGraphics* graphics = pObj ? pObj->GetGraphics() : &Graphics;
+	if (graphicsName)
+	{
+		C4DefGraphics *other = graphics->Get(graphicsName);
+		if (other) graphics = other;
+	}
 	graphics->Draw(cgo, iColor, pObj, iPhaseX, iPhaseY, trans);
 }
 

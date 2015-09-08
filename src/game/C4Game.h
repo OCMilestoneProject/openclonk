@@ -27,6 +27,8 @@
 #include <C4PlayerControl.h>
 #include <C4TransferZone.h>
 
+class C4ScriptGuiWindow;
+
 class C4Game
 {
 private:
@@ -87,6 +89,7 @@ public:
 	C4KeyboardInput &KeyboardInput;
 	C4FileMonitor *pFileMonitor;
 	C4GameSec1Timer *pSec1Timer;
+	C4Value            &GlobalSoundModifier; // contains proplist for sound modifier to be applied to all new sounds played
 
 	char CurrentScenarioSection[C4MaxName+1];
 	char ScenarioFilename[_MAX_PATH+1];
@@ -96,6 +99,7 @@ public:
 	char DirectJoinAddress[_MAX_PATH+1];
 	C4Network2Reference *pJoinReference;
 	int32_t StartupPlayerCount;
+	int32_t StartupTeamCount;
 	int32_t FPS,cFPS;
 	int32_t HaltCount;
 	bool GameOver;
@@ -226,6 +230,7 @@ public:
 	bool InitPlayerControlUserSettings(); // merge player control default settings and config overloads into user setting
 	void SetDefaultGamma();
 
+	C4ScriptGuiWindow *ScriptGuiRoot;
 protected:
 	void Default();
 	void InitInEarth();
@@ -285,6 +290,7 @@ protected:
 public:
 	bool ToggleChart(); // chart dlg on/off
 	void SetMusicLevel(int32_t iToLvl); // change game music volume; multiplied by config volume for real volume
+	void SetGlobalSoundModifier(C4PropList *modifier_props);
 };
 
 extern C4Game         Game;

@@ -20,21 +20,20 @@ public func GetCarryBone() { return "main"; }
 public func GetCarrySpecial(clonk) { return carry_bone; }
 public func GetCarryTransform(clonk, sec, back)
 {
-	if(back) return Trans_Mul(Trans_Rotate(180,0,0,1), Trans_Rotate(90,0,1,0), Trans_Translate(0,-7000,0));
-	return Trans_Rotate(90, 0, 1, 0);
+	if(back) return Trans_Mul(Trans_Rotate(180,0,1,0), Trans_Rotate(-90,1,0,0), Trans_Translate(-7000,0,0));
+	return Trans_Rotate(-90, 1, 0, 0);
 }
 
 local magic_number;
 local carry_bone;
-public func ControlUse(object clonk, int x, int y)
+
+public func RejectUse(object clonk)
 {
-	// cooldown?
-	if(!CanStrikeWithWeapon(clonk)) return true;
-	
-	// if the clonk doesn't have an action where he can use it's hands do nothing
-	if(!clonk->HasHandAction())
-		return true;
-		
+	return !clonk->HasHandAction() || !CanStrikeWithWeapon(clonk) || !(clonk->IsWalking() || clonk->IsJumping());
+}
+
+public func ControlUse(object clonk, int x, int y)
+{	
 	var slow=GetEffect("SwordStrikeSlow", clonk);
 
 	var arm = "R";
@@ -55,7 +54,8 @@ public func ControlUse(object clonk, int x, int y)
 	{
 		if(!GetEffect("SwordStrikeStop", clonk))
 			AddEffect("SwordStrikeStop", clonk, 2, length, this);
-	} else
+	}
+	else
 	if(clonk->IsJumping())
 	{
 		rand = 1;
@@ -87,8 +87,6 @@ public func ControlUse(object clonk, int x, int y)
 			}
 		}
 	}
-	//else return true;*/
-	if(!clonk->IsWalking() && !clonk->IsJumping()) return true;
 
 	if(!downwards_stab)
 	{

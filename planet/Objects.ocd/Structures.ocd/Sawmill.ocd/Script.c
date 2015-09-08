@@ -53,11 +53,24 @@ private func CheckWoodObject(object target)
 
 /*-- Production --*/
 
+// Overload production menu entries to show helpful hint to player.
+public func GetProductionMenuEntries()
+{
+	return [{symbol = Wood, custom =
+				{
+					Right = "100%", Bottom = "4em",
+					text = {Left = "2em", Text = "$AutoProduction$", Style = GUI_TextVCenter | GUI_TextHCenter},
+					image = {Right = "2em", Bottom = "2em", Symbol = Wood}
+				}
+			}];
+}
+
 private func IgnoreKnowledge() { return true; }
 
 public func Saw(object target)
 {
-	target->Enter(this);
+	if (target->Contained() != this)
+		target->Enter(this);
 	var output = target->GetComponent(Wood);
 	target->Split2Components();
 	AddToQueue(Wood, output);
@@ -70,13 +83,6 @@ private func IsProduct(id product_id)
 }
 private func ProductionTime(id toProduce) { return 100; }
 public func PowerNeed() { return 20; }
-
-public func NeedRawMaterial(id rawmat_id)
-{
-	if (rawmat_id->~IsSawmillProduct())
-		return true;
-	return false;
-}
 
 public func OnProductionStart(id product)
 {
@@ -122,9 +128,10 @@ public func CollectTrees()
 	return;
 }
 
-protected func Collection()
+protected func Collection(object obj)
 {
 	Sound("Clonk");
+	Saw(obj);
 }
 
 public func FxSawingTimer(object target, proplist effect, int time)
@@ -166,7 +173,7 @@ private func SpinOn(int call)
 	if (call == 2) spin = 50;
 	if (call == 3) { spin = 30; SetMeshMaterial("SawmillBlade.Spin", 2); }
 
-	SetAnimationPosition(this.SpinAnimation, Anim_Linear(GetAnimationPosition(this.SpinAnimation), GetAnimationLength("work"), 0, spin, ANIM_Loop));
+	SetAnimationPosition(this.SpinAnimation, Anim_Linear(GetAnimationPosition(this.SpinAnimation), 0, GetAnimationLength("work"), spin, ANIM_Loop));
 
 	if (call < 3) ScheduleCall(this, "SpinOn", this.SpinStep, nil, call+1);
 	else Sound("SawmillRipcut", nil, nil, nil, +1);
@@ -186,7 +193,7 @@ private func SpinOff(int call, int animation_no)
 		return;
 	}
 
-	SetAnimationPosition(this.SpinAnimation, Anim_Linear(GetAnimationPosition(this.SpinAnimation), GetAnimationLength("work"), 0, spin, ANIM_Loop));
+	SetAnimationPosition(this.SpinAnimation, Anim_Linear(GetAnimationPosition(this.SpinAnimation), 0, GetAnimationLength("work"), spin, ANIM_Loop));
 
 	ScheduleCall(this, "SpinOff", this.SpinStep * 2, nil, call+1);
 }

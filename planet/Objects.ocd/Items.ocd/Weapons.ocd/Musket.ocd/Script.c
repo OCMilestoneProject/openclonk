@@ -21,7 +21,7 @@ public func GetCarrySpecial(clonk) { if(fAiming > 0) return "pos_hand2"; }
 public func GetCarryBone()	{	return	"main";	}
 public func GetCarryTransform()
 {
-	return Trans_Rotate(-90, 0, 1, 0);
+	return Trans_Rotate(90, 1, 0, 0);
 }
 
 local animation_set;
@@ -60,15 +60,13 @@ local MuskUp; local MuskFront; local MuskDown; local MuskOffset;
 
 protected func HoldingEnabled() { return true; }
 
+func RejectUse(object clonk)
+{
+	return !clonk->HasHandAction();
+}
+
 func ControlUseStart(object clonk, int x, int y)
 {
-	// if the clonk doesn't have an action where he can use it's hands do nothing
-	if(!clonk->HasHandAction())
-	{
-		holding = true;
-		return true;
-	}
-
 	// nothing in extraslot?
 	if(!Contents(0))
 	{

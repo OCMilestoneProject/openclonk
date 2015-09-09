@@ -1,4 +1,4 @@
-material LavaShellMat: NormalMap
+material LavaShellMat //: NormalMap
 {
 	receive_shadows off
 	
@@ -15,7 +15,7 @@ material LavaShellMat: NormalMap
 			scene_blend alpha_blend
 			depth_write off
 			
-			texture_unit base
+			texture_unit //base
 			{
 				texture LavaCoreShell.png
 				tex_address_mode wrap
@@ -23,11 +23,11 @@ material LavaShellMat: NormalMap
 				colour_op_ex source1 src_texture src_texture
 			}
 			
-			texture_unit normal
-            {
-                texture LavaCoreShellNormals.png
-                tex_address_mode wrap
-            }
+			//texture_unit normal
+           // {
+           //     texture LavaCoreShellNormals.png
+               // tex_address_mode wrap
+           // }
 		}
 	}
 }

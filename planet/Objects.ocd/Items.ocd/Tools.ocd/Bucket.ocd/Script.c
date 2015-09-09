@@ -43,6 +43,10 @@ public func ControlUse(object clonk, int iX, int iY)
 		PlayAnimation(clonk);
 		return true;
 	}
+	else
+	{
+		Message("$UsageHotTip$");
+	}
 
 	return true;
 }
@@ -226,6 +230,23 @@ protected func Hit()
 public func IsBucket() { return true; }
 public func IsTool() { return true; }
 public func IsToolProduct() { return true; }
+
+// When trying to put into a producer that can't take the item but its contents, just transfer the contents.
+public func TryPutInto(object to_building, ...)
+{
+	if (to_building && to_building->~IsProducer() && !to_building->~IsCollectionAllowed(this))
+	{
+		var i = ContentsCount(), contents, num_collected = 0;
+		while (i--)
+			if (contents = Contents(i))
+				if (to_building->Collect(contents))
+					++num_collected;
+		// Return if contents transfer was successful.
+		if (num_collected > 0) return true;
+	}
+	return _inherited(to_building, ...);
+	 
+}
 
 
 public func SaveScenarioObject(props)

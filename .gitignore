@@ -145,3 +145,8 @@ tests/openclonk_unittest.sln
 
 # Packed groups created directly in root path
 /*.oc*
+/planet/GoldRushMissions.ocf
+/planet/TexTest.ocs
+/planet/NewMaterials.ocs
+/.gitignore
+/*.gitignore

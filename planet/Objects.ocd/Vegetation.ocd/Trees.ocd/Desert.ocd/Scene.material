@@ -1,0 +1,31 @@
+material DesertTreeMat: NormalMap
+{
+	receive_shadows on
+	technique
+	{
+		pass
+		{
+			cull_hardware none
+			scene_blend alpha_blend
+			depth_check off
+		
+			ambient 1.000000 1.000000 1.000000 1.000000
+			diffuse 1.000000 1.000000 1.000000 1.000000
+			specular 0.000000 0.000000 0.000000 1.000000 12.500000
+			emissive 0.000000 0.000000 0.000000 1.000000
+			
+			texture_unit base
+			{
+				texture DesertTree.png
+				tex_address_mode wrap
+				filtering trilinear
+			}
+			texture_unit normal
+			{
+				texture DesertTreeNormals.png
+				tex_address_mode wrap
+				filtering trilinear
+			}
+		}
+	}
+}

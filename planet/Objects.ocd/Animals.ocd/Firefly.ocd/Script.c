@@ -30,7 +30,8 @@ private func Flying() {
 	timer += Random(2);
 	var angle = timer*180/10;
 	SetObjDrawTransform(900+Sin(angle,100), 0, 0, 0, 900+Sin(angle, 100), 0, 1);
-
+	SetLightColor(RGB(200,255,150+Sin(angle,10)));
+	
 	var awayFrom = FindObject(Find_Distance(Firefly_ShynessDistance), Find_Category(C4D_Object), Find_OCF(OCF_HitSpeed1), Find_NoContainer());
 	if(awayFrom)
 	{
@@ -95,6 +96,9 @@ protected func Initialize()
 	SetClrModulation(RGBa(200,255,0,255),2);
 
 	SetObjDrawTransform(300, 0, 0, 0, 300, 0, 2);
+	
+	SetLightRange(5,30);
+	SetLightColor(RGB(200,255,100));
 }
 
 public func CatchBlow()	{ RemoveObject(); }

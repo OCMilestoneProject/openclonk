@@ -16,6 +16,8 @@ local rota_increment = 2;
 local rota_top_upper_freedom = 54;
 local rota_top_lower_freedom = 46;
 
+local dir;
+
 func Initialize()
 {
 	
@@ -28,9 +30,13 @@ public func InitAttach(object parent)
 
 // Slowly rotates the opening towards an enemy
 
-public func StartRotation()
+public func StartRotation(object prey)
 {
 	StopAll();
+	
+	dir = 1;
+	if(prey->GetX() > GetX())
+		dir = -1;
 	AddEffect("ShellRotate",this,1,1,this);
 }
 
@@ -80,7 +86,7 @@ protected func FxShellRotateTimer(object target, effect, int time)
 	if(rota_timer >= rota_interval)
 	{
 		rota_timer = 0;
-		SetR(GetR() + rota_increment * 2);
+		SetR(GetR() + rota_increment * 2 * dir);
 	}
 }
 
@@ -92,6 +98,8 @@ protected func FxShellRotateToTopTimer(object target, effect, int time)
 		if(rota_timer >= rota_interval)
 		{
 			rota_timer = 0;
+			
+			
 			SetR(GetR() + rota_increment * 2);
 		}
 }

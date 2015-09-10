@@ -93,7 +93,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			// Rotate the shell opening towards the prey
 			else
 			{
-				StartRotateShell();
+				StartRotateShell(prey);
 			}
 		}
 		else
@@ -215,9 +215,9 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 /*
 	Starts and stops rotating the shell towards an enemy
 */
-protected func StartRotateShell()
+protected func StartRotateShell(object prey)
 {
-	shell->StartRotation();
+	shell->StartRotation(prey);
 }
 
 protected func StopRotateShell()

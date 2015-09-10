@@ -1,0 +1,1 @@
+Achtung: Testszenario und Texturen werden _nicht_ regelmäßig auf den neusten Stand gebracht!

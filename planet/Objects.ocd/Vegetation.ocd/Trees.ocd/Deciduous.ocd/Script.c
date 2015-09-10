@@ -7,7 +7,7 @@ private func SeedChance() { return 500; }
 private func SeedArea() { return 400; }
 private func SeedAmount() { return 10; }
 
-local lib_tree_burned = Tree_Coniferous_Burned;
+local lib_tree_burned = Tree_Deciduous_Burned;
 
 public func GetTreetopPosition(pos)
 {

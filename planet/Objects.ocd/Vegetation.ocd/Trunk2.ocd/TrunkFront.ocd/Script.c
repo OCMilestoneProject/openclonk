@@ -6,7 +6,7 @@ local back;
 
 private func Initialize()
 {
-	this.cover_area = Shape->Rectangle(-118, -31, 236, 62);
+	this.cover_area = Shape->Rectangle(-118, -24, 236, 57);
 	_inherited();
 }
 
@@ -20,13 +20,13 @@ private func CheckPosition()
 {
 	if (!back) return RemoveObject();
 	if (GetX() != back->GetX() || GetY() != back->GetY())
-		SetPosition(back->GetX(), back->GetY());
+		SetPosition(back->GetX()+1, back->GetY()+2);
 }
 
 func EditCursorMoved()
 {
 	// Move main trunk along with front in editor mode
-	if (back) back->SetPosition(GetX(), GetY());
+	if (back) back->SetPosition(GetX()+1, GetY()+2);
 	return true;
 }
 

@@ -1,4 +1,4 @@
-material LavaShellMat //: NormalMap
+material LavaShellMat
 {
 	receive_shadows off
 	
@@ -15,23 +15,17 @@ material LavaShellMat //: NormalMap
 			scene_blend alpha_blend
 			depth_write off
 			
-			texture_unit //base
+			texture_unit
 			{
 				texture LavaCoreShell.png
 				tex_address_mode wrap
 				filtering trilinear
 				colour_op_ex source1 src_texture src_texture
 			}
-			
-			//texture_unit normal
-           // {
-           //     texture LavaCoreShellNormals.png
-               // tex_address_mode wrap
-           // }
 		}
 	}
 }
-material LavaShellStoneMat: NormalMap
+material LavaShellStoneMat
 {
 	receive_shadows off
 	
@@ -48,19 +42,13 @@ material LavaShellStoneMat: NormalMap
 			scene_blend alpha_blend
 			depth_write off
 			
-			texture_unit base
+			texture_unit
 			{
 				texture LavaCoreShellStone.png
 				tex_address_mode wrap
 				filtering trilinear
 				colour_op_ex source1 src_texture src_texture
 			}
-			
-			texture_unit normal
-            {
-                texture LavaCoreShellNormals.png
-                tex_address_mode wrap
-            }
 		}
 	}
 }

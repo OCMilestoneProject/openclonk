@@ -34,7 +34,7 @@ local surfaced = 0;
 local shoot_interval = 4;
 local shoot_timer = 0;
 
-local out_of_lava_survive_time = 100;
+local out_of_lava_survive_time = 17;
 local out_of_lava_survive_timer = 0;
 
 //local shell_rotation;
@@ -52,42 +52,35 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 {
 	// when not surfacing normally, check if still swimming in lava. If not, turn to stone
 	var mat = MaterialName(GetMaterial(0, -3));
-	if(!surfaced)
-		if(mat != "Lava" && mat != "DuroLava")
-		{
-			out_of_lava_survive_timer++;
-			if(out_of_lava_survive_timer >= out_of_lava_survive_time)
-			{
-				Fossilize();
-			}
-			else
-				ContactTop();
-		}
-		else
-		{
-		out_of_lava_survive_timer = 0;
-		if(fossilized)
-			{
-				Revive();
-			}
-		}
-	
-	if(fossilized)
-		{
-		return -1;
-		}
-	
+
 	// todo: grow when not fully grown
 	// ...
-	
 	if(surfaced)
 	{
+		if(fossilized)
+		{
+		surfaced = 0;
+		return 1;
+		}
+		var mat2 = MaterialName(GetMaterial(0, 5));
+		
+		if(mat2 != "Lava" && mat2 != "DuroLava")
+		{
+			surfaced = 0;
+			move_surface_timer = 0;
+			stay_surface_timer = 0;
+			
+			ContactTop();
+			return 1;
+		}
 		// Search for Clonks and other animals to fry
 		var prey = FindObject(Find_OCF(OCF_Alive), Find_Distance(55));
 		
 		if(prey != nil && prey->GetID() != LavaCore)
 		{
+			// Stop rotating the shell to cover the core from the top
 			StopRotateShellToTop();
+			// When prey is in front of the opening, open fire
 			if(PathFree(GetX(), GetY(), prey->GetX(), prey->GetY()))
 			{
 				shoot_timer++;
@@ -97,6 +90,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 				}
 				StopRotateShell();
 			}
+			// Rotate the shell opening towards the prey
 			else
 			{
 				StartRotateShell();
@@ -121,18 +115,47 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			ContactTop();
 		}
 	}
+	// When NOT surfaced and behaving normally
 	else
-	{
+	{	
+		// When we're not in lava or durolava we are starting to dry up and eventually petrify
+		if(!fossilized)
+			if(mat != "Lava" && mat != "DuroLava")
+			{
+				out_of_lava_survive_timer++;
+			
+				if(out_of_lava_survive_timer >= out_of_lava_survive_time)
+				{
+					Fossilize();
+				}
+				else
+					ContactTop();
+		}
+		// If we're in lava and petrified, then revive
+		if(mat == "Lava" || mat == "DuroLava")
+		{
+			//out_of_lava_survive_timer = 0;
+			
+			if(fossilized)
+				{
+					Revive();
+				}
+		}
+		if(fossilized)
+			return 1;
+		
+		// Periodically surfacing
 		move_surface_timer++;
 		
-		// periodically surfaces
 		if(move_surface_timer >= move_surface_interval)
 		{
+			// Move up to reach the surface
 			move_vectorX = 0;
 			move_vectorY = -1;
 			
 			MoveImpulse();
 			
+			// When Sky or Tunnel is detected, we confirm that we are on the surface
 			if(mat == "Tunnel" || mat == nil)
 			{
 				surfaced = 1;
@@ -140,6 +163,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			else
 				surfaced = 0;
 		}
+		// When not trying to reach the surface, splish splash around in intervals
 		else
 		{
 			move_timer++;
@@ -175,7 +199,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 					MoveImpulse();
 				}
 			
-			// dampen movement
+			// dampen movement over time to make movements seem like impulses
 			if(GetXDir() > 0)
 				SetXDir(GetXDir() - 1);
 			else
@@ -220,6 +244,9 @@ protected func StopRotateShellToTop()
 */
 protected func MoveImpulse()
 {
+	//if(GetAction() == "Flight")
+	if(fossilized)
+		return -1;
 	move_timer = 0;
 	// If we are being obstructed by the landscape while rising to the surface we have to wiggle a little
 	if(IsSurfacing() && GetContact(-1) & CNAT_Left)
@@ -314,12 +341,24 @@ protected func Death()
 */
 protected func Fossilize()
 {
+	out_of_lava_survive_timer = 0;
 	fossilized = 1;
+	SetAction("Flight");
+	SetMeshMaterial("LavaCoreStoneMat");
+	shell->SetMeshMaterial("LavaShellStoneMat");
+	shell->StopAll();
+	SetComDir(COMD_None);
+	//AddEffect("CoreBehaviour",this,1,1,this);
 }
 
 protected func Revive()
 {
 	fossilized = 0;
+	SetAction("Swim");
+	SetMeshMaterial("LavaCoreMat");
+	shell->SetMeshMaterial("LavaShellMat");
+	SetComDir(COMD_None);
+	//AddEffect("CoreBehaviour",this,1,1,this);
 }
 
 local ActMap = {
@@ -336,6 +375,18 @@ Swim = {
 	FacetBase=1,
 	NextAction = "Swim",
 	StartCall = "UpdateSwim"
+},
+Flight = {
+	Prototype = Action,
+	Name = "Flight",
+	Procedure = DFA_FLIGHT,
+	Speed = 100,
+	Accel = 16,
+	Decel = 16,
+	Length = 1,
+	Delay = 0,
+	FacetBase=1,
+	NextAction = "Flight",
 },
 Dead = {
 	Prototype = Action,

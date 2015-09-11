@@ -1,7 +1,7 @@
 [DefCore]
-id=Fx_AcidBubble
-Version=5,2,0,1
-Category=C4D_Vehicle
+id=BoilingAcid_Bubble
+Version=6,0
+Category=C4D_None
 Width=8
 Height=8
 Offset=-4,-4
@@ -9,8 +9,6 @@ Vertices=3
 VertexX=0,2,-2
 VertexY=1,-1,-1
 VertexFriction=1
-Float=0
+Float=1
 Oversize=1
 StretchGrowth=1
-Mass=0
-

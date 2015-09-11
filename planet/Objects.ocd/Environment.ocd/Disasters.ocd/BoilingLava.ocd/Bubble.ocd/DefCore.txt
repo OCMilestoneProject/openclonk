@@ -1,7 +1,7 @@
 [DefCore]
-id=Fx_MagmaBubble
-Version=5,2,0,1
-Category=C4D_Vehicle
+id=BoilingLava_Bubble
+Version=6,0
+Category=C4D_None
 Width=8
 Height=8
 Offset=-4,-4
@@ -12,4 +12,3 @@ VertexFriction=1
 Float=1
 Oversize=1
 StretchGrowth=1
-

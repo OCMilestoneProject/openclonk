@@ -1,2 +1,0 @@
-Name=BoilingMagma
-Description=Causes Lava on the map to boil

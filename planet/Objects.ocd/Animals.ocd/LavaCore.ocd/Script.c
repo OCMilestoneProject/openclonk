@@ -34,7 +34,7 @@ local surfaced = 0;
 local shoot_interval = 4;
 local shoot_timer = 0;
 
-local out_of_lava_survive_time = 17;
+local out_of_lava_survive_time = 30;
 local out_of_lava_survive_timer = 0;
 
 //local shell_rotation;
@@ -48,13 +48,38 @@ func Initialize()
 	AddEffect("CoreBehaviour",this,1,1,this);
 }
 
+func Place(int amount, proplist rectangle, proplist settings)
+{
+	var max_tries = 2 * amount;
+	var loc_area = nil;
+	if (rectangle) loc_area = Loc_InArea(rectangle);
+	var f;
+	
+	while ((amount > 0) && (--max_tries > 0))
+	{
+		var spot = FindLocation(Loc_Material("Lava"), Loc_Space(20), loc_area);
+		if(!Random(2))
+			spot = FindLocation(Loc_Material("DuroLava"), Loc_Space(20), loc_area);
+		if (!spot) continue;
+		
+		f = CreateObjectAbove(this, spot.x, spot.y, NO_OWNER);
+		if (!f) continue;
+		
+		if (f->Stuck())
+		{
+			f->RemoveObject();
+			continue;
+		}
+		--amount;
+	}
+	return f; // return last created lavacore
+}
+
 protected func FxCoreBehaviourTimer(object target, effect, int time)
 {
 	// when not surfacing normally, check if still swimming in lava. If not, turn to stone
 	var mat = MaterialName(GetMaterial(0, -3));
 
-	// todo: grow when not fully grown
-	// ...
 	if(surfaced)
 	{
 		if(fossilized)
@@ -76,7 +101,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 		// Search for Clonks and other animals to fry
 		var prey = FindObject(Find_OCF(OCF_Alive), Find_Distance(55));
 		
-		if(prey != nil && prey->GetID() != LavaCore)
+		if(prey != nil && prey->GetID() != LavaCore && GetCon() >= 90)
 		{
 			// Stop rotating the shell to cover the core from the top
 			StopRotateShellToTop();
@@ -143,6 +168,25 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 		}
 		if(fossilized)
 			return 1;
+		
+		// Grow and reproduce
+		if((Random(100) < 2 && !Random(15)) && GetCon() >= 100)
+			{
+			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(220));
+			if(rival == nil)
+				{
+				var newcore = CreateObjectAbove(LavaCore);
+				newcore->SetCon(35);
+				newcore.shell->SetCon(35);
+				}
+			}
+			
+		if(GetCon() < 100)
+			if(!Random(70))
+				{
+				DoCon(1);
+				shell->DoCon(1);
+				}
 		
 		// Periodically surfacing
 		move_surface_timer++;

@@ -46,9 +46,9 @@ private func FxIntMeteorStart(object target, effect fx, bool temp)
 		G = 255,
 		
 		Alpha = PV_KeyFrames(1000, 0, 0, 300, 255, 1000, 0),
-		Size = PV_Linear(30,60),
+		Size = PV_Linear(30, 60),
 		Stretch = 1000,
-		Phase = PV_Random(0,4),
+		Phase = PV_Random(0, 4),
 		Rotation = PV_Random(-GetR() - 15, -GetR() + 15),
 		DampingX = 1000,
 		DampingY = 1000,
@@ -62,8 +62,8 @@ private func FxIntMeteorStart(object target, effect fx, bool temp)
 		R = 200,
 		B = 255,
 		G = 255,
-		Alpha = PV_KeyFrames(0,  0,0,  PV_Random(200,600),0,  700,255, 1000,0),
-		Size = PV_Random(30,80),
+		Alpha = PV_KeyFrames(0, 0, 0, PV_Random(200, 600), 0, 700, 255, 1000, 0),
+		Size = PV_Random(30, 80),
 		Stretch = 1000,
 		Phase = 0,
 		Rotation = 0,
@@ -86,9 +86,6 @@ private func FxIntMeteorTimer(object target, effect fx)
 	ydir -= size * ydir ** 2 / 11552000; // Magic number.
 	SetYDir(ydir, 100);
 	
-	// Fire trail.
-	//fx.fire.ForceX = -GetXDir()/2 + RandomX(-5,5);
-	//fx.fire.ForceY = -GetYDir()/2;
 	// Smoke trail.
 	CreateParticle("SmokeThick", 0, 0, PV_Random(-3, 3), PV_Random(-3, 3), 200, fx.smoketrail, 5);
 	

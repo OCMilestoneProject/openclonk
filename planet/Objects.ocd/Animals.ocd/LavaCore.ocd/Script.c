@@ -39,7 +39,7 @@ local out_of_lava_survive_timer = 0;
 
 //local shell_rotation;
 
-func Initialize()
+func Construction()
 {
 	shell = CreateObjectAbove(LavaCoreShell);
 	shell->InitAttach(this);

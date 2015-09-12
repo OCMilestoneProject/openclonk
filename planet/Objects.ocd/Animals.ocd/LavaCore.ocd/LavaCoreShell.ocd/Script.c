@@ -18,11 +18,6 @@ local rota_top_lower_freedom = 46;
 
 local dir;
 
-func Initialize()
-{
-	
-}
-
 public func InitAttach(object parent)
 {
 	SetAction("Attach", parent);

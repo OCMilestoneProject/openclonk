@@ -331,12 +331,12 @@ protected func UpdateSwim()
 // todo: animation when turning
 
 /*
-	Shoots Fx_MagmaBubbles at the victim ):
+	Shoots lava bubbles at the victim ):
 */
 
 protected func AttackTarget(object prey)
 {
-	var bubble = CreateObject(Fx_MagmaBubble);
+	var bubble = CreateObject(BoilingLava_Bubble);
 	bubble->SetXDir(prey->GetX() - GetX());
 	bubble->SetYDir(prey->GetY() - GetY());
 	bubble->DoCon(35);

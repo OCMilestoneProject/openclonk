@@ -18,10 +18,17 @@ protected func Initialize()
 {
 	SetPosition(LandscapeWidth()/2,0);
 	width = 500;
-	strength = 10;
+	strength = 100;
 	material_name = "Water";
 	AddEffect("IntRain", this, 1, 1, this);
+	Sound("StereoRain.ogg", true, strength, 0, 1);
 	return 1;
+}
+
+public func SetStrength(value)
+{
+	strength = value;
+	Sound("StereoRain.ogg", true, strength);
 }
 
 global func Particles_Rain(iSize, color)
@@ -36,6 +43,23 @@ global func Particles_Rain(iSize, color)
 		Rotation = PV_Direction(),
 		CollisionDensity = 25,
 		Stretch = 3000,
+	};
+}
+global func Particles_Snow(iSize, color)
+{
+	return
+	{
+		Phase = PV_Random(0, 16),
+		CollisionVertex = 0,
+		OnCollision = PC_Die(),
+		DampingY = 1000,//PV_Cos(PV_Linear(0,1800),5,990),
+		ForceY = 0,//GetGravity()/100,//PV_Gravity(100),
+		ForceX = PV_Sin(PV_Step(RandomX(5,10), Random(180)),RandomX(5,8),0),
+		Size = iSize,
+		R = color[0], G = color[1], B = color[2],
+		Rotation = PV_Random(360),
+		CollisionDensity = 25,
+		Stretch = 1000,
 	};
 }
 global func Particles_Rain2(iSize, color)
@@ -122,7 +146,18 @@ private func FxIntRainTimer()
 		var y = -50;
 		var xdir = RandomX(GetWind(0,0,1)-5, GetWind(0,0,1)+5)/5;
 		var ydir = 30;
+		if(material_name == "Snow")
+		{
+			CreateParticle("RaindropSnow", x, y, xdir, 10, PV_Random(2000, 3000), Particles_Snow(RandomX(0,3), color), 0);
+			if(!Random(10))
+				CastPXS(material_name, 1, 0, x, 0, 0, 0);
+			continue;
+		}		
 		CreateParticle(name, x, y, xdir, ydir, PV_Random(200, 300), Particles_Rain(RandomX(10,30), color), 0);
+		// Sometimes "real" rain falls
+		if(!Random(10))
+			InsertMaterial(Material(material_name), x, 0, xdir, ydir);
+		//	CastPXS(material_name, 1, 0, x, 100, 0, 0);
 		// Simulate particle path
 		x *= 100;
 		y *= 100;
@@ -135,9 +170,6 @@ private func FxIntRainTimer()
 		while(GBackSemiSolid(x,y)) { y -= 1; }
 		y += 1;
 		ScheduleCall(this, "DropHit", ticks, 0, x, y);
-		// Sometimes "real" rain falls
-		if(!Random(10))
-			CastPXS(material_name, 1, 0, x, 0, 0, 0);
 	}
 	
 	return 1;

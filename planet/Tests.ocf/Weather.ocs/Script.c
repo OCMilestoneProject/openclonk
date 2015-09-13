@@ -2,7 +2,8 @@
 
 func Initialize()
 {
-	CreateObject(RainCloud, 100, 100);
+	var cloud = CreateObject(RainCloud, 100, 100);
+	cloud->SetPosition(LandscapeWidth()/4,0);
 
 	SetSkyAdjust(RGB(50,50,50));
 }

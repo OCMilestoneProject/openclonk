@@ -83,7 +83,7 @@ void C4ConfigDeveloper::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(AutoFileReload,      "AutoFileReload",     1                   , false, true));
 	pComp->Value(mkNamingAdapt(ExtraWarnings,      "ExtraWarnings",       0                   , false, true));
 	pComp->Value(mkNamingAdapt(s(TodoFilename),    "TodoFilename",       "{SCENARIO}/TODO.txt", false, true));
-	pComp->Value(mkNamingAdapt(s(AltTodoFilename), "AltTodoFilename",    "TODO.txt"           , false, true));
+	pComp->Value(mkNamingAdapt(s(AltTodoFilename), "AltTodoFilename2",   "{USERPATH}/TODO.txt", false, true));
 }
 
 void C4ConfigGraphics::CompileFunc(StdCompiler *pComp)
@@ -126,7 +126,7 @@ void C4ConfigSound::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(FESamples,             "MenuSound",            1             ,false, true));
 	pComp->Value(mkNamingAdapt(FMMode,                "FMMode",               1             ));
 	pComp->Value(mkNamingAdapt(Verbose,               "Verbose",              0             ));
-	pComp->Value(mkNamingAdapt(MusicVolume,           "MusicVolume",          100           ,false, true));
+	pComp->Value(mkNamingAdapt(MusicVolume,           "MusicVolume2",         40            ,false, true));
 	pComp->Value(mkNamingAdapt(SoundVolume,           "SoundVolume",          100           ,false, true));
 }
 

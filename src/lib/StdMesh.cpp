@@ -1281,15 +1281,41 @@ void StdMeshInstance::ExecuteAnimation(float dt)
 		(*iter)->Child->ExecuteAnimation(dt);
 }
 
-StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMesh(const StdMesh& mesh, AttachedMesh::Denumerator* denumerator, const StdStrBuf& parent_bone, const StdStrBuf& child_bone, const StdMeshMatrix& transformation, uint32_t flags)
+StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMesh(const StdMesh& mesh, AttachedMesh::Denumerator* denumerator, const StdStrBuf& parent_bone, const StdStrBuf& child_bone, const StdMeshMatrix& transformation, uint32_t flags, unsigned int attach_number)
 {
+	std::unique_ptr<AttachedMesh::Denumerator> auto_denumerator(denumerator);
+
 	StdMeshInstance* instance = new StdMeshInstance(mesh, 1.0f);
-	AttachedMesh* attach = AttachMesh(*instance, denumerator, parent_bone, child_bone, transformation, flags, true);
+	AttachedMesh* attach = AttachMesh(*instance, auto_denumerator.release(), parent_bone, child_bone, transformation, flags, true, attach_number);
 	if (!attach) { delete instance; return NULL; }
 	return attach;
 }
 
-StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMesh(StdMeshInstance& instance, AttachedMesh::Denumerator* denumerator, const StdStrBuf& parent_bone, const StdStrBuf& child_bone, const StdMeshMatrix& transformation, uint32_t flags, bool own_child)
+StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMesh(StdMeshInstance& instance, AttachedMesh::Denumerator* denumerator, const StdStrBuf& parent_bone, const StdStrBuf& child_bone, const StdMeshMatrix& transformation, uint32_t flags, bool own_child, unsigned int attach_number)
+{
+	std::unique_ptr<AttachedMesh::Denumerator> auto_denumerator(denumerator);
+
+	// Owned attach children must be set via the topmost instance, to ensure
+	// attach number uniqueness.
+	if (AttachParent && AttachParent->OwnChild) return NULL;
+
+	// Find free index.
+	unsigned int number = 0;
+	ScanAttachTree(AttachChildren.begin(), AttachChildren.end(), [&number](AttachedMeshList::const_iterator iter) { number = std::max(number, (*iter)->Number); return true; });
+	number += 1; // One above highest
+
+	StdMeshInstance* direct_parent = this;
+	if (attach_number != 0)
+	{
+		AttachedMesh* attach = GetAttachedMeshByNumber(attach_number);
+		if (attach == NULL) return NULL;
+		direct_parent = attach->Child;
+	}
+
+	return direct_parent->AttachMeshImpl(instance, auto_denumerator.release(), parent_bone, child_bone, transformation, flags, own_child, number);
+}
+
+StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMeshImpl(StdMeshInstance& instance, AttachedMesh::Denumerator* denumerator, const StdStrBuf& parent_bone, const StdStrBuf& child_bone, const StdMeshMatrix& transformation, uint32_t flags, bool own_child, unsigned int new_attach_number)
 {
 	std::unique_ptr<AttachedMesh::Denumerator> auto_denumerator(denumerator);
 
@@ -1301,19 +1327,11 @@ StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMesh(StdMeshInstance& inst
 		if (Parent == &instance)
 			return NULL;
 
-	AttachedMesh* attach = NULL;
-	unsigned int number = 1;
-
-	// Find free index.
-	for (AttachedMeshIter iter = AttachChildren.begin(); iter != AttachChildren.end(); ++iter)
-		if ((*iter)->Number >= number)
-			number = (*iter)->Number + 1;
-
 	const StdMeshBone* parent_bone_obj = Mesh->GetSkeleton().GetBoneByName(parent_bone);
 	const StdMeshBone* child_bone_obj = instance.Mesh->GetSkeleton().GetBoneByName(child_bone);
 	if (!parent_bone_obj || !child_bone_obj) return NULL;
 
-	attach = new AttachedMesh(number, this, &instance, own_child, auto_denumerator.release(), parent_bone_obj->Index, child_bone_obj->Index, transformation, flags);
+	AttachedMesh* attach = new AttachedMesh(new_attach_number, this, &instance, own_child, auto_denumerator.release(), parent_bone_obj->Index, child_bone_obj->Index, transformation, flags);
 	instance.AttachParent = attach;
 
 	// If DrawInFront is set then sort before others so that drawing order is easy
@@ -1327,29 +1345,44 @@ StdMeshInstance::AttachedMesh* StdMeshInstance::AttachMesh(StdMeshInstance& inst
 
 bool StdMeshInstance::DetachMesh(unsigned int number)
 {
-	for (AttachedMeshList::iterator iter = AttachChildren.begin(); iter != AttachChildren.end(); ++iter)
+	return !ScanAttachTree(AttachChildren.begin(), AttachChildren.end(), [this, number](AttachedMeshList::iterator iter)
 	{
 		if ((*iter)->Number == number)
 		{
+			AttachedMesh* attached = *iter;
+
 			// Reset attach parent of child so it does not try
 			// to detach itself on destruction.
-			(*iter)->Child->AttachParent = NULL;
+			attached->Child->AttachParent = NULL;
+			attached->Parent->AttachChildren.erase(iter);
 
-			delete *iter;
-			AttachChildren.erase(iter);
-			return true;
+			delete attached;
+
+			// Finish scan
+			return false;
 		}
-	}
 
-	return false;
+		// Continue scan
+		return true;
+	});
 }
 
 StdMeshInstance::AttachedMesh* StdMeshInstance::GetAttachedMeshByNumber(unsigned int number) const
 {
-	for (AttachedMeshIter iter = AttachChildren.begin(); iter != AttachChildren.end(); ++iter)
+	StdMeshInstance::AttachedMesh* result = NULL;
+
+	ScanAttachTree(AttachChildren.begin(), AttachChildren.end(), [number, &result](AttachedMeshList::const_iterator iter)
+	{
 		if ((*iter)->Number == number)
-			return *iter;
-	return NULL;
+		{
+			result = *iter;
+			return false;
+		}
+
+		return true;
+	});
+
+	return result;
 }
 
 void StdMeshInstance::SetMaterial(size_t i, const StdMeshMaterial& material)
@@ -1609,6 +1642,23 @@ void StdMeshInstance::ClearPointers(class C4Object* pObj)
 
 	for(unsigned int i = 0; i < Removal.size(); ++i)
 		DetachMesh(Removal[i]);
+}
+
+template<typename IteratorType, typename FuncObj>
+bool StdMeshInstance::ScanAttachTree(IteratorType begin, IteratorType end, const FuncObj& obj)
+{
+	for (IteratorType iter = begin; iter != end; ++iter)
+	{
+		if (!obj(iter)) return false;
+
+		// Scan attached tree of own children. For non-owned children,
+		// we can't guarantee unique attach numbers.
+		if( (*iter)->OwnChild)
+			if (!ScanAttachTree((*iter)->Child->AttachChildren.begin(), (*iter)->Child->AttachChildren.end(), obj))
+				return false;
+	}
+
+	return true;
 }
 
 StdMeshInstance::AnimationNodeList::iterator StdMeshInstance::GetStackIterForSlot(int slot, bool create)

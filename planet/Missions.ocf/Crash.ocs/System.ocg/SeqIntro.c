@@ -8,7 +8,6 @@ func Intro_Init()
 	this.plane->SetColor(0xa04000);
 	this.pilot = npc_pyrit = CreateObjectAbove(Clonk, 100, 100, NO_OWNER);
 	this.pilot->MakeInvincible();
-	this.pilot->MakeNonFlammable();
 	this.pilot->SetSkin(2);
 	this.pilot->Enter(this.plane);
 	this.pilot->SetAction("Walk");
@@ -30,6 +29,10 @@ func Intro_Start(object hero)
 
 	SetViewTarget(this.pilot);
 	SetPlayerZoomByViewRange(NO_OWNER, 200,100, PLRZOOM_Set); // zoom out from plane
+	
+	// Lava goes crazy during the intro
+	var lava = FindObject(Find_ID(BoilingLava));
+	if (lava) lava->SetIntensity(500);
 	
 	return ScheduleNext(80);
 }
@@ -230,6 +233,9 @@ func Intro_24()
 
 func Intro_Stop()
 {
+	// Lava gets quiet after intro
+	var lava = FindObject(Find_ID(BoilingLava));
+	if (lava) lava->SetIntensity(25);
 	// if players got stuck somewhere, unstick them
 	for (var i=0; i<GetPlayerCount(C4PT_User); ++i)
 	{

@@ -477,6 +477,16 @@ namespace C4GUI
 		// blit output to own window
 		if (pWindow)
 		{
+			// Draw context menu on editor window
+			ContextMenu *menu;
+			if ((menu = GetScreen()->pContext))
+			{
+				if (menu->GetTargetDialog() == this)
+				{
+					menu->Draw(cgo);
+				}
+			}
+			// Editor window: Blit to output
 			C4Rect rtSrc,rtDst;
 			rtSrc.x=rcBounds.x; rtSrc.y=rcBounds.y;  rtSrc.Wdt=rcBounds.Wdt; rtSrc.Hgt=rcBounds.Hgt;
 			rtDst.x=0; rtDst.y=0;    rtDst.Wdt=rcBounds.Wdt; rtDst.Hgt=rcBounds.Hgt;
@@ -807,7 +817,7 @@ namespace C4GUI
 	{
 		// draw upper board
 		if (HasUpperBoard())
-			pDraw->BlitSurfaceTile(::GraphicsResource.fctUpperBoard.Surface,cgo.Surface,0,Min<int32_t>(iFade-::GraphicsResource.fctUpperBoard.Hgt, 0),cgo.Wdt,::GraphicsResource.fctUpperBoard.Hgt);
+			pDraw->BlitSurfaceTile(::GraphicsResource.fctUpperBoard.Surface,cgo.Surface,0,Min<int32_t>(iFade-::GraphicsResource.fctUpperBoard.Hgt, 0),cgo.Wdt,::GraphicsResource.fctUpperBoard.Hgt, 0, 0, NULL);
 	}
 
 	void FullscreenDialog::UpdateOwnPos()

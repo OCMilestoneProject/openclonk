@@ -734,7 +734,7 @@ private:
 void StdCompilerWarnCallback(void *pData, const char *szPosition, const char *szError);
 
 template <class CompT, class StructT>
-bool CompileFromBuf_Log(StructT &TargetStruct, const typename CompT::InT &SrcBuf, const char *szName)
+bool CompileFromBuf_Log(StructT RREF TargetStruct, const typename CompT::InT &SrcBuf, const char *szName)
 {
 	try
 	{
@@ -743,7 +743,10 @@ bool CompileFromBuf_Log(StructT &TargetStruct, const typename CompT::InT &SrcBuf
 	}
 	catch (StdCompiler::Exception *pExc)
 	{
-		LogF("ERROR: %s (in %s)", pExc->Msg.getData(), szName);
+		if (!pExc->Pos.getLength())
+			LogF("ERROR: %s (in %s)", pExc->Msg.getData(), szName);
+		else
+			LogF("ERROR: %s (in %s, %s)", pExc->Msg.getData(), pExc->Pos.getData(), szName);
 		delete pExc;
 		return false;
 	}

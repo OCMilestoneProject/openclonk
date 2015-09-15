@@ -782,6 +782,7 @@ bool C4MessageInput::ProcessCommand(const char *szCommand)
 		for (int i = 0; i < static_cast<int>(std::extent<decltype(todo_filenames)>::value); ++i)
 		{
 			StdCopyStrBuf todo_filename(todo_filenames[i]);
+			todo_filename.Replace("{USERPATH}", Config.General.UserDataPath);
 			int replacements = todo_filename.Replace("{SCENARIO}", Game.ScenarioFile.GetFullName().getData());
 			// sanity check if entered in editor with no file open
 			if (replacements && !Game.ScenarioFile.IsOpen()) continue;
@@ -789,6 +790,8 @@ bool C4MessageInput::ProcessCommand(const char *szCommand)
 			CStdFile todo_file;
 			if (!todo_file.Append(todo_filename.getData())) continue;
 			if (!todo_file.WriteString(pCmdPar)) continue;
+			// check on file close because CStdFile may do a delayed write
+			if (!todo_file.Close()) continue;
 			success = true;
 			break;
 		}

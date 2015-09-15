@@ -114,7 +114,7 @@ global func ExplosionParticles_Init()
 
 /*-- Explosion --*/
 
-global func Explode(int level, bool silent)
+global func Explode(int level, bool silent, int damage_level)
 {
 	if(!this) FatalError("Function Explode must be called from object context");
 
@@ -134,10 +134,10 @@ global func Explode(int level, bool silent)
 	// Execute the explosion in global context.
 	// There is no possibility to interact with the global context, apart from GameCall.
 	// So at least remove the object context.
-	exploding_id->DoExplosion(x, y, level, container, cause_plr, layer, silent);
+	exploding_id->DoExplosion(x, y, level, container, cause_plr, layer, silent, damage_level);
 }
 
-global func DoExplosion(int x, int y, int level, object inobj, int cause_plr, object layer, bool silent)
+global func DoExplosion(int x, int y, int level, object inobj, int cause_plr, object layer, bool silent, int damage_level)
 {
 	// If the object is contained, loop through all parent containers until the blast is contained or no container is found.
 	// Blast the containers it passes through and the objects inside them.
@@ -150,7 +150,7 @@ global func DoExplosion(int x, int y, int level, object inobj, int cause_plr, ob
 		var contains_blast = container.ContainBlast;
 		var parent_container = container->Contained();
 		// Blast the current container, but not the previous container.
-		BlastObjects(x + GetX(), y + GetY(), level, container, cause_plr, layer, prev_container);
+		BlastObjects(x + GetX(), y + GetY(), level, container, cause_plr, damage_level, layer, prev_container);
 		// Break the blasting if this container contains the blast.
 		if (contains_blast)
 			break;
@@ -158,25 +158,22 @@ global func DoExplosion(int x, int y, int level, object inobj, int cause_plr, ob
 		prev_container = container;
 		container = parent_container;
 	}
-	// Blast objects outside if there was no final container containing the blast.
-	if (!container)
-		BlastObjects(x + GetX(), y + GetY(), level, container, cause_plr, layer, prev_container);
 	
 	// Explosion outside: Explosion effects.
 	if (!container)
 	{
+		// Blast objects outside if there was no final container containing the blast.
+		BlastObjects(x + GetX(), y + GetY(), level, container, cause_plr, damage_level, layer, prev_container);
 		// Incinerate oil.
 		if (!IncinerateLandscape(x, y))
 			if (!IncinerateLandscape(x, y - 10))
 				if (!IncinerateLandscape(x - 5, y - 5))
 					IncinerateLandscape(x + 5, y - 5);
 		// Graphic effects.
-		Call("ExplosionEffect", level, x, y, 0, silent);
-	}
-	
-	// Landscape destruction. Happens after BlastObjects, so that recently blown-free materials are not affected
-	if (!container)
+		Call("ExplosionEffect", level, x, y, 0, silent, damage_level);
+		// Landscape destruction. Happens after BlastObjects, so that recently blown-free materials are not affected
 		BlastFree(x, y, level, cause_plr);
+	}
 
 	return true;
 }
@@ -185,7 +182,7 @@ global func DoExplosion(int x, int y, int level, object inobj, int cause_plr, ob
 Creates a visual explosion effect at a position.
 smoothness (in percent) determines how round the effect will look like
 */
-global func ExplosionEffect(int level, int x, int y, int smoothness, bool silent)
+global func ExplosionEffect(int level, int x, int y, int smoothness, bool silent, int damage_level)
 {
 	if(!silent) //Does object use it's own explosion sound effect?
 	{
@@ -254,7 +251,7 @@ global func ExplosionEffect(int level, int x, int y, int smoothness, bool silent
 /*-- Blast objects & shockwaves --*/
 
 // Damage and hurl objects away.
-global func BlastObjects(int x, int y, int level, object container, int cause_plr, object layer, object no_blast)
+global func BlastObjects(int x, int y, int level, object container, int cause_plr, int damage_level, object layer, object no_blast)
 {
 	var obj;
 	
@@ -262,86 +259,40 @@ global func BlastObjects(int x, int y, int level, object container, int cause_pl
 	var l_x = x - GetX(), l_y = y - GetY();
 	
 	// caused by: if not specified, controller of calling object
-	if(cause_plr == nil)
-		if(this)
+	if (cause_plr == nil)
+		if (this)
 			cause_plr = GetController();
+	
+	// damage: if not specified this is the same as the explosion radius
+	if (damage_level == nil)
+		damage_level = level;
 	
 	// In a container?
 	if (container)
 	{
 		if (container->GetObjectLayer() == layer)
 		{
-			container->BlastObject(level, cause_plr);
+			container->BlastObject(damage_level, cause_plr);
 			if (!container)
 				return true; // Container could be removed in the meanwhile.
 			for (obj in FindObjects(Find_Container(container), Find_Layer(layer), Find_Exclude(no_blast)))
 				if (obj)
-					obj->BlastObject(level, cause_plr);
+					obj->BlastObject(damage_level, cause_plr);
 		}
 	}
 	else
 	{
 		// Object is outside.
+		var at_rect = Find_AtRect(l_x - 5, l_y - 5, 10, 10);
 		// Damage objects at point of explosion.
-		for (var obj in FindObjects(Find_AtRect(l_x - 5, l_y - 5, 10,10), Find_NoContainer(), Find_Layer(layer), Find_Exclude(no_blast)))
-			if (obj) obj->BlastObject(level, cause_plr);
+		for (var obj in FindObjects(at_rect, Find_NoContainer(), Find_Layer(layer), Find_Exclude(no_blast)))
+			if (obj) obj->BlastObject(damage_level, cause_plr);
+			
+		// Damage objects in radius.
+		for (var obj in FindObjects(Find_Distance(level, l_x, l_y), Find_Not(at_rect), Find_NoContainer(), Find_Layer(layer), Find_Exclude(no_blast)))
+			if (obj) obj->BlastObject(damage_level / 2, cause_plr);
 
-		// TODO: -> Shockwave in own global func(?)
-
-		// Hurl objects in explosion radius.
-		var shockwave_objs = FindObjects(Find_Distance(level, l_x, l_y), Find_NoContainer(), Find_Layer(layer),
-			Find_Or(Find_Category(C4D_Object|C4D_Living|C4D_Vehicle), Find_Func("CanBeHitByShockwaves")), Find_Func("BlastObjectsShockwaveCheck", x, y));
-		var cnt = GetLength(shockwave_objs);
-		if (cnt)
-		{
-			// The hurl energy is distributed over the objects.
-			//Log("Shockwave objs %v (%d)", shockwave_objs, cnt);
-			var shock_speed = Sqrt(2 * level * level / BoundBy(cnt, 2, 12));
-			for (var obj in shockwave_objs)
-				if (obj) // Test obj, cause OnShockwaveHit could have removed objects.
-				{
-					// Object has special reaction on shockwave?
-					if (obj->~OnShockwaveHit(level, x, y, cause_plr))
-						continue;
-					// Living beings are hurt more.
-					var cat = obj->GetCategory();
-					if (cat & C4D_Living)
-					{
-						obj->DoEnergy(level / -2, false, FX_Call_EngBlast, cause_plr);
-						if (!obj) continue;
-						obj->DoDamage(level / 2, FX_Call_DmgBlast, cause_plr);
-						if (!obj) continue;
-					}
-					// Killtracing for projectiles.
-					if (cat & C4D_Object)
-						obj->SetController(cause_plr);
-					// Shockwave.
-					var mass_fact = 20, mass_mul = 100;
-					if (cat & C4D_Living)
-					{
-						mass_fact = 8;
-						mass_mul = 80;
-					}
-					mass_fact = BoundBy(obj->GetMass() * mass_mul / 1000, 4, mass_fact);
-					var dx = 100 * (obj->GetX() - x) + Random(51) - 25;
-					var dy = 100 * (obj->GetY() - y) + Random(51) - 25;
-					var vx, vy;
-					if (dx)
-						vx = Abs(dx) / dx * (100 * level - Abs(dx)) * shock_speed / level / mass_fact;
-					vy = (Abs(dy) - 100 * level) * shock_speed / level / mass_fact;
-					if (cat & C4D_Object)
-					{
-						// Objects shouldn't move too fast.
-						var ovx = obj->GetXDir(100), ovy = obj->GetYDir(100);
-						if (ovx * vx > 0)
-							vx = (Sqrt(vx * vx + ovx * ovx) - Abs(vx)) * Abs(vx) / vx;
-						if (ovy * vy > 0)
-							vy = (Sqrt(vy * vy + ovy * ovy) - Abs(vy)) * Abs(vy) / vy;
-					}
-					//Log("%v v(%v %v)   d(%v %v)  m=%v  l=%v  s=%v", obj, vx,vy, dx,dy, mass_fact, level, shock_speed);
-					obj->Fling(vx, vy, 100, true);
-				}
-		}
+		DoShockwave(x, y, level, cause_plr, layer);
 	}
 	// Done.
 	return true;
@@ -357,7 +308,7 @@ global func BlastObject(int level, int caused_by)
 	if (!self) return;
 
 	if (GetAlive())
-		DoEnergy(-level/3, false, FX_Call_EngBlast, caused_by);
+		DoEnergy(-level, false, FX_Call_EngBlast, caused_by);
 	if (!self) return;
 
 	if (this.BlastIncinerate && GetDamage() >= this.BlastIncinerate)
@@ -365,7 +316,65 @@ global func BlastObject(int level, int caused_by)
 	return;
 }
 
-global func BlastObjectsShockwaveCheck(int x, int y)
+global func DoShockwave(int x, int y, int level, int cause_plr, object layer)
+{
+	// Coordinates are always supplied globally, convert to local coordinates.
+	var l_x = x - GetX(), l_y = y - GetY();
+	
+	// caused by: if not specified, controller of calling object
+	if (cause_plr == nil)
+		if (this)
+			cause_plr = GetController();
+
+	// Hurl objects in explosion radius.
+	var shockwave_objs = FindObjects(Find_Distance(level, l_x, l_y), Find_NoContainer(), Find_Layer(layer),
+		Find_Or(Find_Category(C4D_Object|C4D_Living|C4D_Vehicle), Find_Func("CanBeHitByShockwaves")), Find_Func("DoShockwaveCheck", x, y));
+	var cnt = GetLength(shockwave_objs);
+	if (cnt)
+	{
+		// The hurl energy is distributed over the objects.
+		//Log("Shockwave objs %v (%d)", shockwave_objs, cnt);
+		var shock_speed = Sqrt(2 * level * level / BoundBy(cnt, 2, 12));
+		for (var obj in shockwave_objs)
+			if (obj) // Test obj, cause OnShockwaveHit could have removed objects.
+			{
+				var cat = obj->GetCategory();
+				// Object has special reaction on shockwave?
+				if (obj->~OnShockwaveHit(level, x, y, cause_plr))
+					continue;
+				// Killtracing for projectiles.
+				if (cat & C4D_Object)
+					obj->SetController(cause_plr);
+				// Shockwave.
+				var mass_fact = 20, mass_mul = 100;
+				if (cat & C4D_Living)
+				{
+					mass_fact = 8;
+					mass_mul = 80;
+				}
+				mass_fact = BoundBy(obj->GetMass() * mass_mul / 1000, 4, mass_fact);
+				var dx = 100 * (obj->GetX() - x) + Random(51) - 25;
+				var dy = 100 * (obj->GetY() - y) + Random(51) - 25;
+				var vx, vy;
+				if (dx)
+					vx = Abs(dx) / dx * (100 * level - Abs(dx)) * shock_speed / level / mass_fact;
+				vy = (Abs(dy) - 100 * level) * shock_speed / level / mass_fact;
+				if (cat & C4D_Object)
+				{
+					// Objects shouldn't move too fast.
+					var ovx = obj->GetXDir(100), ovy = obj->GetYDir(100);
+					if (ovx * vx > 0)
+						vx = (Sqrt(vx * vx + ovx * ovx) - Abs(vx)) * Abs(vx) / vx;
+					if (ovy * vy > 0)
+						vy = (Sqrt(vy * vy + ovy * ovy) - Abs(vy)) * Abs(vy) / vy;
+				}
+				//Log("%v v(%v %v)   d(%v %v)  m=%v  l=%v  s=%v", obj, vx,vy, dx,dy, mass_fact, level, shock_speed);
+				obj->Fling(vx, vy, 100, true);
+			}
+	}
+}
+
+global func DoShockwaveCheck(int x, int y)
 {
 	var def = GetID();
 	// Some special cases, which won't go into FindObjects.

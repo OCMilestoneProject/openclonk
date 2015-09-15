@@ -72,7 +72,7 @@ C4Facet C4Facet::TruncateSection(int32_t) { return *this; }
 
 C4Surface::C4Surface() {}
 C4Surface::~C4Surface() {}
-bool C4Surface::Read(CStdStream &, const char *) { return false; }
+bool C4Surface::Read(CStdStream &, const char *, bool) { return false; }
 bool C4Surface::Lock() { return false; }
 bool C4Surface::Unlock() { return false; }
 DWORD C4Surface::GetPixDw(int iX, int iY, bool fApplyModulation) { return 0; }
@@ -195,3 +195,6 @@ C4Game::~C4Game() {}
 
 C4AulDebug *C4AulDebug::pDebug;
 void C4AulDebug::DebugStep(C4AulBCC*, C4Value*) {}
+
+C4Shader::C4Shader() {}
+C4Shader::~C4Shader() {}

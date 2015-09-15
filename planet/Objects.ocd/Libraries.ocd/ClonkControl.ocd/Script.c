@@ -379,8 +379,17 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 	// only act on press, not release
 	if ((ctrl == CON_Throw || ctrl == CON_ThrowDelayed || ctrl == CON_Drop) && !house && (!vehicle || proc == "ATTACH") && !release)
 	{		
-		if (contents && !contents->~QueryRejectDeparture(this))
-		{		
+		if (contents)
+		{
+			// Object overloaded throw control?
+			// Call this before QueryRejectDeparture to allow alternate use of non-droppable objects
+			if (contents->~ControlThrow(this, x, y))
+				return true;
+			
+			// The object does not want to be dropped? Still handle command.
+			if (contents->~QueryRejectDeparture(this))
+				return true;
+			
 			// just drop in certain situations
 			var only_drop = proc == "SCALE" || proc == "HANGLE" || proc == "SWIM";
 			// also drop if no throw would be possible anyway

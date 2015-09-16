@@ -92,6 +92,9 @@ public:
 	// the given rectangle
 	virtual void Update(C4Rect Rect, C4Landscape *pSource) = 0;
 
+	// Texmap has been updated
+	virtual void HandleTexMapUpdate() = 0;
+
 	virtual void Draw(const C4TargetFacet &cgo, const class C4FoWRegion *Light) = 0;
 };
 
@@ -131,6 +134,7 @@ public:
 
 	virtual C4Rect GetAffectedRect(C4Rect Rect);
 	virtual void Update(C4Rect Rect, C4Landscape *pSource);
+	virtual void HandleTexMapUpdate();
 
 	virtual void Draw(const C4TargetFacet &cgo, const C4FoWRegion *Light);
 
@@ -151,6 +155,8 @@ private:
 	void AddTextureAnim(const char *szTextureAnim);
 	void AddTexturesFromMap(C4TextureMap *pMap);
 	void BuildMatMap(GLfloat *pFMap, GLubyte *pIMap);
+
+	C4GroupSet *pGroupSet;
 };
 #endif
 
@@ -170,9 +176,9 @@ public:
 
 	virtual C4Rect GetAffectedRect(C4Rect Rect);
 	virtual void Update(C4Rect Rect, C4Landscape *pSource);
+	virtual void HandleTexMapUpdate();
 
 	virtual void Draw(const C4TargetFacet &cgo, const C4FoWRegion *Light);
-
 };
 
 #endif // C4LANDSCAPE_RENDER_H

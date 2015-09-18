@@ -116,7 +116,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 				StopRotateShell();
 			}
 			// Rotate the shell opening towards the prey
-			else
+			else if(!GetEffect("ShellRotate", shell))
 			{
 				StartRotateShell(prey);
 			}

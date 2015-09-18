@@ -22,7 +22,7 @@
 #include "C4Surface.h"
 
 // Shader version
-const int C4Shader_Version = 120; // GLSL 1.20 / OpenGL 2.1
+const int C4Shader_Version = 130; // GLSL 1.30 / OpenGL 3.0
 
 // Maximum number of texture coordinates
 const int C4Shader_MaxTexCoords = 8;
@@ -179,10 +179,9 @@ private:
 	bool fStarted;
 	const C4Shader *pShader;
 	int iUnits;
-	GLenum hUnit[C4ShaderCall_MaxUnits];
 
 public:
-	GLint AllocTexUnit(int iUniform, GLenum iType);
+	GLint AllocTexUnit(int iUniform);
 
 	// Setting uniforms... Lots of code duplication here, not quite sure whether
 	// something could be done about it.

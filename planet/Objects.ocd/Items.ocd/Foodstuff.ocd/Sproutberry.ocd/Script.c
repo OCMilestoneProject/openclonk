@@ -134,3 +134,8 @@ func SaveScenarioObject(props, ...)
 			return false;
 	return inherited(props, ...);
 }
+
+public func IsAnimalFood()
+{
+	return true;
+}

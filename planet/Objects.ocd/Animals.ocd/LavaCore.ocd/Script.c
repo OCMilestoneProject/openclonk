@@ -258,7 +258,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			
 			// when detecting other Lavacores, swim in opposite directions. This keeps them spread evenly in a body of lava.
 			
-			var rival = FindObject(Find_ID(LavaCore), Find_Distance(50 + max_size));
+			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(50 + max_size));
 			if(rival != nil && rival != this)
 				if(PathFree(GetX(), GetY(), rival->GetX(), rival->GetY()))
 				{

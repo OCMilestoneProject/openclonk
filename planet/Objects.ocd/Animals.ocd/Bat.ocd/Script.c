@@ -30,15 +30,23 @@ local z_rot = 0; // rotation around Z axis
 local flip_timer = 0;
 local flip_interval = 0;
 
+local is_expat = 0;
+
+local startled_timer = 0; // Doesn't sit while startled
+
 //local shell_rotation;
 
 func Construction()
 {
 	daytime = FindObject(Find_ID(Environment_Time));
-	SetAction("Flight");
-	SetComDir(COMD_None);
+
 	AddEffect("CoreBehaviour",this,1,1,this);
-	ChangeDirection();
+	
+	Fly();
+	
+	// Some bats don't stick to the swarm and start their own.
+	if(!Random(100))
+		is_expat = 1;
 	
 	ultra_sound_particle = {
 	R = 255,
@@ -100,13 +108,20 @@ protected func FlightRoutine()
 		if(daytime == nil)
 			if(!Random(150))
 				Fly();
-		if(daytime != nil)
+		if(daytime != nil || !GBackSolid(0, -12))
 			Fly();
 	}
 	else
 	{
 		// Move
 		MoveImpulse();
+		// Make sound
+		if(!Random(300))
+			Sound("BatFlutter*");
+		if(startled_timer > 0)
+			startled_timer--;
+		//if(!Random(300))
+			//Sound("Bat*");
 		// Calculate rotation based on direction
 		var rot_inc = 20;
 		if(dir == 1)
@@ -127,9 +142,9 @@ protected func FlightRoutine()
 			reproduction_timer++;
 			if(reproduction_timer >= reproduction_interval)
 			{	
-				if(!Random(60))
+				if(!Random(150))
 				{
-					var population = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200));
+					var population = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(500), Find_Exclude(this));
 					if(GetLength(population) <= 10)
 					{
 						var new_bat = CreateObjectAbove(Bat);
@@ -169,7 +184,17 @@ protected func FlightRoutine()
 				Sound("Munch1");
 				}
 		}
-		// Fifth: When above ground don't fly too far up into the sky
+		// Fly towards other bats to loosely make a swarm
+		else if(!Random(100) && !is_expat)
+		{
+			var fellow = FindObject(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200), Find_Exclude(this));
+			if(fellow != nil)
+			{
+				move_vectorX = Normalize(fellow->GetX() - GetX());
+				move_vectorY = Normalize(fellow->GetY() - GetY());
+			}
+		}
+		// When above ground don't fly too far up into the sky
 		else if(GBackSky(0,0))
 			if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
 				if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
@@ -177,8 +202,7 @@ protected func FlightRoutine()
 					move_vectorX = RandomX(-1, 1);
 					move_vectorY = 1;
 				}
-		
-		if(!Random(250))
+		if(!Random(450))
 		{
 			// Search for food
 			target_food = FindObject(Find_Func("IsAnimalFood"), Find_Distance(100), Find_NoContainer());
@@ -187,10 +211,41 @@ protected func FlightRoutine()
 			else
 			{
 				CreateParticle("Shockwave", 0, 0, 0, 0 , 30, ultra_sound_particle, 1);
+				Sound("BatChirp");
 			}
 		}	
 		
 	}
+}
+
+protected func CatchBlow()
+{
+	if (GetAction() == "Dead") return;
+	Hurt();
+}
+	
+protected func Hurt()
+{
+	if(GetAction() == "Sit")
+		Fly();
+	Sound("Bat*");
+	// When hurt, alarm nearby bats
+	var swarm = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200), Find_Exclude(this));
+	for(var i = 0; i < GetLength(swarm); i++)
+	{
+		swarm[i]->Startle();
+	}
+}
+
+protected func Startle()
+{
+	if(GetAction() == "Sit")
+		{
+		Fly();
+		Log("wut");
+		Sound("BatNoise*");
+		startled_timer = 150;
+		}
 }
 
 /*
@@ -235,8 +290,11 @@ protected func ChangeDirection()
 
 protected func Fly()
 {
+	StopAnimation(1);
 	SetAction("Flight");
 	SetComDir(COMD_None);
+	
+	PlayAnimation("Fly", 1, Anim_Linear(0,0,GetAnimationLength("Fly"),10,ANIM_Loop), Anim_Const(1000));
 			
 	target_food = nil;
 			
@@ -245,8 +303,11 @@ protected func Fly()
 
 protected func Sit()
 {
+	StopAnimation(1);
 	SetAction("Sit");
 	SetComDir(COMD_None);
+	
+	PlayAnimation("Hang", 1, Anim_Linear(0,0,GetAnimationLength("Hang"),25,ANIM_Loop), Anim_Const(1000));
 	
 	SetXDir(0);
 	SetYDir(0);
@@ -271,7 +332,7 @@ protected func ContactBottom()
 
 protected func ContactTop()
 {
-	if(daytime == nil)
+	if(daytime == nil && !startled_timer)
 	{
 		if(!Random(10))
 			{
@@ -279,7 +340,7 @@ protected func ContactTop()
 			return 1;
 			}
 	}
-	if(daytime != nil) 
+	if(daytime != nil && !startled_timer) 
 		if(daytime->IsDay())
 		{
 			Sit();
@@ -304,6 +365,8 @@ protected func ContactRight()
 
 protected func Death()
 {
+	StopAnimation(1);
+	PlayAnimation("Dead", 1, Anim_Linear(0,0,GetAnimationLength("Dead"),1,ANIM_Hold), Anim_Const(1000));
 	RemoveEffect("CoreBehaviour", this);
 	SetAction("Dead");
 }

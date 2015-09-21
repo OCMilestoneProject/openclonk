@@ -37,15 +37,52 @@ local shoot_timer = 0;
 local out_of_lava_survive_time = 30;
 local out_of_lava_survive_timer = 0;
 
+local max_size = 40;
+
 //local shell_rotation;
 
 func Construction()
 {
+	DetermineMaxSize();
 	shell = CreateObjectAbove(LavaCoreShell);
 	shell->InitAttach(this);
 	SetAction("Swim");
 	SetComDir(COMD_None);
 	AddEffect("CoreBehaviour",this,1,1,this);
+	
+}
+
+protected func DetermineMaxSize()
+{
+	var temp_size = 0;
+	var size_inc = 10;
+	var distance_step = 100;
+	
+	for(var i = 1; i < 14; i++)
+	{
+		// Up
+		if(PathFree(GetX(), GetY(), GetX(), GetY() - distance_step * i))
+		{
+			temp_size += size_inc;
+		}
+		// Down
+		if(PathFree(GetX(), GetY(), GetX(), GetY() + distance_step * i))
+		{
+			temp_size += size_inc;
+		}
+		// Left
+		if(PathFree(GetX(), GetY(), GetX() - distance_step * i, GetY()))
+		{
+			temp_size += size_inc;
+		}
+		// Right
+		if(PathFree(GetX(), GetY(), GetX() + distance_step * i, GetY()))
+		{
+			temp_size += size_inc;
+		}
+	}
+	
+	max_size += temp_size;
 }
 
 func Place(int amount, proplist rectangle, proplist settings)
@@ -99,9 +136,9 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			return 1;
 		}
 		// Search for Clonks and other animals to fry
-		var prey = FindObject(Find_OCF(OCF_Alive), Find_Distance(55));
+		var prey = FindObject(Find_OCF(OCF_Alive), Find_Distance(55), Find_Not(Find_ID(LavaCore)));
 		
-		if(prey != nil && prey->GetID() != LavaCore && GetCon() >= 90)
+		if(prey != nil && prey->GetID() != LavaCore && GetCon() >= max_size)
 		{
 			// Stop rotating the shell to cover the core from the top
 			StopRotateShellToTop();
@@ -170,19 +207,19 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			return 1;
 		
 		// Grow and reproduce
-		if((Random(100) < 2 && !Random(15)) && GetCon() >= 100)
+		if((Random(100) < 2 && !Random(15)) && GetCon() >= max_size)
 			{
-			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(220));
+			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(200 + max_size));
 			if(rival == nil)
 				{
 				var newcore = CreateObjectAbove(LavaCore);
-				newcore->SetCon(35);
-				newcore.shell->SetCon(35);
+				newcore->SetCon(30);
+				newcore.shell->SetCon(30);
 				}
 			}
 			
-		if(GetCon() < 100)
-			if(!Random(70))
+		if(GetCon() < max_size)
+			if(!Random(45))
 				{
 				DoCon(1);
 				shell->DoCon(1);
@@ -221,7 +258,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			
 			// when detecting other Lavacores, swim in opposite directions. This keeps them spread evenly in a body of lava.
 			
-			var rival = FindObject(Find_ID(LavaCore), Find_Distance(90));
+			var rival = FindObject(Find_ID(LavaCore), Find_Distance(50 + max_size));
 			if(rival != nil && rival != this)
 				if(PathFree(GetX(), GetY(), rival->GetX(), rival->GetY()))
 				{

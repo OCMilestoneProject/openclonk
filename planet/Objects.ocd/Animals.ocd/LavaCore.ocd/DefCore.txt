@@ -6,10 +6,10 @@ Height=43
 Width=42
 Offset=-21,-21
 Vertices=9
-VertexX=0,-20,21,0,0,-14,13,-14,14
-VertexY=0,0,0,-22,21,-16,-16,14,14
+VertexX=0,-20,21,  0, 0,-14, 13,-14,14
+VertexY=0,  0, 0,-22,21,-16,-16,14 ,14
 VertexFriction=1,50,50,50,50,50,50,50,50
-VertexCNAT=16,1,2,4,8,1,2,1,2
+VertexCNAT=16,1,2,4,8,5,2,5,2
 Value=1
 Mass=200
 Components=LavaCore=1

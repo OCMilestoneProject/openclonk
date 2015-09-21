@@ -12,7 +12,7 @@ local Description = "$Description$";
 
 local move_vectorX = 0;
 local move_vectorY = 0;
-local move_speed = 5; // bear in  mind this is also multiplied by a random factor
+local move_speed = 12; // bear in  mind this is also multiplied by a random factor
 local move_random_dir = 3; // max random multiplier
 
 local target_food = 0; // Try to reach this object
@@ -23,6 +23,12 @@ local daytime;
 
 local reproduction_timer = 0;
 local reproduction_interval = 500;
+
+local dir = 1; // 1 = right; -1 = left
+local z_rot = 0; // rotation around Z axis
+
+local flip_timer = 0;
+local flip_interval = 0;
 
 //local shell_rotation;
 
@@ -47,7 +53,6 @@ func Construction()
 	BlitMode = 0,
 	CollisionVertex = 0,
 	OnCollision = PC_Stop(),
-	Attach = nil
 	};
 }
 
@@ -80,8 +85,8 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 {
 	if(daytime == nil)
 		FlightRoutine();
-	else if(daytime->IsNight())
-		FlightRoutine();
+	else if(daytime->IsNight() || GetAction() != "Sit")
+			FlightRoutine();
 
 	if(GetCon() < 100)
 		if(!Random(10))
@@ -93,74 +98,117 @@ protected func FlightRoutine()
 	if(GetAction() == "Sit")
 	{
 		if(daytime == nil)
-			if(!Random(30))
+			if(!Random(150))
 				Fly();
-		else
+		if(daytime != nil)
 			Fly();
 	}
 	else
 	{
-		// Rotate based on flight direction
-		this.MeshTransformation = Trans_Rotate(GetYDir() * 2, 0, 0, 1);
 		// Move
 		MoveImpulse();
+		// Calculate rotation based on direction
+		var rot_inc = 20;
+		if(dir == 1)
+			if(z_rot > 0)
+			{
+				z_rot -= rot_inc;
+			}
+		if(dir == -1)
+			if(z_rot < 180)
+			{
+				z_rot += rot_inc;
+			}
+		// Rotate based on flight direction
+		this.MeshTransformation = Trans_Mul(Trans_Rotate(GetYDir() * 2 * dir, 0, 0, 1), Trans_Rotate(z_rot, 0, 1, 0));
 		// Grow and reproduce
 		if(GetCon() >= 100)
 		{
 			reproduction_timer++;
 			if(reproduction_timer >= reproduction_interval)
 			{	
-				if(!Random(100))
+				if(!Random(60))
 				{
-					var new_bat = CreateObjectAbove(Bat);
-					new_bat->SetCon(60);
+					var population = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200));
+					if(GetLength(population) <= 10)
+					{
+						var new_bat = CreateObjectAbove(Bat);
+						new_bat->SetCon(60);
+					}
+					
 				}
 				reproduction_timer = 0;
 			}
 		}
-		// Fly towards food
-		if(target_food)
+		var predator = FindObject(Find_ID(Clonk), Find_Distance(50));
+		// First priority: stay outta water
+		if(GBackLiquid(0, 4))
 		{
-			move_vectorX = target_food->GetX() - GetX();
-			move_vectorY = target_food->GetY() - GetY();
+			move_vectorX = RandomX(-1, 1);
+			move_vectorY = -1;
+		}
+		// Second priority: Stay away from Clonks D:
+		else if(predator != nil)
+		{
+			move_vectorX = - Normalize(predator->GetX() - GetX());
+			move_vectorY = - Normalize(predator->GetY() - GetY());
+		}
+		// Third: Explore
+		else if(!Random(80) && !IsTurning())
+			ChangeDirection();
+		// Fourth: Fly towards food
+		else if(target_food)
+		{
+			move_vectorX = Normalize(target_food->GetX() - GetX());
+			move_vectorY = Normalize(target_food->GetY() - GetY());
 
 			if(Distance(GetX(), GetY(), target_food->GetX(), target_food->GetY()) < 10)
 				{
 				target_food->RemoveObject();
 				ChangeDirection();
+				Sound("Munch1");
 				}
 		}
-		// When not hunting for food, fly around randomly
-		else 
-		{
-			if(GBackLiquid(0, 4))
-			{
-				move_vectorX = RandomX(-1, 1);
-				move_vectorY = -1;
-			}
-			else if(!Random(30))
-				ChangeDirection();
-			// When above ground don't fly too far up into the sky
-			if(GBackSky(0,0))
-				if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
-					if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
-					{
-						move_vectorX = RandomX(-1, 1);
-						move_vectorY = 1;
-					}
-			if(!Random(250))
-			{
-				// Search for food
-				target_food = FindObject(Find_Func("IsAnimalFood"), Find_Distance(100));
-				if(target_food != nil && !PathFree(GetX(), GetY(), target_food->GetX(), target_food->GetY()))
-					target_food = nil;
-				else
+		// Fifth: When above ground don't fly too far up into the sky
+		else if(GBackSky(0,0))
+			if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
+				if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
 				{
-					CreateParticle("Shockwave", 0, 0, 0, 0 , 30, ultra_sound_particle, 1);
+					move_vectorX = RandomX(-1, 1);
+					move_vectorY = 1;
 				}
-			}	
-		}
+		
+		if(!Random(250))
+		{
+			// Search for food
+			target_food = FindObject(Find_Func("IsAnimalFood"), Find_Distance(100), Find_NoContainer());
+			if(target_food != nil && !PathFree(GetX(), GetY(), target_food->GetX(), target_food->GetY()))
+				target_food = nil;
+			else
+			{
+				CreateParticle("Shockwave", 0, 0, 0, 0 , 30, ultra_sound_particle, 1);
+			}
+		}	
+		
 	}
+}
+
+/*
+Returns true if the bat is still turning
+*/
+protected func IsTurning()
+{
+	if(dir == 1)
+		if(z_rot > 0)
+		{
+			return true;
+		}
+	if(dir == -1)
+		if(z_rot < 180)
+		{
+			return true;
+		}
+	return false;
 }
 
 /*
@@ -168,8 +216,13 @@ protected func FlightRoutine()
 */
 protected func MoveImpulse()
 {
-	SetXDir(move_vectorX * move_speed * RandomX(1, move_random_dir));
-	SetYDir(move_vectorY * move_speed * RandomX(1, move_random_dir));
+	if(move_vectorX > 0)
+		dir = 1;
+	if(move_vectorX < 0)
+		dir = -1;
+	
+	SetXDir(( GetXDir() + move_vectorX * move_speed ) / 2);
+	SetYDir(( GetYDir() +  move_vectorY * move_speed ) / 2);
 }
 
 protected func ChangeDirection()
@@ -182,7 +235,6 @@ protected func ChangeDirection()
 
 protected func Fly()
 {
-	Log("got up");
 	SetAction("Flight");
 	SetComDir(COMD_None);
 			
@@ -193,14 +245,22 @@ protected func Fly()
 
 protected func Sit()
 {
-	Log("sat");
-	move_vectorX = 0;
-	move_vectorY = 0;
-		
-	MoveImpulse();
-	
 	SetAction("Sit");
 	SetComDir(COMD_None);
+	
+	SetXDir(0);
+	SetYDir(0);
+}
+
+public func Normalize(int value)
+{
+	var min = -1;
+	var max = 1;
+	
+	if (value <= min) 
+		return -1;
+    if (value >= max) 
+    	return 1;
 }
 
 protected func ContactBottom()
@@ -219,11 +279,12 @@ protected func ContactTop()
 			return 1;
 			}
 	}
-	else if(daytime->IsDay())
-	{
-		Sit();
-		return 1;
-	}
+	if(daytime != nil) 
+		if(daytime->IsDay())
+		{
+			Sit();
+			return 1;
+		}
 		
 	move_vectorX = RandomX(-1, 1);
 	move_vectorY = 1;
@@ -252,7 +313,7 @@ local ActMap = {
 Sit = {
 	Prototype = Action,
 	Name = "Sit",
-	Procedure = DFA_FLIGHT,
+	Procedure = DFA_FLOAT,
 	Speed = 100,
 	Accel = 16,
 	Decel = 16,

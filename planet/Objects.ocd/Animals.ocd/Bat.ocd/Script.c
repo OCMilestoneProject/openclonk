@@ -8,6 +8,10 @@
 local Name = "$Name$";
 local Description = "$Description$";
 
+local MaxEnergy = 20000;
+local MaxBreath = 180; // 180 = five seconds
+local NoBurnDecay = 1;
+
 // time is in frames
 
 local move_vectorX = 0;
@@ -16,8 +20,13 @@ local move_speed = 12; // bear in  mind this is also multiplied by a random fact
 local move_random_dir = 3; // max random multiplier
 
 local target_food = 0; // Try to reach this object
+local target_enemy = 0; // When the pack is large enough: attack enemies
+local is_agressive = 1; // attacks Clonks
+
+local attack_damage = 3;
 
 local ultra_sound_particle;
+local agression_particle;
 
 local daytime;
 
@@ -52,6 +61,20 @@ func Construction()
 	R = 255,
 	B = 255,
 	G = 255,
+		
+	Alpha = PV_Linear(255,0),
+	Size = PV_Linear(5,60),
+	Stretch = 1000,
+	DampingX = 1000,
+	DampingY = 1000,
+	BlitMode = 0,
+	CollisionVertex = 0,
+	OnCollision = PC_Stop(),
+	};
+	agression_particle = {
+	R = 255,
+	B = 0,
+	G = 0,
 		
 	Alpha = PV_Linear(255,0),
 	Size = PV_Linear(5,60),
@@ -142,7 +165,7 @@ protected func FlightRoutine()
 			reproduction_timer++;
 			if(reproduction_timer >= reproduction_interval)
 			{	
-				if(!Random(150))
+				if(!Random(100))
 				{
 					var population = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(500), Find_Exclude(this));
 					if(GetLength(population) <= 10)
@@ -156,22 +179,34 @@ protected func FlightRoutine()
 			}
 		}
 		var predator = FindObject(Find_ID(Clonk), Find_Distance(50));
-		// First priority: stay outta water
+		// Stay outta water
 		if(GBackLiquid(0, 4))
 		{
 			move_vectorX = RandomX(-1, 1);
 			move_vectorY = -1;
 		}
-		// Second priority: Stay away from Clonks D:
-		else if(predator != nil)
+		// Fly towards Clonk when aggressive
+		else if(target_enemy)
 		{
-			move_vectorX = - Normalize(predator->GetX() - GetX());
-			move_vectorY = - Normalize(predator->GetY() - GetY());
+			// Give up chase after a while
+			if(Distance(GetX(), GetY(), target_enemy->GetX(), target_enemy->GetY()) > 200 || !PathFree(GetX(), GetY(), target_enemy->GetX(), target_enemy->GetY()))
+			{
+				target_enemy = nil;
+				return 1;
+			}
+			move_vectorX = Normalize(target_enemy->GetX() - GetX());
+			move_vectorY = Normalize(target_enemy->GetY() - GetY());
+
+			if(Distance(GetX(), GetY(), target_enemy->GetX(), target_enemy->GetY()) < 10)
+				{
+				target_enemy->DoEnergy(-attack_damage);
+				target_enemy->CatchBlow();
+				target_enemy = nil;
+				ChangeDirection();
+				Sound("ProjectileHitLiving*");
+				}
 		}
-		// Third: Explore
-		else if(!Random(80) && !IsTurning())
-			ChangeDirection();
-		// Fourth: Fly towards food
+		// Fly towards food
 		else if(target_food)
 		{
 			move_vectorX = Normalize(target_food->GetX() - GetX());
@@ -184,25 +219,8 @@ protected func FlightRoutine()
 				Sound("Munch1");
 				}
 		}
-		// Fly towards other bats to loosely make a swarm
-		else if(!Random(100) && !is_expat)
-		{
-			var fellow = FindObject(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200), Find_Exclude(this));
-			if(fellow != nil)
-			{
-				move_vectorX = Normalize(fellow->GetX() - GetX());
-				move_vectorY = Normalize(fellow->GetY() - GetY());
-			}
-		}
-		// When above ground don't fly too far up into the sky
-		else if(GBackSky(0,0))
-			if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
-				if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
-				{
-					move_vectorX = RandomX(-1, 1);
-					move_vectorY = 1;
-				}
-		if(!Random(450))
+		// Look for food
+		else if(!Random(450))
 		{
 			// Search for food
 			target_food = FindObject(Find_Func("IsAnimalFood"), Find_Distance(100), Find_NoContainer());
@@ -213,8 +231,53 @@ protected func FlightRoutine()
 				CreateParticle("Shockwave", 0, 0, 0, 0 , 30, ultra_sound_particle, 1);
 				Sound("BatChirp");
 			}
-		}	
-		
+		}
+		// Look for Clonks to attack
+		else if(!Random(40) && is_agressive)
+		{
+			// Search for Clonks
+			target_enemy = FindObject(Find_ID(Clonk), Find_Distance(100), Find_NoContainer());
+			var buddies = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(100));
+			// Check if path free and if there are enough buddies to mount an attack with
+			if(target_enemy != nil)
+				if(!PathFree(GetX(), GetY(), target_enemy->GetX(), target_enemy->GetY()) || GetLength(buddies) < 4)
+				{
+					target_enemy = nil;
+				}
+				else
+				{
+					target_food = nil;
+					CreateParticle("Shockwave", 0, 0, 0, 0 , 30, agression_particle, 1);
+					Sound("BatNoise*");
+				}
+		}
+		// Stay away from Clonks if alone D:
+		else if(predator != nil)
+		{
+			move_vectorX = - Normalize(predator->GetX() - GetX());
+			move_vectorY = - Normalize(predator->GetY() - GetY());
+		}
+		// Fly towards other bats to loosely make a swarm
+		else if(!Random(70) && !is_expat)
+		{
+			var fellow = FindObject(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200), Find_Exclude(this));
+			if(fellow != nil)
+			{
+				move_vectorX = Normalize(fellow->GetX() - GetX());
+				move_vectorY = Normalize(fellow->GetY() - GetY());
+			}
+		}
+		// Explore
+		else if(!Random(80) && !IsTurning())
+			ChangeDirection();
+		// When above ground don't fly too far up into the sky
+		else if(GBackSky(0,0))
+			if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
+				if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
+				{
+					move_vectorX = RandomX(-1, 1);
+					move_vectorY = 1;
+				}
 	}
 }
 
@@ -227,7 +290,8 @@ protected func CatchBlow()
 protected func Hurt()
 {
 	if(GetAction() == "Sit")
-		Fly();
+		Startle();
+		
 	Sound("Bat*");
 	// When hurt, alarm nearby bats
 	var swarm = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200), Find_Exclude(this));
@@ -242,7 +306,6 @@ protected func Startle()
 	if(GetAction() == "Sit")
 		{
 		Fly();
-		Log("wut");
 		Sound("BatNoise*");
 		startled_timer = 150;
 		}
@@ -307,7 +370,9 @@ protected func Sit()
 	SetAction("Sit");
 	SetComDir(COMD_None);
 	
-	PlayAnimation("Hang", 1, Anim_Linear(0,0,GetAnimationLength("Hang"),25,ANIM_Loop), Anim_Const(1000));
+	PlayAnimation("Hang", 1, Anim_Linear(0,0,GetAnimationLength("Hang"),50,ANIM_Loop), Anim_Const(1000));
+	
+	this.MeshTransformation = Trans_Rotate(Random(360), 0, 1, 0);
 	
 	SetXDir(0);
 	SetYDir(0);
@@ -319,9 +384,10 @@ public func Normalize(int value)
 	var max = 1;
 	
 	if (value <= min) 
-		return -1;
+		return min;
     if (value >= max) 
-    	return 1;
+    	return max;
+    return 0;
 }
 
 protected func ContactBottom()
@@ -366,10 +432,31 @@ protected func ContactRight()
 protected func Death()
 {
 	StopAnimation(1);
-	PlayAnimation("Dead", 1, Anim_Linear(0,0,GetAnimationLength("Dead"),1,ANIM_Hold), Anim_Const(1000));
+	PlayAnimation("Land", 1, Anim_Linear(0,0,GetAnimationLength("Land"),19,ANIM_Hold), Anim_Const(1000));
 	RemoveEffect("CoreBehaviour", this);
 	SetAction("Dead");
+	
+	this.MeshTransformation = Trans_Rotate(Random(360), 0, 1, 0);
+	
+	AddTimer(this.Decaying, 500);
 }
+
+protected func Hit()
+{
+	if(!GetAlive())
+	{
+		PlayAnimation("Dead", 1, Anim_Linear(0,0,GetAnimationLength("Dead"),1,ANIM_Hold), Anim_Const(1000));
+	}
+}
+
+func Decaying()
+{
+	if (GetCon()<20) RemoveObject(); else DoCon(-5);
+	return true;
+}
+
+public func NutritionalValue() { if (!GetAlive()) return 15; else return 0; }
+func IsPrey() { return true; }
 
 local ActMap = {
 

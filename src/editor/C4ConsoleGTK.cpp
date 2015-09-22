@@ -266,7 +266,7 @@ public:
 	static void OnGrade(GtkWidget* widget, gpointer data);
 	static void OnWindowHide(GtkWidget* widget, gpointer data);
 	
-	State(C4ToolsDlg* dlg): Super(dlg), hbox(NULL) { dlg->ModeBack = true; }
+	State(C4ToolsDlg* dlg): Super(dlg), hbox(NULL) { }
 	bool Open();
 	void UpdateToolCtrls();
 	void InitMaterialCtrls();
@@ -285,7 +285,7 @@ public:
 	}
 
 	void Clear() {}
-	void Default() {}
+	void Default() { GetOwner()->ModeBack = true;  }
 };
 
 void C4ConsoleGUI::State::OnScriptActivate(GtkWidget* widget, gpointer data)
@@ -1303,7 +1303,7 @@ void C4ToolsDlg::State::UpdatePreview()
 	iPrvWdt=64;
 	iPrvHgt=64;
 
-	if (!(sfcPreview=new C4Surface(iPrvWdt,iPrvHgt))) return;
+	if (!(sfcPreview=new C4Surface(iPrvWdt,iPrvHgt,0))) return;
 
 	// fill bg
 	BYTE bCol = 0;

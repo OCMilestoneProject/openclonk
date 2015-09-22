@@ -86,7 +86,6 @@ if(USE_GCC_STD_0X)
 endif()
 
 REQUIRE_CXX_SOURCE_COMPILES("#include <memory>\nint main() { std::unique_ptr<int> a; std::shared_ptr<int> b; }" HAVE_C11_SMART_PTRS)
-CHECK_CXX_SOURCE_COMPILES("void f(struct D&&); int main() { return 0; }" HAVE_RVALUE_REF)
 CHECK_CXX_SOURCE_COMPILES("int main() { void *d = nullptr; }" HAVE_NULLPTR)
 CHECK_CXX_SOURCE_COMPILES("int main() { static_assert(true, \"\"); }" HAVE_STATIC_ASSERT)
 CHECK_CXX_SOURCE_COMPILES("#include <memory>\nint main() { auto a = std::make_unique<int>(0); }" HAVE_MAKE_UNIQUE)
@@ -823,6 +822,8 @@ include_directories(${JPEG_INCLUDE_DIR} ${PNG_INCLUDE_DIR} ${ZLIB_INCLUDE_DIR})
 
 set(Boost_ADDITIONAL_VERSIONS
 	# FindBoost.cmake goes up to 1.56.0
+	"1.59.0" "1.59"
+	"1.58.0" "1.58"
 	"1.57.0" "1.57"
 	)
 find_package("Boost" 1.40.0 REQUIRED)
@@ -1048,6 +1049,9 @@ src/lib/C4SimpleLog.cpp
 )
 
 target_link_libraries(libmisc ${ZLIB_LIBRARIES})
+if (WIN32)
+	target_link_libraries(libmisc winmm)
+endif()
 
 add_library(libc4script
 src/c4group/C4GroupSet.cpp
@@ -1158,7 +1162,9 @@ if(UNIX AND NOT APPLE)
 		target_link_libraries(mape rt)
 	endif()
 endif()
-set_property(TARGET openclonk APPEND PROPERTY COMPILE_DEFINITIONS GLEW_STATIC)
+if (GLEW_FOUND)
+	set_property(TARGET openclonk APPEND PROPERTY COMPILE_DEFINITIONS ${GLEW_DEFINITIONS})
+endif()
 if(NOT "${CMAKE_VERSION}" VERSION_LESS "2.8.10")
 	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS $<$<CONFIG:Debug>:_DEBUG>)
 	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
@@ -1345,17 +1351,17 @@ endif()
 
 if(NOT USE_CONSOLE)
 	find_package(OpenGL)
-	FINDLIB(GLEW_LIBRARIES NAMES GLEW glew32 glew32s)
-	FIND_PATH(GLEW_INCLUDE_DIR NAMES GL/glew.h)
+	find_package(GLEW REQUIRED)
 	target_link_libraries(openclonk
 		${GLEW_LIBRARIES}
 		${OPENGL_LIBRARIES}
 	)
-	include_directories(${GLEW_INCLUDE_DIR})
+	include_directories(${GLEW_INCLUDE_DIRS})
+	add_definitions(${GLEW_DEFINITIONS})
 	# On some platforms, GLEW declares the userParam parameter of
 	# GLDEBUGPROCARB as const void *, and on other platforms, it's void *.
 	# Test which one works here.
-	set(CMAKE_REQUIRED_INCLUDES "${GLEW_INCLUDE_DIR}")
+	set(CMAKE_REQUIRED_INCLUDES "${GLEW_INCLUDE_DIRS}")
 	CHECK_CXX_SOURCE_COMPILES("#include <GL/glew.h>\nvoid GLAPIENTRY OpenGLDebugProc(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const char* message, const void* userParam) {}\nint main() { GLDEBUGPROCARB proc = &OpenGLDebugProc; }" GLDEBUGPROCARB_USERPARAM_IS_CONST)
 endif()
 if(USE_GTK)

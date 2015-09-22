@@ -312,8 +312,6 @@ public:
 	HBITMAP hbmRect,hbmRect2;
 	HBITMAP hbmFill,hbmFill2;
 	HBITMAP hbmPicker,hbmPicker2;
-	HBITMAP hbmIFT;
-	HBITMAP hbmNoIFT;
 	HBITMAP hbmDynamic;
 	HBITMAP hbmStatic;
 	HBITMAP hbmExact;
@@ -324,14 +322,11 @@ public:
 		hbmRect(0), hbmRect2(0),
 		hbmFill(0), hbmFill2(0),
 		hbmPicker(0), hbmPicker2(0),
-		hbmIFT(0),
-		hbmNoIFT(0),
 		hbmDynamic(0),
 		hbmStatic(0),
 		hbmExact(0)
 	{
 		pPreviewWindow = NULL;
-		toolsDlg->ModeBack = true;
 	}
 	
 	void LoadBitmaps(HINSTANCE instance)
@@ -359,12 +354,19 @@ public:
 	void Clear()
 	{
 		// Unload bitmaps
-		if (hbmBrush) DeleteObject(hbmBrush);
-		if (hbmLine) DeleteObject(hbmLine);
-		if (hbmRect) DeleteObject(hbmRect);
-		if (hbmFill) DeleteObject(hbmFill);
-		if (hbmIFT) DeleteObject(hbmIFT);
-		if (hbmNoIFT) DeleteObject(hbmNoIFT);
+		if (hbmBrush) { DeleteObject(hbmBrush); hbmBrush = 0; }
+		if (hbmLine) { DeleteObject(hbmLine); hbmLine = 0; }
+		if (hbmRect) { DeleteObject(hbmRect); hbmRect = 0; }
+		if (hbmFill) { DeleteObject(hbmFill); hbmFill = 0; }
+		if (hbmPicker) { DeleteObject(hbmPicker); hbmPicker = 0; }
+		if (hbmBrush2) { DeleteObject(hbmBrush2); hbmBrush2 = 0; }
+		if (hbmLine2) { DeleteObject(hbmLine2); hbmLine2 = 0; }
+		if (hbmRect2) { DeleteObject(hbmRect2); hbmRect2 = 0; }
+		if (hbmFill2) { DeleteObject(hbmFill2); hbmFill2 = 0; }
+		if (hbmPicker2) { DeleteObject(hbmPicker2); hbmPicker2 = 0; }
+		if (hbmDynamic) { DeleteObject(hbmDynamic); hbmDynamic = 0; }
+		if (hbmStatic) { DeleteObject(hbmStatic); hbmStatic = 0; }
+		if (hbmExact) { DeleteObject(hbmExact); hbmExact = 0; }
 		if (pPreviewWindow)
 		{
 			delete pPreviewWindow;
@@ -375,6 +377,7 @@ public:
 
 	void Default()
 	{
+		GetOwner()->ModeBack = true;
 	}
 
 };
@@ -818,7 +821,8 @@ void C4ConsoleGUI::ClearViewportMenu()
 
 void C4ConsoleGUI::ToolsDlgClose()
 {
-	::ClearDlg(Console.ToolsDlg.state->hDialog);
+	if (Console.ToolsDlg.state)
+		Console.ToolsDlg.state->Clear();
 }
 
 bool C4ConsoleGUI::PropertyDlgOpen()

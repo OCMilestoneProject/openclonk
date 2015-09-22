@@ -118,22 +118,6 @@ typedef ptrdiff_t ssize_t;
 
 
 
-// Temporary-To-Reference-Fix
-#if !defined(__clang__) && defined(__GNUC__) && ((__GNUC__ < 4) || (__GNUC__ == 4 && __GNUC_MINOR__ < 3))
-#define ALLOW_TEMP_TO_REF(ClassName) operator ClassName & () { return *this; }
-#else
-#define ALLOW_TEMP_TO_REF(ClassName)
-#endif
-
-#ifdef HAVE_RVALUE_REF
-# define RREF &&
-#else
-# define RREF &
-namespace std { template<typename T> inline T &move (T &t) { return t; } }
-#endif
-
-
-
 #if defined(_DEBUG) && defined(_MSC_VER)
 // use inline assembler to invoke the "breakpoint exception"
 #  define BREAKPOINT_HERE __debugbreak()

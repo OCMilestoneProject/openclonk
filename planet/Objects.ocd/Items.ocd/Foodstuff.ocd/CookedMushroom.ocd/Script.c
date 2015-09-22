@@ -18,6 +18,11 @@ protected func ControlUse(object clonk)
 	clonk->Eat(this);
 }
 
+public func IsAnimalFood()
+{
+	return true;
+}
+
 public func NutritionalValue() { return 25; }
 
 public func IsKitchenProduct() { return true; }

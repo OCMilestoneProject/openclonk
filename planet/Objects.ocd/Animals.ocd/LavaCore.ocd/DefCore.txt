@@ -1,7 +1,7 @@
 [DefCore]
 id=LavaCore
 Version=5,2,0,1
-Category=C4D_Object
+Category=C4D_Living
 Height=43
 Width=42
 Offset=-21,-21
@@ -10,10 +10,10 @@ VertexX=0,-20,21,  0, 0,-14, 13,-14,14
 VertexY=0,  0, 0,-22,21,-16,-16,14 ,14
 VertexFriction=1,50,50,50,50,50,50,50,50
 VertexCNAT=16,1,2,4,8,5,2,5,2
-Value=1
 Mass=200
 Components=LavaCore=1
 ContactCalls=1
 StretchGrowth=1
 Oversize=1
 IncompleteActivity=1
+NoBreath=1

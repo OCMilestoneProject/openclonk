@@ -9,6 +9,8 @@
 local Name = "$Name$";
 local Plane = 50;
 local Description = "$Description$";
+local CorrosionResist = 1;
+local MaxEnergy = 100000;
 
 // time is in frames
 
@@ -39,15 +41,16 @@ local out_of_lava_survive_timer = 0;
 
 local max_size = 40;
 
-//local shell_rotation;
-
 func Construction()
 {
 	DetermineMaxSize();
+	
 	shell = CreateObjectAbove(LavaCoreShell);
 	shell->InitAttach(this);
+	
 	SetAction("Swim");
 	SetComDir(COMD_None);
+	
 	AddEffect("CoreBehaviour",this,1,1,this);
 	
 }
@@ -102,14 +105,28 @@ func Place(int amount, proplist rectangle, proplist settings)
 		f = CreateObjectAbove(this, spot.x, spot.y, NO_OWNER);
 		if (!f) continue;
 		
+		f->PlaceConstruction();
+		
 		if (f->Stuck())
 		{
-			f->RemoveObject();
+			f->Delete();
 			continue;
 		}
 		--amount;
 	}
 	return f; // return last created lavacore
+}
+
+func PlaceConstruction()
+{
+	SetCon(max_size);
+	shell->SetCon(max_size);
+}
+
+public func Delete()
+{
+	shell->RemoveObject();
+	RemoveObject();
 }
 
 protected func FxCoreBehaviourTimer(object target, effect, int time)
@@ -258,16 +275,10 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			
 			// when detecting other Lavacores, swim in opposite directions. This keeps them spread evenly in a body of lava.
 			
-			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(50 + max_size));
+			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(10 + max_size));
 			if(rival != nil && rival != this)
 				if(PathFree(GetX(), GetY(), rival->GetX(), rival->GetY()))
 				{
-					// Sync up surfacing times sometimes, other times, reset counter
-					if(!Random(2))
-						move_surface_timer = rival.move_surface_timer;
-					else
-						move_surface_timer = 0;
-						
 					if(rival->GetX() > GetX())
 						move_vectorX = -1;
 					else
@@ -360,13 +371,6 @@ public func IsSurfacing()
 	return move_surface_timer >= move_surface_interval;
 }
 
-protected func UpdateSwim()
-{
-	
-}
-
-// todo: animation when turning
-
 /*
 	Shoots lava bubbles at the victim ):
 */
@@ -414,7 +418,8 @@ protected func ContactRight()
 
 protected func Death()
 {
-	Explode(40);
+	shell->RemoveObject();
+	Explode(max_size/2);
 }
 
 /*
@@ -424,22 +429,27 @@ protected func Fossilize()
 {
 	out_of_lava_survive_timer = 0;
 	fossilized = 1;
+	
 	SetAction("Flight");
+	SetComDir(COMD_None);
+	
 	SetMeshMaterial("LavaCoreStoneMat");
+	
 	shell->SetMeshMaterial("LavaShellStoneMat");
 	shell->StopAll();
-	SetComDir(COMD_None);
-	//AddEffect("CoreBehaviour",this,1,1,this);
+	
 }
 
 protected func Revive()
 {
 	fossilized = 0;
+	
 	SetAction("Swim");
-	SetMeshMaterial("LavaCoreMat");
-	shell->SetMeshMaterial("LavaShellMat");
 	SetComDir(COMD_None);
-	//AddEffect("CoreBehaviour",this,1,1,this);
+	
+	SetMeshMaterial("LavaCoreMat");
+	
+	shell->SetMeshMaterial("LavaShellMat");
 }
 
 local ActMap = {

@@ -334,9 +334,14 @@ protected func Startle()
 	if(GetAction() == "Sit")
 		{
 		Fly();
-		Sound("BatNoise*");
+		ScheduleCall(this, "MakeBatNoise", Random(15));
 		startled_timer = 150;
 		}
+}
+
+func MakeBatNoise()
+{
+	Sound("BatNoise*");
 }
 
 /*

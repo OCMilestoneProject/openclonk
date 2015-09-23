@@ -16,6 +16,11 @@ local NoBurnDecay = 1;
 
 local move_vectorX = 0;
 local move_vectorY = 0;
+
+// is used to determine if bat leaves a cave
+local last_tunnelX = 0;
+local last_tunnelY = 0;
+
 local move_speed = 12; // bear in  mind this is also multiplied by a random factor
 local move_random_dir = 3; // max random multiplier
 
@@ -136,6 +141,17 @@ protected func FlightRoutine()
 	}
 	else
 	{
+		// Remember direction we need to fly in to get back into the cave
+		if(GetMaterial(0, 0) == Material("Tunnel"))
+		{
+			last_tunnelX = GetX();
+			last_tunnelY = GetY();
+		}
+		if(!PathFree(GetX(), GetY(), last_tunnelX, last_tunnelY))
+		{
+			last_tunnelX = -1;
+			last_tunnelY = -1;
+		}
 		// Move
 		MoveImpulse();
 		// Make sound
@@ -236,7 +252,7 @@ protected func FlightRoutine()
 		else if(!Random(40) && is_agressive)
 		{
 			// Search for Clonks
-			target_enemy = FindObject(Find_ID(Clonk), Find_Distance(100), Find_NoContainer());
+			target_enemy = FindObject(Find_ID(Clonk), Find_OCF(OCF_Alive), Find_Distance(100), Find_NoContainer());
 			var buddies = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(100));
 			// Check if path free and if there are enough buddies to mount an attack with
 			if(target_enemy != nil)
@@ -272,27 +288,39 @@ protected func FlightRoutine()
 			ChangeDirection();
 		// When above ground don't fly too far up into the sky
 		else if(GBackSky(0,0))
-			if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
-				if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
+			{
+				if(!GBackSolid(0, 100) && !GBackLiquid(0, 100))
 				{
-					move_vectorX = RandomX(-1, 1);
-					move_vectorY = 1;
+					if(PathFree(GetX(), GetY(), GetX(), GetY() + 100))
+					{
+						move_vectorX = RandomX(-1, 1);
+						move_vectorY = 1;
+					}
 				}
+				else if(last_tunnelX != -1 && last_tunnelX != -1)
+				{
+					move_vectorX = Normalize(last_tunnelX - GetX());
+					move_vectorY = Normalize(last_tunnelY - GetY());		
+				}
+			}
 	}
 }
 
-protected func CatchBlow()
+protected func CatchBlow(int damage, object obj)
 {
 	if (GetAction() == "Dead") return;
-	Hurt();
+	Hurt(obj);
 }
 	
-protected func Hurt()
+protected func Hurt(object obj)
 {
 	if(GetAction() == "Sit")
 		Startle();
 		
-	Sound("Bat*");
+	target_enemy = GetCursor(GetController(obj));
+	
+	Sound("BatNoise*");
+	
 	// When hurt, alarm nearby bats
 	var swarm = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200), Find_Exclude(this));
 	for(var i = 0; i < GetLength(swarm); i++)
@@ -394,6 +422,11 @@ protected func ContactBottom()
 {
 	move_vectorX = RandomX(-1, 1);
 	move_vectorY = -1;
+	
+	if(!GetAlive())
+	{
+		PlayAnimation("Dead", 1, Anim_Linear(0,0,GetAnimationLength("Dead"),1,ANIM_Hold), Anim_Const(1000));
+	}
 }
 
 protected func ContactTop()
@@ -441,22 +474,11 @@ protected func Death()
 	AddTimer(this.Decaying, 500);
 }
 
-protected func Hit()
-{
-	if(!GetAlive())
-	{
-		PlayAnimation("Dead", 1, Anim_Linear(0,0,GetAnimationLength("Dead"),1,ANIM_Hold), Anim_Const(1000));
-	}
-}
-
 func Decaying()
 {
 	if (GetCon()<20) RemoveObject(); else DoCon(-5);
 	return true;
 }
-
-public func NutritionalValue() { if (!GetAlive()) return 15; else return 0; }
-func IsPrey() { return true; }
 
 local ActMap = {
 

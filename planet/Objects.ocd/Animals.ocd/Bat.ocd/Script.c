@@ -18,8 +18,8 @@ local move_vectorX = 0;
 local move_vectorY = 0;
 
 // is used to determine if bat leaves a cave
-local last_tunnelX = 0;
-local last_tunnelY = 0;
+local last_tunnelX = -1;
+local last_tunnelY = -1;
 
 local move_speed = 12; // bear in  mind this is also multiplied by a random factor
 local move_random_dir = 3; // max random multiplier

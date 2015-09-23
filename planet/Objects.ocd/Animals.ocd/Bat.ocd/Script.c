@@ -253,7 +253,7 @@ protected func FlightRoutine()
 		{
 			// Search for Clonks
 			target_enemy = FindObject(Find_ID(Clonk), Find_OCF(OCF_Alive), Find_Distance(100), Find_NoContainer());
-			var buddies = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(100));
+			var buddies = FindObjects(Find_ID(Bat), Find_OCF(OCF_Alive), Find_Distance(200));
 			// Check if path free and if there are enough buddies to mount an attack with
 			if(target_enemy != nil)
 				if(!PathFree(GetX(), GetY(), target_enemy->GetX(), target_enemy->GetY()) || GetLength(buddies) < 4)

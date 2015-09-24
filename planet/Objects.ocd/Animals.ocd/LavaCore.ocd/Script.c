@@ -7,7 +7,7 @@
 */
 
 local Name = "$Name$";
-local Plane = 50;
+local Plane = 399;
 local Description = "$Description$";
 local CorrosionResist = 1;
 local MaxEnergy = 100000;

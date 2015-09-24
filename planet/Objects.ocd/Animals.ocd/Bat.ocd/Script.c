@@ -147,7 +147,7 @@ protected func FlightRoutine()
 			last_tunnelX = GetX();
 			last_tunnelY = GetY();
 		}
-		if(!PathFree(GetX(), GetY(), last_tunnelX, last_tunnelY))
+		if(!PathFree(GetX(), GetY(), last_tunnelX, last_tunnelY) || Distance(GetX(), GetY(), last_tunnelX, last_tunnelY) > 30)
 		{
 			last_tunnelX = -1;
 			last_tunnelY = -1;

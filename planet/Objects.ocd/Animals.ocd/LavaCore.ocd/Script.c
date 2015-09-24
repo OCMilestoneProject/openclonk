@@ -61,7 +61,7 @@ protected func DetermineMaxSize()
 	var size_inc = 10;
 	var distance_step = 100;
 	
-	for(var i = 1; i < 14; i++)
+	for(var i = 1; i < 6; i++)
 	{
 		// Up
 		if(PathFree(GetX(), GetY(), GetX(), GetY() - distance_step * i))
@@ -274,7 +274,6 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			}
 			
 			// when detecting other Lavacores, swim in opposite directions. This keeps them spread evenly in a body of lava.
-			
 			var rival = FindObject(Find_ID(LavaCore), Find_Exclude(this), Find_Distance(10 + max_size));
 			if(rival != nil && rival != this)
 				if(PathFree(GetX(), GetY(), rival->GetX(), rival->GetY()))
@@ -336,7 +335,6 @@ protected func StopRotateShellToTop()
 */
 protected func MoveImpulse()
 {
-	//if(GetAction() == "Flight")
 	if(fossilized)
 		return -1;
 	move_timer = 0;
@@ -419,7 +417,7 @@ protected func ContactRight()
 protected func Death()
 {
 	shell->RemoveObject();
-	Explode(max_size/2);
+	Explode(BoundBy(max_size/2, 20, 90));
 }
 
 /*

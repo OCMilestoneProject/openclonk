@@ -48,9 +48,13 @@ local is_expat = 0;
 
 local startled_timer = 0; // Doesn't sit while startled
 
-//local shell_rotation;
+private func Definition(proplist def)
+{
+def.PictureTransformation = Trans_Mul(Trans_Rotate(-65, 0, 1, 0), Trans_Rotate(-35, 0, 0, 1));
+return _inherited(def, ...);
+}
 
-func Construction()
+private func Construction()
 {
 	daytime = FindObject(Find_ID(Environment_Time));
 
@@ -92,7 +96,7 @@ func Construction()
 	};
 }
 
-func Place(int amount, proplist rectangle, proplist settings)
+private func Place(int amount, proplist rectangle, proplist settings)
 {
 	var max_tries = 2 * amount;
 	var loc_area = nil;
@@ -117,7 +121,7 @@ func Place(int amount, proplist rectangle, proplist settings)
 	return f; // return last created bat
 }
 
-protected func FxCoreBehaviourTimer(object target, effect, int time)
+private func FxCoreBehaviourTimer(object target, effect, int time)
 {
 	if(daytime == nil)
 		FlightRoutine();
@@ -129,7 +133,7 @@ protected func FxCoreBehaviourTimer(object target, effect, int time)
 			DoCon(1);
 }
 
-protected func FlightRoutine()
+private func FlightRoutine()
 {
 	if(GetAction() == "Sit")
 	{
@@ -306,13 +310,13 @@ protected func FlightRoutine()
 	}
 }
 
-protected func CatchBlow(int damage, object obj)
+private func CatchBlow(int damage, object obj)
 {
 	if (GetAction() == "Dead") return;
 	Hurt(obj);
 }
 	
-protected func Hurt(object obj)
+private func Hurt(object obj)
 {
 	if(GetAction() == "Sit")
 		Startle();
@@ -329,7 +333,7 @@ protected func Hurt(object obj)
 	}
 }
 
-protected func Startle()
+private func Startle()
 {
 	if(GetAction() == "Sit")
 		{
@@ -339,7 +343,7 @@ protected func Startle()
 		}
 }
 
-func MakeBatNoise()
+private func MakeBatNoise()
 {
 	Sound("BatNoise*");
 }
@@ -347,7 +351,7 @@ func MakeBatNoise()
 /*
 Returns true if the bat is still turning
 */
-protected func IsTurning()
+private func IsTurning()
 {
 	if(dir == 1)
 		if(z_rot > 0)
@@ -365,7 +369,7 @@ protected func IsTurning()
 /*
 	Causes the object to move 
 */
-protected func MoveImpulse()
+private func MoveImpulse()
 {
 	if(move_vectorX > 0)
 		dir = 1;
@@ -376,7 +380,7 @@ protected func MoveImpulse()
 	SetYDir(( GetYDir() +  move_vectorY * move_speed ) / 2);
 }
 
-protected func ChangeDirection()
+private func ChangeDirection()
 {
 	move_vectorX = RandomX(-1,1);
 	move_vectorY = RandomX(-1,1);
@@ -384,7 +388,7 @@ protected func ChangeDirection()
 	MoveImpulse();
 }
 
-protected func Fly()
+private func Fly()
 {
 	StopAnimation(1);
 	SetAction("Flight");
@@ -397,7 +401,7 @@ protected func Fly()
 	ChangeDirection();
 }
 
-protected func Sit()
+private func Sit()
 {
 	StopAnimation(1);
 	SetAction("Sit");
@@ -423,7 +427,7 @@ public func Normalize(int value)
     return 0;
 }
 
-protected func ContactBottom()
+private func ContactBottom()
 {
 	move_vectorX = RandomX(-1, 1);
 	move_vectorY = -1;
@@ -434,7 +438,7 @@ protected func ContactBottom()
 	}
 }
 
-protected func ContactTop()
+private func ContactTop()
 {
 	if(daytime == nil && !startled_timer)
 	{
@@ -455,19 +459,19 @@ protected func ContactTop()
 	move_vectorY = 1;
 }
 
-protected func ContactLeft()
+private func ContactLeft()
 {
 	move_vectorX = RandomX(-1, 1);
 	move_vectorY = 1;
 }
 
-protected func ContactRight()
+private func ContactRight()
 {
 	move_vectorX = -1;
 	move_vectorY = RandomX(-1, 1);
 }
 
-protected func Death()
+private func Death()
 {
 	StopAnimation(1);
 	PlayAnimation("Land", 1, Anim_Linear(0,0,GetAnimationLength("Land"),19,ANIM_Hold), Anim_Const(1000));
@@ -479,7 +483,7 @@ protected func Death()
 	AddTimer(this.Decaying, 500);
 }
 
-func Decaying()
+private func Decaying()
 {
 	if (GetCon()<20) RemoveObject(); else DoCon(-5);
 	return true;

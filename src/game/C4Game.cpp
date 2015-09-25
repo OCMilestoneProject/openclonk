@@ -821,6 +821,10 @@ bool C4Game::InitMaterialTexture()
 				return false;
 		}
 
+		// Texture loader will access out of order. Pre-cache the small text-files to prevent rewind.
+		Mats.PreCacheEntries(C4CFN_TexMap);
+		Mats.PreCacheEntries(C4CFN_MaterialFiles, true);
+
 		// First material file? Load texture map.
 		bool fNewOverloadMaterials = false, fNewOverloadTextures = false;
 		if (fFirst)
@@ -3666,9 +3670,7 @@ float C4Game::GetTextSpecImageAspect(const char* szSpec)
 		{
 			const StdMesh& mesh = *pGfx->Mesh;
 			const StdMeshBox& box = mesh.GetBoundingBox();
-
-			// Note the bounding box is in OGRE frame of reference
-			return (box.y2 - box.y1) / (box.z2 - box.z1);
+			return (box.x2 - box.x1) / (box.y2 - box.y1);
 		}
 
 		return -1.0f;

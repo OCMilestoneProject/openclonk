@@ -71,8 +71,15 @@ private func InitCaveMiddle()
 	// Make sure the brick overlaps the rock to blast.
 	DrawMaterialQuad("Brick", 432, 536, 472, 536, 472, 542, 432, 542, true);
 	
-	// Some firestones on the way, to pick up.
-	//PlaceObjects(Firestone, 2 + Random(2), "Earth", 248, 440, 40, 40);
+	// Widen and cover the exit for the wipf.
+	DrawMaterialQuad("Tunnel", 550, 526, 570, 526, 570, 536, 550, 536, DMQ_Sub);
+	var trunk = CreateObjectAbove(Trunk, 570, 558);
+	trunk.MeshTransformation = [821, 0, 795, 0, 0, 1145, 0, 0, -795, 0, 821, 0];
+	trunk.Plane = 510; trunk->SetR(90);
+	
+	// A source of light drawing attention to the wipf.
+	var torch = CreateObjectAbove(Torch, 484, 528);
+	torch->AttachToWall(true);
 		
 	// Some mushrooms and ferns in the middle: left cave.
 	Fern->Place(2 + Random(2), Rectangle(0, 480, 56, 40));
@@ -150,7 +157,9 @@ private func InitVegetation()
 private func InitAnimals()
 {
 	// The wipf as your friend, controlled by AI.
-	CreateObjectAbove(Wipf, 500, 536);
+	var wipf = CreateObjectAbove(Wipf, 500, 536);
+	wipf->EnableTutorialControl();
+	wipf->SetMeshMaterial("WipfSkin");
 	
 	// Some butterflies as atmosphere.
 	for (var i = 0; i < 25; i++)
@@ -225,6 +234,12 @@ global func FxGoalOutroStop(object target, proplist effect, int reason, bool tem
 {
 	if (temp) 
 		return FX_OK;
+
+	// Enable wipf activity.
+	var wipf = FindObject(Find_ID(Wipf));
+	if (wipf)
+		wipf->DisableTutorialControl();		
+	return FX_OK;
 }
 
 /*-- Guide Messages --*/

@@ -12,7 +12,7 @@
 19=DuroLava-lava_red
 20=Water-water1-water2-water3-water1-water3-water2
 22=Acid-acid
-23=Lava-lava
+23=Lava-lava_red
 25=Water-water
 
 28=Earth-earth

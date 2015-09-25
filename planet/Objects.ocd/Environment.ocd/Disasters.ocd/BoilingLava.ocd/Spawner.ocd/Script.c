@@ -7,9 +7,9 @@
 
 local Name = "Lava Bubble Spawner";
 
-local max_time = 2;
+local max_time = 4;
 local timer = 0;
-local count = 10;
+local count = 10;	
 
 public func Construction()
 {
@@ -24,12 +24,16 @@ private func Boil()
 	if (++timer > max_time)
 	{
 		timer = 0;
-		var amount = RandomX(1, 3);
+		var amount = RandomX(1, 2);
 		count -= amount;
 		
 		var bubbles = CastLavaBubbles(amount, RandomX(10, 30), RandomX(-30, 30), 0);
 		for (var bubble in bubbles)
-			bubble->SetCon(RandomX(105, 115));
+			{
+			bubble->SetCon(RandomX(40, 70));
+			bubble->SetYDir(RandomX(-25,-50));
+			bubble->SetXDir(RandomX(-3,3));
+			}
 		if (count <= 0)
 			RemoveObject();
 	}

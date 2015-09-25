@@ -35,7 +35,8 @@ private func GetDefaultIntensity()
 	return (LandscapeWidth() * LandscapeHeight()) / this.intensity_quotient;
 }
 
-private func Boiling()
+// old function
+/*private func Boiling()
 {
 	for(var i = 0; i < intensity; i++)
 	{
@@ -53,6 +54,31 @@ private func Boiling()
 					{
 						CreateObject(BoilingLava_Spawner, x_rand, y_rand);
 					}
+	}
+}*/
+
+private func Boiling()
+{
+	for (var i = 0; i < intensity; i++)
+	{
+		// Checks if there is a deep enough pool of lava at a random location of the map, then creates spawner at a random depth into the pool
+		var x_rand = Random(LandscapeWidth());	
+		var y_rand = Random(LandscapeHeight());
+		var mat = MaterialName(GetMaterial(x_rand, y_rand));
+		var random_depth = RandomX(30, 100);
+		var depth_check_mat = MaterialName(GetMaterial(x_rand, y_rand + random_depth));
+
+		if(mat == "DuroLava" || mat == "Lava")
+			if (depth_check_mat == "DuroLava" || depth_check_mat == "Lava")
+				if (PathFree(x_rand, y_rand, x_rand, y_rand + random_depth))
+				{	
+					var nearbySpawner = FindObject(Find_Distance(RandomX(80, 100), x_rand, y_rand), Find_ID(BoilingLava_Spawner));
+				
+					if (nearbySpawner == nil)
+					{
+						CreateObject(BoilingLava_Spawner, x_rand, y_rand + random_depth);
+					}
+				}
 	}
 }
 

@@ -58,7 +58,7 @@ func Construction()
 protected func DetermineMaxSize()
 {
 	var temp_size = 0;
-	var size_inc = 10;
+	var size_inc = 6;
 	var distance_step = 100;
 	
 	for(var i = 1; i < 6; i++)

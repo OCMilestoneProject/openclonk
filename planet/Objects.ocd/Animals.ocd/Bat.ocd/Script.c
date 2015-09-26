@@ -56,7 +56,7 @@ return _inherited(def, ...);
 
 private func Construction()
 {
-	daytime = FindObject(Find_ID(Environment_Time));
+	daytime = FindObject(Find_ID(Time));
 
 	AddEffect("CoreBehaviour",this,1,1,this);
 	

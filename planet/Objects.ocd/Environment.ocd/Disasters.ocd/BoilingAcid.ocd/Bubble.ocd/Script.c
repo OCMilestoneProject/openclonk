@@ -34,7 +34,7 @@ private func FxMoveTimer(object target, effect fx, int time)
 		DoCon(2);
 	
 	// Causes bubbles to repel each other.
-	var nearby_bubble = FindObject(Find_Distance(GetCon()/15, 0, 0), Find_ID(GetID()));
+	var nearby_bubble = FindObject(Find_Distance(5, 0, 0), Find_ID(GetID()));
 	if (nearby_bubble)
 	{
 		SetXDir(-(nearby_bubble->GetX() - GetX()) / 2);

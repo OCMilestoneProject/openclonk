@@ -50,7 +50,7 @@ private func FxMoveTimer(object target, effect, int time)
 		DoCon(2);
 	
 	// Explode near living things
-	var prey = FindObject(Find_Distance(GetCon()/15, 0, 0), Find_OCF(OCF_Alive));
+	var prey = FindObject(Find_Distance(5, 0, 0), Find_OCF(OCF_Alive));
 	if (prey)
 	{
 		Explode(10);

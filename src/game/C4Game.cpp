@@ -1874,7 +1874,7 @@ bool C4Game::SaveGameTitle(C4Group &hGroup)
 		                        sfcPic,0,0,iSfcWdt,iSfcHgt);
 
 		bool fOkay=true;
-		fOkay = sfcPic->SavePNG(Config.AtTempPath(C4CFN_TempTitle), false, true, false);
+		fOkay = sfcPic->SavePNG(Config.AtTempPath(C4CFN_TempTitle), false, false, false);
 		StdStrBuf destFilename = FormatString("%s.png",C4CFN_ScenarioTitle);
 		delete sfcPic; if (!fOkay) return false;
 		if (!hGroup.Move(Config.AtTempPath(C4CFN_TempTitle),destFilename.getData())) return false;
@@ -2344,6 +2344,9 @@ bool C4Game::InitGameFinal()
 	Objects.ValidateOwners();
 	Objects.AssignInfo();
 	Objects.AssignLightRange(); // update FoW-repellers
+
+	// Ambience init (before scenario construction, so the scenario can easily modify ambience in Initialize)
+	if (!C4S.Head.SaveGame) ::GameScript.Call(PSF_InitializeAmbience);
 
 	// Script constructor call
 	int32_t iObjCount = Objects.ObjectCount();

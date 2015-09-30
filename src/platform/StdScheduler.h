@@ -40,6 +40,9 @@ struct pollfd;
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif // HAVE_PTHREAD
+#ifdef __APPLE__
+#include <sched.h>
+#endif
 #endif // _WIN32
 
 
@@ -335,6 +338,7 @@ protected:
 	virtual void Execute() = 0;
 
 	bool IsStopSignaled();
+	virtual bool IsSelfDestruct() { return false; } // whether thread should delete itself after execution finished
 
 private:
 	// thread func

@@ -53,7 +53,7 @@ public:
 	bool Load(BYTE *pFile, int iSize);            // load from file that is completely in mem
 	DWORD GetPix(int iX, int iY);                 // get pixel value (rgba) - note that NO BOUNDS CHECKS ARE DONE due to performance reasons!
 	// Use ONLY for PNG_COLOR_TYPE_RGB_ALPHA!
-	const uint32_t * GetRow(int iY)
+	uint32_t * GetRow(int iY)
 	{
 		return reinterpret_cast<uint32_t *>(pImageData+iY*iRowSize);
 	}
@@ -63,6 +63,9 @@ public:
 
 	BYTE *GetImageData() { return pImageData; }   // return raw image data
 	int GetBitsPerPixel();                        // return number of bits per pixel in raw image data
+
+	static void ScheduleSaving(CPNGFile *png, const char *filename); // start a background thread to save the png file. then free the passed png.
+	static void WaitForSaves(); // wait until all pending saves are finished
 
 private:
 	static void PNGAPI CPNGReadFn(png_structp png_ptr, png_bytep data, size_t length); // reading proc (callback)

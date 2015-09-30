@@ -96,11 +96,17 @@ public func OnFuseFinished()
 	DoExplode();
 }
 
-public func DoExplode()
+public func ActivateFuse()
 {
 	// Activate all fuses.
 	for (var obj in FindObjects(Find_Category(C4D_StaticBack), Find_Func("IsFuse"), Find_ActionTargets(this)))
 		obj->~StartFusing(this);
+}
+
+public func DoExplode()
+{
+	// Activate all fuses.
+	ActivateFuse();
 	// Explode, calc the radius out of the area of a explosion of a single dynamite times the amount of dynamite
 	// This results to 18, 25, 31, 36, and 40
 	Explode(Sqrt(18**2*count));
@@ -108,7 +114,8 @@ public func DoExplode()
 
 protected func Incineration(int caused_by) 
 {
-	AddEffect("Fuse", this, 100, 1, this);
+	ActivateFuse();
+	if (!GetEffect("Fuse", this)) AddEffect("Fuse", this, 100, 1, this);
 	Sound("Fuse");
 	SetController(caused_by);
 	return;
@@ -130,6 +137,15 @@ public func FxFuseTimer(object target, effect, int timer)
 
 public func IsTool() { return true; }
 public func IsChemicalProduct() { return true; }
+
+
+/* Drop connected or fusing boxes */
+
+public func IsDroppedOnDeath(object clonk)
+{
+	return GetEffect("Fuse", this) || wire;
+}
+
 
 
 /*-- Properties --*/

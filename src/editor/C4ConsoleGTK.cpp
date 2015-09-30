@@ -821,6 +821,11 @@ void C4ConsoleGUI::SetInputFunctions(std::list<const char*>& functions)
 	if(state->txtScript == NULL) return;
 
 	GtkEntryCompletion* completion = gtk_entry_get_completion(GTK_ENTRY(state->txtScript));
+	if(!completion)
+	{
+		ClearInput();
+		completion = gtk_entry_get_completion(GTK_ENTRY(state->txtScript));
+	}
 	GtkListStore* store = GTK_LIST_STORE(gtk_entry_completion_get_model(completion));
 	GtkTreeIter iter;
 	g_assert(store);
@@ -985,7 +990,7 @@ void C4ConsoleGUI::PropertyDlgClose()
 {
 }
 
-void C4ConsoleGUI::PropertyDlgUpdate(C4ObjectList &rSelection)
+void C4ConsoleGUI::PropertyDlgUpdate(C4ObjectList &rSelection, bool force_function_update)
 {
 	if (!state->propertydlg) return;
 	if (!C4DevmodeDlg::GetWindow()) return;
@@ -993,7 +998,7 @@ void C4ConsoleGUI::PropertyDlgUpdate(C4ObjectList &rSelection)
 	GtkTextBuffer* buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(state->propertydlg_textview));
 	gtk_text_buffer_set_text(buffer, rSelection.GetDataString().getData(), -1);
 
-	if (PropertyDlgObject == rSelection.GetObject()) return;
+	if (PropertyDlgObject == rSelection.GetObject() && !force_function_update) return;
 	PropertyDlgObject = rSelection.GetObject();
 	
 	std::list<const char *> functions = ::ScriptEngine.GetFunctionNames(PropertyDlgObject);

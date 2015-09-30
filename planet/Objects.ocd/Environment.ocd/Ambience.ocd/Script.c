@@ -131,6 +131,7 @@ private func Execute()
 private func ExecutePlayer(int plr, array environments)
 {
 	var cursor = GetCursor(plr);
+	if (!cursor) cursor = GetPlrView(plr);
 	// Update active state of all player environments
 	if (cursor)
 	{
@@ -162,7 +163,7 @@ private func ExecutePlayer(int plr, array environments)
 			// Music!
 			if (env.music && !has_music)
 			{
-				this->SetPlayList(env.music, plr, true, 3000);
+				this->SetPlayList(env.music, plr, true, 3000, 10000);
 				has_music = true;
 			}
 			// Sound effects like cave reverb etc.
@@ -196,7 +197,8 @@ func InitializePlayer(int plr)
 			envs[i] = new all_environments[i] { change_delay = 999, is_active = false };
 		player_environments[plr] = envs;
 		// Newly joining players should have set playlist immediately (so they don't start playing a random song just to switch it immediately)
-		ExecutePlayer(plr);
+		// However, this only works with a cursor
+		ExecutePlayer(plr, envs);
 	}
 	return true;
 }
@@ -332,12 +334,21 @@ private func EnvCheck_Day(object cursor, int x, int y, bool is_current)
 	return true;
 }
 
+public func SaveScenarioObject(proplist props, ...)
+{
+	// Only save ambience if it has modifications set for this scenario
+	// However, modifications aren't possible for now so never save it
+	return false;
+}
+
 /*-- Proplist --*/
 
 local SoundModifier, CaveModifier, UnderwaterModifier;
 
-func ReleaseSoundModifier() { return ChangeSoundModifier(this, true); }
-func UpdateSoundModifier() { return ChangeSoundModifier(this, false); } // OpenAL-Soft implementation does not work for all modifiers
+private func ReleaseSoundModifier() { return ChangeSoundModifier(this, true); }
+private func UpdateSoundModifier() { return ChangeSoundModifier(this, false); } // OpenAL-Soft implementation does not work for all modifiers
+
+public func IsAmbienceController() { return true; }
 
 public func Definition(def)
 {
@@ -478,4 +489,18 @@ CreateEnvironmentObjects("Temperate", Rectangle(LandscapeWidth()/2, 0, Landscape
 		
 		p_id->Place(amount_percentage, area);
 	}
+}
+
+
+
+/* Global sound ambience object creation */
+
+global func InitializeAmbience()
+{
+	// Fallback for when this call is not defined in scenario: Ensure there is an ambience controller object
+	if (!FindObject(Find_Func("IsAmbienceController")))
+	{
+		CreateObject(Ambience);
+	}
+	return true;
 }

@@ -384,7 +384,7 @@ void C4MusicSystem::Clear()
 	if (MODInitialized) { DeinitializeMOD(); }
 }
 
-void C4MusicSystem::Execute()
+void C4MusicSystem::Execute(bool force_buffer_checks)
 {
 	// Execute music fading
 	if (FadeMusicFile)
@@ -407,7 +407,7 @@ void C4MusicSystem::Execute()
 	}
 	// Ensure a piece is played
 #if AUDIO_TK != AUDIO_TK_SDL_MIXER
-	if (!::Game.iTick35 || !Game.IsRunning)
+	if (!::Game.iTick35 || !Game.IsRunning || force_buffer_checks)
 #endif
 	{
 		if (!PlayMusicFile)
@@ -417,7 +417,7 @@ void C4MusicSystem::Execute()
 	}
 }
 
-bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms)
+bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, double max_resume_time)
 {
 	if (Game.IsRunning ? !Config.Sound.RXMusic : !Config.Sound.FEMusic)
 		return false;
@@ -439,32 +439,42 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms)
 				break;
 		}
 	}
-
-	// Random song
 	else
 	{
-		// try to find random song
-		for (int i = 0; i <= 1000; i++)
+		// When resuming, prefer songs that were interrupted before
+		if (max_resume_time > 0)
 		{
-			int nmb = SafeRandom(Max(ASongCount / 2 + ASongCount % 2, ASongCount - SCounter));
-			int j;
-			for (j = 0, NewFile = Songs; NewFile; NewFile = NewFile->pNext)
-				if (!NewFile->NoPlay)
-					if (NewFile->LastPlayed == -1 || NewFile->LastPlayed < SCounter - ASongCount / 2)
-					{
-						j++;
-						if (j > nmb) break;
-					}
-			if (NewFile) break;
+			for (C4MusicFile *check_file = Songs; check_file; check_file = check_file->pNext)
+				if (!check_file->NoPlay)
+					if (check_file->HasResumePos() && check_file->GetRemainingTime() > max_resume_time)
+						if (!NewFile || NewFile->LastPlayed < check_file->LastPlayed)
+							NewFile = check_file;
 		}
 
+		// Random song
+		if (!NewFile)
+		{
+			// try to find random song
+			for (int i = 0; i <= 1000; i++)
+			{
+				int nmb = SafeRandom(Max(ASongCount / 2 + ASongCount % 2, ASongCount - SCounter));
+				int j;
+				for (j = 0, NewFile = Songs; NewFile; NewFile = NewFile->pNext)
+					if (!NewFile->NoPlay)
+						if (NewFile->LastPlayed == -1 || NewFile->LastPlayed < SCounter - ASongCount / 2)
+						{
+							j++;
+							if (j > nmb) break;
+						}
+				if (NewFile) break;
+			}
+
+		}
 	}
 
 	// File found?
 	if (!NewFile)
 		return false;
-
-	LogF(LoadResStr("IDS_PRC_PLAYMUSIC"), GetFilename(NewFile->FileName));
 
 	// Stop/Fade out old music
 	bool is_fading = fadetime_ms && NewFile != PlayMusicFile && PlayMusicFile;
@@ -504,13 +514,17 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms)
 	}
 
 	// Play new song
-	if (!NewFile->Play(fLoop)) return false;
+	if (!NewFile->Play(fLoop, max_resume_time)) return false;
 	PlayMusicFile = NewFile;
 	NewFile->LastPlayed = SCounter++;
 	Loop = fLoop;
 
 	// Set volume
 	PlayMusicFile->SetVolume(Volume * !is_fading);
+
+	// Message first time a piece is played
+	if (!NewFile->HasBeenAnnounced())
+		NewFile->Announce();
 
 	return true;
 }
@@ -598,14 +612,13 @@ bool C4MusicSystem::GrpContainsMusic(C4Group &rGrp)
 	                 || rGrp.FindEntry("*.ogg");
 }
 
-int C4MusicSystem::SetPlayList(const char *szPlayList, bool fForceSwitch, int fadetime_ms)
+int C4MusicSystem::SetPlayList(const char *szPlayList, bool fForceSwitch, int fadetime_ms, double max_resume_time)
 {
 	// reset
 	C4MusicFile *pFile;
 	for (pFile = Songs; pFile; pFile = pFile->pNext)
 	{
 		pFile->NoPlay = true;
-		pFile->LastPlayed = -1;
 	}
 	ASongCount = 0;
 	SCounter = 0;
@@ -637,7 +650,7 @@ int C4MusicSystem::SetPlayList(const char *szPlayList, bool fForceSwitch, int fa
 	// Force switch of music if currently playing piece is not in list?
 	if (fForceSwitch && PlayMusicFile && PlayMusicFile->NoPlay)
 	{
-		Play(NULL, false, fadetime_ms);
+		Play(NULL, false, fadetime_ms, max_resume_time);
 	}
 	return ASongCount;
 }

@@ -1,18 +1,16 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2013 David Dormagen
+ * Copyright (c) 2014-2015, The OpenClonk Team and contributors
  *
- * Portions might be copyrighted by other authors who have contributed
- * to OpenClonk.
+ * Distributed under the terms of the ISC license; see accompanying file
+ * "COPYING" for details.
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- * See isc_license.txt for full license and disclaimer.
+ * "Clonk" is a registered trademark of Matthes Bender, used with permission.
+ * See accompanying file "TRADEMARK" for details.
  *
- * "Clonk" is a registered trademark of Matthes Bender.
- * See clonk_trademark_license.txt for full license.
+ * To redistribute this file separately, substitute the full license texts
+ * for the above references.
  */
 
  /*
@@ -1680,9 +1678,10 @@ bool C4ScriptGuiWindow::UpdateLayout(C4TargetFacet &cgo, float parentWidth, floa
 	rcBounds.Wdt = width;
 	rcBounds.Hgt = height;
 
-	// if this window contains text, we auto-fit to the text height
+	// If this window contains text, we auto-fit to the text height;
+	// but we only break text when the window /would/ crop it otherwise. 
 	StdCopyStrBuf *strBuf = props[C4ScriptGuiWindowPropertyName::text].GetStrBuf();
-	if (strBuf)
+	if (strBuf && !(style & C4ScriptGuiWindowStyleFlag::NoCrop))
 	{
 		StdStrBuf sText;
 		int32_t textHgt = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), rcBounds.Wdt, &sText, true);
@@ -1827,7 +1826,11 @@ bool C4ScriptGuiWindow::Draw(C4TargetFacet &cgo, int32_t player, C4Rect *current
 	{
 		StdStrBuf sText;
 		int alignment = ALeft;
-		int32_t textHgt = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), outDrawWdt, &sText, true);
+		// If we are set to NoCrop, the message will be split by string-defined line breaks only.
+		int allowedTextWidth = outDrawWdt;
+		if (style & C4ScriptGuiWindowStyleFlag::NoCrop)
+			allowedTextWidth = std::numeric_limits<int>::max();
+		int32_t textHgt = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), allowedTextWidth, &sText, true);
 		float textYOffset = 0.0f, textXOffset = 0.0f;
 		if (style & C4ScriptGuiWindowStyleFlag::TextVCenter)
 			textYOffset = float(outDrawHgt) / 2.0f - float(textHgt) / 2.0f;

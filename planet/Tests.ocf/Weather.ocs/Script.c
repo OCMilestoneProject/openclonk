@@ -1,38 +1,27 @@
-/* Sky race */
-
 func Initialize()
 {
-	var cloud = CreateObject(RainCloud, 100, 100);
-	cloud->SetPosition(LandscapeWidth()/4,0);
+	RemoveAll(Find_ID(WindBag));
+	RemoveAll(Find_ID(Shovel));
+	RemoveAll(Find_ID(GrappleBow));
+	RemoveAll(Find_ID(Dynamite));
+	CreateRain(LandscapeWidth()/4, 500, "Acid");
 
-	SetSkyAdjust(RGB(50,50,50));
+	SetSkyAdjust(RGB(50,50,50));	
 }
 
-func InitializePlayer(int iPlr, int iX, int iY, object pBase, int iTeam)
+func InitializePlayer(int plr)
 {
-	JoinPlayer(iPlr);
-	return;
-}
-
- func RelaunchPlayer(int iPlr)
-{
-	var clonk = CreateObjectAbove(Clonk, 0, 0, iPlr);
-	clonk->MakeCrewMember(iPlr);
-  	SetCursor(iPlr,clonk);
-	JoinPlayer(iPlr);
-	return;
-}
-
- func JoinPlayer(int iPlr)
-{
-	var clonk = GetCrew(iPlr);
-	clonk->SetPosition(425, 498);
-	clonk->DoEnergy(100000);
-	clonk->CreateContents(Musket);
-	clonk->CreateContents(LeadShot);
-	clonk->CreateContents(GrappleBow);
-	clonk->CreateContents(Bow);
-	clonk->Collect(CreateObjectAbove(Arrow));
-	
-	return;
+	Log("init plr");
+	var clonk = GetCrew(plr);
+	if (clonk)
+	{
+		clonk->CreateContents(Shovel);
+		clonk->CreateContents(Dynamite);
+		clonk->CreateContents(Dynamite);
+		clonk->CreateContents(Dynamite);
+		clonk->CreateContents(Torch);
+		clonk->SetPosition(150,100);
+		//SetFoW(false, 0);
+		//SetPlayerZoom(NO_OWNER, 1);
+	}
 }

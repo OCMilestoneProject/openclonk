@@ -1,5 +1,5 @@
 [DefCore]
 id=RainCloud
 Version=6,1
-Category=C4D_StaticBack|C4D_Background
+Category=C4D_StaticBack
 Picture=0,0,64,64

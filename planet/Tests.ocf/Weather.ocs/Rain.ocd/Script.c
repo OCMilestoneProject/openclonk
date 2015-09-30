@@ -14,6 +14,16 @@ func GetMaterialColor(szName)
 	return [GetRGBaValue(color, 1), GetRGBaValue(color, 2),GetRGBaValue(color, 3)];
 }
 
+global func CreateRain(pos_x, width, material_name)
+{
+	material_name = material_name ?? "Water";
+	width = width ?? 500;
+	var cloud = CreateObject(RainCloud, 100, 100);
+	cloud->SetPosition(pos_x,0);
+	cloud.width = width;
+	cloud.material_name = material_name;
+}
+
 protected func Initialize()
 {
 	SetPosition(LandscapeWidth()/2,0);
@@ -38,6 +48,20 @@ global func Particles_Rain(iSize, color)
 		CollisionVertex = 0,
 		OnCollision = PC_Die(),
 		ForceY = GetGravity()/10,//PV_Gravity(100),
+		Size = iSize,
+		R = color[0], G = color[1], B = color[2],
+		Rotation = PV_Direction(),
+		CollisionDensity = 25,
+		Stretch = 3000,
+	};
+}
+global func Particles_Ice(iSize, color)
+{
+	return
+	{
+		CollisionVertex = 0,
+		OnCollision = PC_Die(),
+		ForceY = GetGravity(),//PV_Gravity(100),
 		Size = iSize,
 		R = color[0], G = color[1], B = color[2],
 		Rotation = PV_Direction(),
@@ -101,6 +125,19 @@ global func Particles_SplashWater(iSize, color)
 		Attach = ATTACH_Back,
 	};
 }
+global func Particles_Ice2(iSize, color)
+{
+	return
+	{
+		CollisionVertex = 0,
+		ForceY = PV_Gravity(60),
+		OnCollision = PC_Stop(),
+		Size = iSize,
+		Alpha = PV_KeyFrames(255, 0, 255, 500, 255, 1000, 0),
+		R = color[0], G = color[1], B = color[2],
+		Rotation = PV_Random(360),
+	};
+}
 
 public func DropHit(x, y)
 {
@@ -122,7 +159,10 @@ public func DropHit(x, y)
 		if( (material_name == "Acid" && GetMaterial(x,y) == Material("Earth")) || material_name == "Lava" || material_name == "DuroLava")
 			Smoke(x, y, 3, RGB(150,160,150));
 		CreateParticle("RaindropSplash", x, y-1, 0, 0, 5, Particles_Splash(RandomX(5,10), color), 0);
-		CreateParticle("RaindropSmall", x, y, RandomX(-4, 4), -Random(10), PV_Random(300, 300), Particles_Rain2(20, color), 0);
+		if(material_name == "Ice")
+			CreateParticle("Hail", x, y, RandomX(-2,2), -Random(10), PV_Random(300, 300), Particles_Ice2(2, color), 0);
+		else
+			CreateParticle("RaindropSmall", x, y, RandomX(-4, 4), -Random(10), PV_Random(300, 300), Particles_Rain2(20, color), 0);
 	}
 }
 
@@ -146,6 +186,13 @@ private func FxIntRainTimer()
 		var y = -50;
 		var xdir = RandomX(GetWind(0,0,1)-5, GetWind(0,0,1)+5)/5;
 		var ydir = 30;
+		var particle = Particles_Rain(RandomX(10,30), color);
+		if(Random(2))
+			particle.Attach = ATTACH_Back;
+		if(material_name == "Ice")
+		{
+			particle = Particles_Ice(RandomX(10,30), color);
+		}
 		if(material_name == "Snow")
 		{
 			CreateParticle("RaindropSnow", x, y, xdir, 10, PV_Random(2000, 3000), Particles_Snow(RandomX(0,3), color), 0);
@@ -153,7 +200,7 @@ private func FxIntRainTimer()
 				CastPXS(material_name, 1, 0, x, 0, 0, 0);
 			continue;
 		}		
-		CreateParticle(name, x, y, xdir, ydir, PV_Random(200, 300), Particles_Rain(RandomX(10,30), color), 0);
+		CreateParticle(name, x, y, xdir, ydir, PV_Random(200, 300), particle, 0);
 		// Sometimes "real" rain falls
 		if(!Random(10))
 			InsertMaterial(Material(material_name), x, 0, xdir, ydir);

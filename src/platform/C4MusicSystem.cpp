@@ -32,8 +32,14 @@ C4MusicSystem::C4MusicSystem():
 		Songs(NULL),
 		SongCount(0),
 		PlayMusicFile(NULL),
+		game_music_level(100),
+		playlist(),
+		music_break_min(DefaultMusicBreak), music_break_max(DefaultMusicBreak),
 		Volume(100),
-		FadeMusicFile(NULL)
+		is_waiting(false),
+		wait_time_end(),
+		FadeMusicFile(NULL),
+		upcoming_music_file(NULL)
 #if AUDIO_TK == AUDIO_TK_OPENAL
 		, alcDevice(NULL), alcContext(NULL)
 #endif
@@ -174,7 +180,7 @@ bool C4MusicSystem::Init(const char * PlayList)
 	// set play list
 	if (PlayList) SetPlayList(PlayList); else SetPlayList(0);
 	// set initial volume
-	SetVolume(Config.Sound.MusicVolume);
+	UpdateVolume();
 
 	// ok
 	return true;
@@ -372,6 +378,7 @@ void C4MusicSystem::ClearSongs()
 		delete pFile;
 	}
 	SongCount = 0;
+	FadeMusicFile = upcoming_music_file = PlayMusicFile = NULL;
 }
 
 void C4MusicSystem::Clear()
@@ -384,7 +391,17 @@ void C4MusicSystem::Clear()
 	if (MODInitialized) { DeinitializeMOD(); }
 }
 
-void C4MusicSystem::Execute(bool force_buffer_checks)
+void C4MusicSystem::ClearGame()
+{
+	game_music_level = 100;
+	music_break_min = music_break_max = DefaultMusicBreak;
+	music_break_chance = DefaultMusicBreakChance;
+	SetPlayList(NULL);
+	is_waiting = false;
+	upcoming_music_file = NULL;
+}
+
+void C4MusicSystem::Execute(bool force_song_execution)
 {
 	// Execute music fading
 	if (FadeMusicFile)
@@ -395,7 +412,15 @@ void C4MusicSystem::Execute(bool force_buffer_checks)
 		{
 			FadeMusicFile->Stop();
 			FadeMusicFile = NULL;
-			if (PlayMusicFile) PlayMusicFile->SetVolume(Volume);
+			if (PlayMusicFile)
+			{
+				PlayMusicFile->SetVolume(Volume);
+			}
+			else if (upcoming_music_file)
+			{
+				// Fade end -> start desired next immediately
+				force_song_execution = true;
+			}
 		}
 		else
 		{
@@ -407,18 +432,38 @@ void C4MusicSystem::Execute(bool force_buffer_checks)
 	}
 	// Ensure a piece is played
 #if AUDIO_TK != AUDIO_TK_SDL_MIXER
-	if (!::Game.iTick35 || !Game.IsRunning || force_buffer_checks)
+	if (!::Game.iTick35 || !::Game.IsRunning || force_song_execution || ::Game.IsPaused())
 #endif
 	{
 		if (!PlayMusicFile)
-			Play();
+		{
+			if (!is_waiting || (C4TimeMilliseconds::Now() >= wait_time_end))
+			{
+				// Play a song if no longer in silence mode and nothing is playing right now
+				C4MusicFile *next_file = upcoming_music_file;
+				is_waiting = false;
+				upcoming_music_file = NULL;
+				if (next_file)
+					Play(next_file, false, 0.0);
+				else
+					Play();
+			}
+		}
 		else
+		{
+			// Calls NotifySuccess if a new piece had been selected.
 			PlayMusicFile->CheckIfPlaying();
+		}
 	}
 }
 
-bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, double max_resume_time)
+bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, double max_resume_time, bool allow_break)
 {
+	// pause is done
+	is_waiting = false;
+	upcoming_music_file = NULL;
+
+	// music off?
 	if (Game.IsRunning ? !Config.Sound.RXMusic : !Config.Sound.FEMusic)
 		return false;
 
@@ -428,9 +473,9 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, do
 	if (szSongname && szSongname[0])
 	{
 		// Search in list
-		for (NewFile=Songs; NewFile; NewFile = NewFile->pNext)
+		for (NewFile = Songs; NewFile; NewFile = NewFile->pNext)
 		{
-			char songname[_MAX_FNAME+1];
+			char songname[_MAX_FNAME + 1];
 			SCopy(szSongname, songname); DefaultExtension(songname, "mid");
 			if (SEqual(GetFilename(NewFile->FileName), songname))
 				break;
@@ -454,30 +499,35 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, do
 		// Random song
 		if (!NewFile)
 		{
-			// try to find random song
-			for (int i = 0; i <= 1000; i++)
+			// Intead of a new song, is a break also allowed?
+			if (allow_break) ScheduleWaitTime();
+			if (!is_waiting)
 			{
-				int nmb = SafeRandom(Max(ASongCount / 2 + ASongCount % 2, ASongCount - SCounter));
-				int j;
-				for (j = 0, NewFile = Songs; NewFile; NewFile = NewFile->pNext)
-					if (!NewFile->NoPlay)
-						if (NewFile->LastPlayed == -1 || NewFile->LastPlayed < SCounter - ASongCount / 2)
-						{
-							j++;
-							if (j > nmb) break;
-						}
-				if (NewFile) break;
+				// try to find random song
+				for (int i = 0; i <= 1000; i++)
+				{
+					int nmb = SafeRandom(Max(ASongCount / 2 + ASongCount % 2, ASongCount - SCounter));
+					int j;
+					for (j = 0, NewFile = Songs; NewFile; NewFile = NewFile->pNext)
+						if (!NewFile->NoPlay)
+							if (NewFile->LastPlayed == -1 || NewFile->LastPlayed < SCounter - ASongCount / 2)
+							{
+								j++;
+								if (j > nmb) break;
+							}
+					if (NewFile) break;
+				}
 			}
 
 		}
 	}
 
-	// File found?
-	if (!NewFile)
+	// File (or wait time) found?
+	if (!NewFile && !is_waiting)
 		return false;
 
 	// Stop/Fade out old music
-	bool is_fading = fadetime_ms && NewFile != PlayMusicFile && PlayMusicFile;
+	bool is_fading = (fadetime_ms && NewFile != PlayMusicFile && PlayMusicFile);
 	if (!is_fading)
 	{
 		Stop();
@@ -505,7 +555,7 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, do
 				// Also happens when fading back to the same song but loop status changes, but that should be really uncommon.
 				FadeMusicFile->Stop();
 			}
-			
+
 		}
 		FadeMusicFile = PlayMusicFile;
 		PlayMusicFile = NULL;
@@ -513,14 +563,36 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, do
 		FadeTimeEnd = FadeTimeStart + fadetime_ms;
 	}
 
-	// Play new song
+	// Waiting?
+	if (!NewFile) return false;
+
+	// If the old file is being faded out and a new file would just start, start delayed and without fading
+	// so the beginning of a song isn't faded unnecesserily (because our songs often start very abruptly)
+	if (is_fading && (!NewFile->HasResumePos() || NewFile->GetRemainingTime() <= max_resume_time))
+	{
+		upcoming_music_file = NewFile;
+		is_waiting = true;
+		wait_time_end = FadeTimeEnd;
+		return false;
+	}
+
+	if (!Play(NewFile, fLoop, max_resume_time)) return false;
+
+	if (is_fading) PlayMusicFile->SetVolume(0);
+
+	return true;
+}
+
+bool C4MusicSystem::Play(C4MusicFile *NewFile, bool fLoop, double max_resume_time)
+{
+	// Play new song directly
 	if (!NewFile->Play(fLoop, max_resume_time)) return false;
 	PlayMusicFile = NewFile;
 	NewFile->LastPlayed = SCounter++;
 	Loop = fLoop;
 
 	// Set volume
-	PlayMusicFile->SetVolume(Volume * !is_fading);
+	PlayMusicFile->SetVolume(Volume);
 
 	// Message first time a piece is played
 	if (!NewFile->HasBeenAnnounced())
@@ -537,8 +609,31 @@ void C4MusicSystem::NotifySuccess()
 	if (Loop)
 		if (PlayMusicFile->Play())
 			return;
-	// stop
+	// clear last played piece
 	Stop();
+	// force a wait time after this song?
+	ScheduleWaitTime();
+}
+
+bool C4MusicSystem::ScheduleWaitTime()
+{
+	// Roll for scheduling a break after the next piece.
+	if (SCounter < 3) return false; // But not right away.
+	if (SafeRandom(100) >= music_break_chance) return false;
+	if (music_break_max > 0)
+	{
+		int32_t music_break = music_break_min;
+		if (music_break_max > music_break_min) music_break += SafeRandom(music_break_max - music_break_min); // note that SafeRandom has limited range
+		if (music_break > 0)
+		{
+			is_waiting = true;
+			wait_time_end = C4TimeMilliseconds::Now() + music_break;
+			// After wait, do not resume previously started songs
+			for (C4MusicFile *check_file = Songs; check_file; check_file = check_file->pNext)
+				check_file->ClearResumePos();
+		}
+	}
+	return is_waiting;
 }
 
 void C4MusicSystem::FadeOut(int fadeout_ms)
@@ -569,16 +664,14 @@ bool C4MusicSystem::Stop()
 	return true;
 }
 
-int C4MusicSystem::SetVolume(int iLevel)
+void C4MusicSystem::UpdateVolume()
 {
-	if (iLevel > 100) iLevel = 100;
-	if (iLevel < 0) iLevel = 0;
 	// Save volume for next file
-	Volume = iLevel;
+	int32_t config_volume = Clamp<int32_t>(Config.Sound.MusicVolume, 0, 100);
+	Volume = config_volume * game_music_level / 100;
 	// Tell it to the act file
 	if (PlayMusicFile)
-		PlayMusicFile->SetVolume(iLevel);
-	return iLevel;
+		PlayMusicFile->SetVolume(Volume);
 }
 
 MusicType GetMusicFileTypeByExtension(const char* ext)
@@ -647,11 +740,26 @@ int C4MusicSystem::SetPlayList(const char *szPlayList, bool fForceSwitch, int fa
 				pFile->NoPlay = false;
 			}
 	}
-	// Force switch of music if currently playing piece is not in list?
-	if (fForceSwitch && PlayMusicFile && PlayMusicFile->NoPlay)
+	// Force switch of music if currently playing piece is not in list or idle because no music file matched
+	if (fForceSwitch)
 	{
-		Play(NULL, false, fadetime_ms, max_resume_time);
+		if (PlayMusicFile)
+		{
+			fForceSwitch = PlayMusicFile->NoPlay;
+		}
+		else
+		{
+			fForceSwitch = (!is_waiting || C4TimeMilliseconds::Now() >= wait_time_end);
+		}
+		if (fForceSwitch)
+		{
+			// Switch music. Switching to a break is also allowed, but won't be done if there is a piece to resume
+			// Otherwise breaks would never occur if the playlist changes often.
+			Play(NULL, false, fadetime_ms, max_resume_time, PlayMusicFile != NULL);
+		}
 	}
+	// Remember setting (e.g. to be saved in savegames)
+	playlist.Copy(szPlayList);
 	return ASongCount;
 }
 
@@ -675,3 +783,29 @@ bool C4MusicSystem::ToggleOnOff()
 	// key processed
 	return true;
 }
+
+void C4MusicSystem::CompileFunc(StdCompiler *comp)
+{
+	comp->Value(mkNamingAdapt(playlist, "PlayList", StdCopyStrBuf()));
+	comp->Value(mkNamingAdapt(game_music_level, "Volume", 100));
+	comp->Value(mkNamingAdapt(music_break_min, "MusicBreakMin", DefaultMusicBreak));
+	comp->Value(mkNamingAdapt(music_break_max, "MusicBreakMax", DefaultMusicBreak));
+	comp->Value(mkNamingAdapt(music_break_chance, "MusicBreakChance", DefaultMusicBreakChance));
+	// Wait time is not saved - begin savegame resume with a fresh song!
+	// Reflect loaded values immediately
+	if (comp->isCompiler())
+	{
+		SetGameMusicLevel(game_music_level);
+		SetPlayList(playlist.getData());
+	}
+}
+
+int32_t C4MusicSystem::SetGameMusicLevel(int32_t volume_percent)
+{
+	game_music_level = Clamp<int32_t>(volume_percent, 0, 500); // allow max 5x the user setting
+	UpdateVolume();
+	return game_music_level;
+}
+
+const int32_t C4MusicSystem::DefaultMusicBreak = 120000; // two minutes default music break time
+const int32_t C4MusicSystem::DefaultMusicBreakChance = 50; // ...with a 50% chance

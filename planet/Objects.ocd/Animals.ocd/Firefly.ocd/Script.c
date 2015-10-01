@@ -8,18 +8,18 @@ static const Firefly_MaxSpawnDistance = 15;
 static const Firefly_MaxDistance = 40;
 static const Firefly_ShynessDistance = 40;
 
-local attractedTo;
+local attracted_to;
 local timer;
 
-public func SpawnSwarm(object attractedTo, int size)
+public func SpawnSwarm(object attracted_to, int size)
 {
-	if(!size) size = 10;
-	var x = attractedTo->GetX();
-	var y = attractedTo->GetY();
-	for(var i = 0; i < size; i++)
+	if (!size) size = 10;
+	var x = attracted_to->GetX();
+	var y = attracted_to->GetY();
+	for (var i = 0; i < size; i++)
 	{
 		var firefly = CreateObject(Firefly, RandomX(x - Firefly_MaxSpawnDistance, x + Firefly_MaxSpawnDistance), RandomX(y - Firefly_MaxSpawnDistance, y + Firefly_MaxSpawnDistance), NO_OWNER);
-		firefly.attractedTo = attractedTo;
+		firefly.attracted_to = attracted_to;
 	}
 }
 
@@ -32,11 +32,11 @@ private func Flying() {
 	SetObjDrawTransform(900+Sin(angle,100), 0, 0, 0, 900+Sin(angle, 100), 0, 1);
 	SetLightColor(RGB(200,255,150+Sin(angle,10)));
 	
-	var awayFrom = FindObject(Find_Distance(Firefly_ShynessDistance), Find_Category(C4D_Object), Find_OCF(OCF_HitSpeed1), Find_NoContainer());
-	if(awayFrom)
+	var away_from = FindObject(Find_Distance(Firefly_ShynessDistance), Find_Category(C4D_Object), Find_OCF(OCF_HitSpeed1), Find_NoContainer());
+	if (away_from)
 	{
-		xdir = BoundBy(GetX() - awayFrom->GetX(), -1, 1);
-		ydir = BoundBy(GetY() - awayFrom->GetY(), -1, 1);
+		xdir = BoundBy(GetX() - away_from->GetX(), -1, 1);
+		ydir = BoundBy(GetY() - away_from->GetY(), -1, 1);
 		if(xdir == 0) xdir = Random(2) * 2 - 1;
 		if(ydir == 0) ydir = Random(2) * 2 - 1;
 		xdir = RandomX(5 * xdir, 10 * xdir);
@@ -46,12 +46,12 @@ private func Flying() {
 	}
 	else
 	{
-		if(Random(4)) return;
+		if (Random(4)) return;
 		
-		if(attractedTo != 0 && ObjectDistance(attractedTo) > Firefly_MaxDistance)
+		if (attracted_to != 0 && ObjectDistance(attracted_to) > Firefly_MaxDistance)
 		{
-			xdir = BoundBy(attractedTo->GetX() - GetX(), -1, 1);
-			ydir = BoundBy(attractedTo->GetY() - GetY(), -1, 1);
+			xdir = BoundBy(attracted_to->GetX() - GetX(), -1, 1);
+			ydir = BoundBy(attracted_to->GetY() - GetY(), -1, 1);
 			xdir = RandomX(xdir, 6 * xdir);
 			ydir = RandomX(ydir, 6 * ydir);
 		}
@@ -61,7 +61,7 @@ private func Flying() {
 			ydir = Random(80) - 40;
 		}
 
-		if(GBackLiquid(xdir, ydir))
+		if (GBackLiquid(xdir, ydir))
 		{
 			SetSpeed(0, 0);
 		}
@@ -71,22 +71,22 @@ private func Flying() {
 			ydir *= 10;
 			while(GBackSemiSolid(0, ydir)) ydir-=1;
 			SetCommand("MoveTo", 0, GetX()+xdir, GetY()+ydir);
-			if(Random(10)==0 && attractedTo)
-				SetCommand("MoveTo", attractedTo);
+			if(Random(10)==0 && attracted_to)
+				SetCommand("MoveTo", attracted_to);
 		}
 	}
 }
 
-protected func Check()
+private func Check()
 {
 	// Buried or in water: Instant death
-	if(GBackSemiSolid())
+	if (GBackSemiSolid())
 	{
 		Death();
 	}
 }
 
-protected func Initialize()
+public func Initialize()
 {
 	SetAction("Fly");
 	
@@ -101,9 +101,9 @@ protected func Initialize()
 	SetLightColor(RGB(200,255,100));
 }
 
-public func CatchBlow()	{ RemoveObject(); }
-public func Damage()	{ RemoveObject(); }
-protected func Death()	{ RemoveObject(); }
+public func CatchBlow() { RemoveObject(); }
+public func Damage() { RemoveObject(); }
+public func Death() { RemoveObject(); }
 
 local ActMap = {
 	Fly = {

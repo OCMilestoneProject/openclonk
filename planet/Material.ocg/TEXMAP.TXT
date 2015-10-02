@@ -38,7 +38,7 @@
 
 54=Coal-coal
 
-55=Sand-sand_rough
+55=Sand-sand
 56=Sand-sand
 
 60=Ruby-Ruby

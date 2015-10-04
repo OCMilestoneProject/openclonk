@@ -175,11 +175,14 @@ public:
 	int32_t  AboveTempConvert;
 	int32_t  AboveTempConvertDir;
 	StdCopyStrBuf sAboveTempConvertTo;
-	int32_t  ColorAnimation;
 	int32_t  TempConvStrength;
 	int32_t  MinHeightCount; // minimum material thickness in order for it to be counted
 	int32_t  SplashRate;
 	bool KeepSinglePixels; // if true, single pixels are not destroyed (for vehicle)
+	int32_t  AnimationSpeed; // frames per animation phase
+	int32_t  LightAngle; // light angle at which we have maximum reflection
+	int32_t  LightEmit[3]; // amount the material lights up itself
+	int32_t  LightSpot[3]; // spot strength
 
 	void Clear();
 	void Default();

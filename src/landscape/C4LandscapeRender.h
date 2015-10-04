@@ -45,7 +45,6 @@ enum C4LR_Uniforms
 	C4LRU_Gamma,
 	C4LRU_Resolution,
 	C4LRU_Center,
-	C4LRU_MatMap,
 	C4LRU_MatMapTex,
 	C4LRU_MaterialDepth,
 	C4LRU_MaterialSize,
@@ -131,8 +130,6 @@ public:
 
 	virtual void Draw(const C4TargetFacet &cgo, const C4FoWRegion *Light);
 
-	void RefreshShaders();
-
 private:
 	bool InitLandscapeTexture();
 	bool InitMaterialTexture(C4TextureMap *pMap);
@@ -147,7 +144,7 @@ private:
 	void AddTextureTransition(const char *szFrom, const char *szTo);
 	void AddTextureAnim(const char *szTextureAnim);
 	void AddTexturesFromMap(C4TextureMap *pMap);
-	void BuildMatMap(GLfloat *pFMap, GLubyte *pIMap);
+	void BuildMatMap(uint32_t *pTex);
 };
 #endif
 

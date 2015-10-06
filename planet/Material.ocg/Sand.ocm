@@ -10,4 +10,5 @@ MaxAirSpeed=100
 MaxSlide=1
 Corrode=75
 Soil=1
-Placement=20
+Placement=30
+TextureOverlay=sand

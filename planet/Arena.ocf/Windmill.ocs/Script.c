@@ -26,7 +26,7 @@ func Initialize()
 	
 	CreateObject(Goal_SaveTheWindmills,10,10);
 	PlaceGrass(100, 800, 1400);
-	SetSkyParallax(0,25,25,0,0,0,50);
+	SetSkyParallax(0,25,25,0,0,0,0);
 	AddEffect("BoomAttack", nil, 100, 35);
 	Sound("WindLoop",true,40,nil,+1);
 }
@@ -87,7 +87,7 @@ global func CreateAttackWave(int angle, int rockets, int anglespread)
 			gui_arrow = CreateObjectAbove(GUI_GoalArrow,0,0,owner);
 			gui_arrow->SetAction("Show", GetCursor(owner));
 			gui_arrow->SetClrModulation(RGB(255,0,0));
-			gui_arrow->SetObjectBlitMode(GFX_BLIT_Mod2);
+			gui_arrow->SetObjectBlitMode(GFX_BLIT_Additive);
 		}
 		gui_arrow->SetR(angle);
 		gui_arrow.Plane = 500;

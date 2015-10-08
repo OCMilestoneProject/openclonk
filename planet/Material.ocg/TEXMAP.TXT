@@ -1,4 +1,4 @@
-# Static Map Material/Texture Table 
+# Static Map Material/Texture Table
 # Index +128 for underground materials
 
 1=Vehicle-none
@@ -27,13 +27,15 @@
 
 36=Ore-ore
 
+38=Everrock-everrock
+
 40=Granite-granite
 42=Granite-granite
 
 45=Gold-gold
 
 50=Rock-rock
-51=Rock-rock
+51=Rock-rock_smooth
 
 53=Firestone-firestone
 

@@ -20,6 +20,7 @@
 #ifndef INC_C4Texture
 #define INC_C4Texture
 
+#include <C4TextureShape.h>
 #include <C4Surface.h>
 #include <C4Constants.h>
 #include <C4Material.h>
@@ -34,9 +35,12 @@ public:
 
 	void SetAverageColor(uint32_t Color) { AvgColor = Color; }
 	uint32_t GetAverageColor() const { return AvgColor; }
+	void SetMaterialShape(class C4TextureShape *s) { material_shape.reset(s); }
+	class C4TextureShape *GetMaterialShape() const { return material_shape.get(); }
 protected:
 	StdStrBuf Name;
 	uint32_t AvgColor;
+	std::unique_ptr<class C4TextureShape> material_shape;
 	C4Texture *Next;
 };
 

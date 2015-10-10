@@ -158,6 +158,9 @@ global func Control2Player(int plr, int ctrl, int x, int y, int strength, bool r
 		return SetCursor(plr, crew);
 	}
 	
+	// Modifier keys - do not handle the key. The GetPlayerControlState will still return the correct value when the key is held down.
+	if (ctrl == CON_ModifierMenu1) return false;
+		
 	// cursor pos info - store in player values
 	if (ctrl == CON_CursorPos)
 	{

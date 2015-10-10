@@ -28,6 +28,7 @@
 #include "C4PXS.h"
 #include "C4Record.h"
 #include "C4RoundResults.h"
+#include "C4TextureShape.h"
 
 /* This file implements stubs for the parts of the engine that are not used
  * by mape. It also instantiates global variables required by mape that are
@@ -114,7 +115,7 @@ C4Landscape::~C4Landscape() {}
 bool C4Landscape::FindMatSlide(int&, int&, int, int, int) const { return false; }
 int32_t C4Landscape::ExtractMaterial(int32_t, int32_t, bool) { return 0; }
 bool C4Landscape::InsertMaterial(int32_t, int32_t *, int32_t *, int32_t, int32_t, bool) { return false; }
-bool C4Landscape::Incinerate(int32_t, int32_t) { return false; }
+bool C4Landscape::Incinerate(int32_t, int32_t, int32_t) { return false; }
 bool C4Landscape::ClearPix(int32_t, int32_t) { return false; }
 void C4Landscape::CheckInstabilityRange(int32_t, int32_t) {}
 
@@ -155,6 +156,8 @@ C4PXSSystem::~C4PXSSystem() {}
 bool C4PXSSystem::Create(int, C4Real, C4Real, C4Real, C4Real) { return false; }
 
 void AddDbgRec(C4RecordChunkType, const void *, int) {}
+
+bool C4TextureShape::Load(C4Group &group, const char *filename, int32_t base_tex_wdt, int32_t base_tex_hgt) { return true; }
 
 #if 0
 /* Pulled in by C4Game... */

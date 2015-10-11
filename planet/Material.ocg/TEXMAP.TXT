@@ -38,7 +38,7 @@
 56=Sand-sand
 
 65=Ice-ice
-67=Ice-ice2
+67=Ice-ice
 
 70=Snow-snow1
 

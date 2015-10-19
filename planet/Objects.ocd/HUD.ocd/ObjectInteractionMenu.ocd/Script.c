@@ -71,6 +71,8 @@ public func Close() { return RemoveObject(); }
 public func IsContentMenu() { return true; }
 public func Show() { this.Visibility = VIS_Owner; return true; }
 public func Hide() { this.Visibility = VIS_None; return true; }
+// Called when the menu is open and the player clicks outside.
+public func OnMouseClick() { return Close(); }
 
 func Construction()
 {
@@ -263,7 +265,7 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	var sidebar_size_em = ToEmString(InteractionMenu_SideBarSize);
 	var part_menu =
 	{
-		Left = "0%", Right = "50%-1em",
+		Left = "0%", Right = "50%-3em",
 		Bottom = "100%-7em",
 		sidebar = sidebar, main = main,
 		Target = current_menus[slot].menu_object,
@@ -272,8 +274,8 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	
 	if (slot == 1)
 	{
-		part_menu.Left = "50%+1em";
-		part_menu.Right = "100%";
+		part_menu.Left = "50%-1em";
+		part_menu.Right = "100%-2em";
 	}
 	
 	if (this.minimized)
@@ -303,18 +305,20 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 			minimize_button = 
 			{
 				Bottom = "100%",
-				Top = "100% - 1em",
-				Right = "4em",
-				Text = "$Minimize$",
-				BackgroundColor = {Std = RGB(50, 50, 50), OnHover = RGB(200, 0, 0)},
+				Top = "100% - 2em",
+				Left = "100% - 2em",
+				Tooltip = "$Minimize$",
+				Symbol = Icon_Arrow,
+				GraphicsName = "Down",
+				BackgroundColor = {Std = nil, OnHover = 0x50ffff00},
 				OnMouseIn = GuiAction_SetTag("OnHover"),
 				OnMouseOut = GuiAction_SetTag("Std"),
 				OnClick = GuiAction_Call(this, "OnToggleMinimizeClicked")
 			},
 			center_column =
 			{
-				Left = "50%-1em",
-				Right = "50%+1em",
+				Left = "50%-3em",
+				Right = "50%-1em",
 				Top = "1.75em",
 				Bottom = "100%-7em",
 				Style = GUI_VerticalLayout,
@@ -326,7 +330,7 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 					Style = GUI_TextHCenter | GUI_TextVCenter,
 					Symbol = Icon_MoveItems, GraphicsName = "Left",
 					Tooltip = "",
-					BackgroundColor ={Std = 0, Hover = RGBa(255, 0, 0, 100)},
+					BackgroundColor ={Std = 0, Hover = 0x50ffff00},
 					OnMouseIn = GuiAction_SetTag("Hover"),
 					OnMouseOut = GuiAction_SetTag("Std"),
 					OnClick = GuiAction_Call(this, "OnMoveAllToClicked", 0)
@@ -339,7 +343,7 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 					Style = GUI_TextHCenter | GUI_TextVCenter,
 					Symbol = Icon_MoveItems,
 					Tooltip = "",
-					BackgroundColor ={Std = 0, Hover = RGBa(255, 0, 0, 100)},
+					BackgroundColor ={Std = 0, Hover = 0x50ffff00},
 					OnMouseIn = GuiAction_SetTag("Hover"),
 					OnMouseOut = GuiAction_SetTag("Std"),
 					OnClick = GuiAction_Call(this, "OnMoveAllToClicked", 1)
@@ -348,6 +352,7 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 			description_box =
 			{
 				Top = "100%-5em",
+				Right = "100% - 2em",
 				Margin = [sidebar_size_em, "0em"],
 				BackgroundColor = RGB(25, 25, 25),
 				symbol_part =
@@ -373,11 +378,15 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 			}
 		};
 		
+		// Allow the menu to be closed with a clickable button.
+		var close_button = GuiAddCloseButton(root_menu, this, "Close");
+		
 		// Special setup for a minimized menu.
 		if (this.minimized)
 		{
 			root_menu.Top = "75%";
-			root_menu.minimize_button.Text = "$Maximize$";
+			root_menu.minimize_button.Tooltip = "$Maximize$";
+			root_menu.minimize_button.GraphicsName = "Up";
 			root_menu.center_column.Bottom = nil; // full size
 			root_menu.description_box = nil;
 		}
@@ -723,6 +732,7 @@ func OnMenuEntryHover(proplist menu_info, int entry_index, int player)
 {
 	var info = GetEntryInformation(menu_info, entry_index);
 	if (!info.entry) return;
+	if (!info.entry.symbol) return;
 	// update symbol of description box
 	GuiUpdate({Symbol = info.entry.symbol}, current_main_menu_id, 1, current_description_box.symbol_target);
 	// and update description itself
@@ -733,10 +743,17 @@ func OnMenuEntryHover(proplist menu_info, int entry_index, int player)
 	// default to description of object
 	if (!info.menu.callback_target || !info.menu.callback_hover)
 	{
-		var text = Format("%s:|%s", info.entry.symbol.Name, info.entry.symbol.Description);
+		var text = Format("%s:|%s", info.entry.symbol->GetName(), info.entry.symbol.Description);
 		var obj = nil;
-		if (info.entry.extra_data)
-			obj = info.entry.extra_data.one_object;
+		if (info.entry.extra_data.objects)
+		{
+			for (var possible in info.entry.extra_data.objects)
+			{
+				if (possible == nil) continue;
+				obj = possible;
+				break;
+			}
+		}
 		// For contents menus, we can sometimes present additional information about objects.
 		if (info.menu.flag == InteractionMenu_Contents && obj)
 		{
@@ -788,25 +805,23 @@ private func OnContentsSelection(symbol, extra_data)
 	var other_target = current_menus[1 - extra_data.slot].target;
 	if (!other_target) return;
 	
+	var transfer_only_one = GetPlayerControlState(GetOwner(), CON_ModifierMenu1) == 0; // Transfer ONE object of the stack?
 	var to_transfer = nil;
-	if (extra_data.one_object) // Transfer a specific object?
-		to_transfer = [extra_data.one_object];
-	else if (GetPlayerControlState(GetOwner(), CON_ModifierMenu1) == 0) // Transfer ONE object with some ID?
+	
+	if (transfer_only_one)
 	{
-		to_transfer = [target->FindContents(symbol)];
-	}
-	else // Transfer all!
-	{
-		// Use Contents instead of FindObjets(Find_Container(..)) so that objects can overload Contents().
-		to_transfer = [];
-		var c;
-		var i = 0;
-		while (c = target->Contents(i++))
+		for (var possible in extra_data.objects)
 		{
-			if (c->GetID() == symbol)
-				PushBack(to_transfer, c);
+			if (possible == nil) continue;
+			to_transfer = [possible];
+			break;
 		}
 	}
+	else
+	{
+		to_transfer = RemoveHoles(extra_data.objects);
+	}
+	
 	var successful_transfers = 0;
 	
 	// Try to transfer all the previously selected items.
@@ -875,14 +890,13 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 	var obj, i = 0;
 	while (obj = effect.obj->Contents(i++))
 	{
-		var symbol = obj->GetID();
-		var extra_data = {slot = effect.slot, menu_index = effect.menu_index, one_object = nil /* for unstackable containers */};
+		var symbol = obj;
+		var extra_data = {slot = effect.slot, menu_index = effect.menu_index, objects = []};
 		
 		// check if already exists (and then stack!)
 		var found = false;
 		// Never stack containers with (different) contents, though.
 		var is_container = obj->~IsContainer();
-		var has_contents = obj->ContentsCount() != 0;
 		// For extra-slot objects, we should attach a tracking effect to update the UI on changes.
 		if (obj->~HasExtraSlot())
 		{
@@ -904,32 +918,30 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 		// How many objects are this object?!
 		var object_amount = obj->~GetStackCount() ?? 1;
 		// Empty containers can be stacked.
-		if (!(is_container && has_contents))
+		for (var inv in inventory)
 		{
-			for (var inv in inventory)
+			if (!inv.extra_data.objects[0]->CanBeStackedWith(obj)) continue;
+			if (!obj->CanBeStackedWith(inv.extra_data.objects[0])) continue;
+			inv.count += object_amount;
+			inv.text = Format("%dx", inv.count);
+			PushBack(inv.extra_data.objects, obj);
+			
+			// This object has a custom symbol (because it's a container)? Then the normal text would not be displayed.
+			if (inv.custom != nil)
 			{
-				if (inv.symbol != symbol) continue;
-				if (inv.has_contents) continue;
-				inv.count += object_amount;
-				inv.text = Format("%dx", inv.count);
-				inv.extra_data.one_object = nil;
-				
-				// This object has a custom symbol (because it's a container)? Then the normal text would not be displayed.
-				if (inv.custom != nil)
-				{
-					inv.custom.top.Text = inv.text;
-					inv.custom.top.Style = inv.custom.top.Style | GUI_TextRight | GUI_TextBottom;
-				}
-				
-				found = true;
-				break;
+				inv.custom.top.Text = inv.text;
+				inv.custom.top.Style = inv.custom.top.Style | GUI_TextRight | GUI_TextBottom;
 			}
+			
+			found = true;
+			break;
 		}
-		// Remember object. Will be unset when stacked with other objects
-		extra_data.one_object = obj;
+
 		// Add new!
 		if (!found)
 		{
+			PushBack(extra_data.objects, obj);
+			
 			// Do we need a custom entry when the object has contents?
 			var custom = nil;
 			if (is_container)
@@ -946,7 +958,7 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 					BackgroundColor = {Std = 0, Selected = RGBa(255, 100, 100, 100)},
 					OnMouseIn = GuiAction_SetTag("Selected"),
 					OnMouseOut = GuiAction_SetTag("Std"),
-					OnClick = GuiAction_Call(this, "OnExtraSlotClicked", {slot = effect.slot, one_object = obj, ID = obj->GetID()}),
+					OnClick = GuiAction_Call(this, "OnExtraSlotClicked", {slot = effect.slot, objects = extra_data.objects, ID = obj->GetID()}),
 					container = 
 					{
 						Symbol = Chest,
@@ -955,14 +967,12 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 				};
 
 				// And if the object has contents, show the first one, too.
-				if (has_contents)
+				if (obj->ContentsCount() != 0)
 				{
-					// This icon won't ever be stacked. Remember it for a description.
-					extra_data.one_object = obj;
 					// Add to GUI.
 					custom.bottom.contents = 
 					{
-						Symbol = obj->Contents(0)->GetID(),
+						Symbol = obj->Contents(0),
 						Margin = "0.125em",
 						Priority = 2
 					};
@@ -985,9 +995,8 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 				text = Format("%dx", object_amount);
 			PushBack(inventory,
 				{
-					symbol = symbol, 
-					extra_data = extra_data, 
-					has_contents = (is_container && has_contents),
+					symbol = symbol,
+					extra_data = extra_data,
 					custom = custom,
 					count = object_amount,
 					text = text
@@ -995,7 +1004,7 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 		}
 	}
 	
-
+	// Check if nothing changed. If so, we don't need to update.
 	if (GetLength(inventory) == GetLength(effect.last_inventory))
 	{
 		var same = true;
@@ -1033,21 +1042,15 @@ func OnExtraSlotClicked(proplist extra_data)
 {
 	var menu = current_menus[extra_data.slot];
 	if (!menu || !menu.target) return;
-	var obj = extra_data.one_object; 
-	// Sanity check if object is still available
-	// (ask menu target for special container check because "Surroundings" container hacks its contents)
-	if (!obj || (obj->Contained() != menu.target && !menu.target->~IsObjectContained(obj)))
+	var obj = nil;
+	for (var possible in extra_data.objects)
 	{
-		// Maybe find a similar object? (case: stack of empty bows and one was removed -> user doesn't care which one is displayed)
-		for (var o in FindObjects(Find_Container(menu.target), Find_ID(extra_data.ID)))
-		{
-			obj = o;
-			if (!obj->Contents())
-				break;
-		}
-		if (!obj) return;
+		if (possible == nil) continue;
+		if (possible->Contained() != menu.target && !menu.target->~IsObjectContained(possible)) continue;
+		obj = possible;
+		break;
 	}
-	
+	if (!obj) return;	
 	OpenMenuForObject(obj, extra_data.slot, true);
 }
 

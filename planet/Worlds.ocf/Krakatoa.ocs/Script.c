@@ -23,6 +23,8 @@ protected func Initialize()
 	// Set goal name and description.	
 	goal.Name = "$GoalName$";
 	goal.Description = Format("$GoalDesc$", effect.barcnt);
+	goal.Picture = Krakatoa_GoalIcon;
+	goal.PictureName = Format("%d", SCENPAR_Difficulty);
 
 	// Some rules.
 	CreateObject(Rule_TeamAccount);

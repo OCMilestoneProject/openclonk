@@ -45,21 +45,13 @@ func InitializePlayer(int plr)
 	while (crew = GetCrew(plr, index))
 	{
 		var x = 150 + Random(50);
-		crew->SetPosition(x , 400);
+		crew->SetPosition(x , 390);
 		crew->CreateContents(Shovel);
 		// one clonk can construct, another can mine.
 		if (index == 1)
-		{
 			crew->CreateContents(Hammer);
-			crew->CreateContents(Wood,4);
-			crew->CreateContents(Metal);
-		}
 		else
-		{
 			crew->CreateContents(Axe);
-			crew->CreateContents(Wood,3);
-			crew->CreateContents(Metal,2);
-		}
 		index++;
 	}
 	return;

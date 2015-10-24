@@ -1,4 +1,4 @@
-/*-- Yet Another Burned Coniferous Tree --*/
+/*-- Yet Another Burned Deciduous Tree --*/
 
 #include Library_Plant
 #include Library_Tree

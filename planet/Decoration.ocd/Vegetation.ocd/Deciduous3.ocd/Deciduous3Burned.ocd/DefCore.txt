@@ -1,5 +1,5 @@
 [DefCore]
-id=Tree_Deciduous3_Burned
+id=Deco_Tree_Deciduous3_Burned
 Version=6,1
 Category=C4D_StaticBack
 Width=50

@@ -1,7 +1,8 @@
 /**
 	Fade.c
+	Authors: Ringwaul
+
 	Function to fade in and out objects.
-	
 */
 
 global func FadeOut(int time, bool del)

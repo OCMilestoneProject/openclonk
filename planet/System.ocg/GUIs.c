@@ -16,6 +16,7 @@ global func GuiAddCloseButton(proplist menu, proplist target, string callback, p
 {
 	var close_button =
 	{
+		Tooltip = "$TooltipGUIClose$",
 		Priority = 0x0fffff,
 		Left = "100%-2em", Top = "0%+0em",
 		Right = "100%", Bottom = "0%+2em",
@@ -105,4 +106,12 @@ global func ToPercentString(int value, int factor)
 	if (power_of_ten == 0)
 		percent_decimal = "0";
 	return Format("%s%s.%s", percent_sign, percent_value, percent_decimal);
+}
+
+/*
+Returns true if /this/ object is allowed to be displayed on the same stack as the /other/ object in a GUI.
+*/
+global func CanBeStackedWith(object other)
+{
+	return this->GetID() == other->GetID();
 }

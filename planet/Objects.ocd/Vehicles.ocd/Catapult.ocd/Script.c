@@ -15,6 +15,7 @@ local clonkmesh;
 
 public func IsVehicle() { return true; }
 public func IsArmoryProduct() { return true; }
+public func FitsInDoubleElevator() { return true; }
 
 protected func Initialize()
 {
@@ -205,7 +206,7 @@ public func ActivateEntrance(object clonk)
 		clonk->Enter(this);
 		SetOwner(clonk->GetController());
 		clonkmesh = AttachMesh(clonk,"shot","skeleton_body",Trans_Mul(Trans_Rotate(180, 1, 0, 0), Trans_Translate(-3000, 1000, 0)),AM_DrawBefore);
-		clonk->PlayAnimation("CatapultSit", 5, Anim_Const(0), Anim_Const(1000));
+		clonk->PlayAnimation("CatapultSit", CLONK_ANIM_SLOT_Movement, Anim_Const(0), Anim_Const(1000));
 		ShowTrajectory(70);
 	}
 }

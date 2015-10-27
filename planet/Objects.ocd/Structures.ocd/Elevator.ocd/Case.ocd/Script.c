@@ -32,7 +32,13 @@ public func Ready(object clonk)
 	// No need to call?
 	if (Inside(clonk->GetY(), GetY()-10, GetY()+10)) return false;
 	// Enemy
-	if (Hostile(GetOwner(), clonk->GetOwner())) return false;
+	if (Hostile(elevator->GetOwner(), clonk->GetOwner())) return false;
+	// PathFree
+	if (clonk->GetY() < GetY())
+	{
+		if (!PathFree(GetX(), GetY(), GetX(), clonk->GetY())) return false;
+	} else if (!PathFree(GetX(), GetY()+14, GetX(), clonk->GetY()))
+		return false;
 
 	return true;
 }
@@ -43,11 +49,6 @@ public func CallCase(object clonk)
 }
 
 /*-- Callbacks --*/
-
-// Elevator speeds.
-private func GetCaseSpeed() { return 20; }
-private func GetAutoSpeed() { return GetCaseSpeed() * 2; }
-private func GetDrillSpeed() { return GetCaseSpeed() / 2; }
 
 // Case is not a structure, but uses the library.
 public func IsStructure() { return false; }
@@ -193,7 +194,18 @@ public func ForceSync()
 	partner->SetAction(GetAction());
 	partner->SetComDir(GetComDir());
 	partner->SetYDir(GetYDir());
-	return;
+}
+
+public func ForwardEngineStart(int direction)
+{
+	if (elevator)
+		elevator->StartEngine(direction, true);
+}
+
+public func ForwardEngineStop()
+{
+	if (elevator)
+		elevator->StopEngine(true);
 }
 
 /* Security checks */
@@ -265,12 +277,13 @@ public func OutOfRange(object vehicle)
 {
 	if(Abs(GetY() - vehicle->GetY()) > 10) return true;
 
-	var min_x = GetX() - 12;
-	var max_x = GetX() + 12;
+	var dist = vehicle->GetObjWidth();
+	var min_x = GetX() - dist;
+	var max_x = GetX() + dist;
 	if(IsMaster())
 	{
-		min_x = Min(min_x, partner->GetX() - 12);
-		max_x = Max(max_x, partner->GetX() + 12);
+		min_x = Min(min_x, partner->GetX() - dist);
+		max_x = Max(max_x, partner->GetX() + dist);
 	}
 
 	if(vehicle->GetX() < min_x) return true;
@@ -280,13 +293,13 @@ public func OutOfRange(object vehicle)
 
 private func FxFetchVehiclesTimer(object target, proplist effect, int time)
 {
-	if (!elevator) 
+	if (!elevator)
 		return FX_Execute_Kill;
 	if (IsSlave())
 		return FX_OK;
 
 	// look for vehicles
-	var additional = -5;
+	var additional = 5;
 	var x = GetX() - 12 - additional;
 	var w = GetX() + 12 + additional;
 	var y = GetY() - 12;
@@ -303,13 +316,31 @@ private func FxFetchVehiclesTimer(object target, proplist effect, int time)
 	{
 		if (GetEffect("ElevatorControl", vehicle))
 			continue;
-		vehicle->SetPosition(vehicle->GetX(), GetY() + GetBottom() - 3 - vehicle->GetBottom());
+		if (vehicle->FitsInDoubleElevator())
+			if (!IsMaster())
+				continue;
 		vehicle->SetSpeed();
+		// If a clonk is pushing the vehicle, its receive another push after 1 frame
+		Schedule(vehicle, "SetSpeed()", 2);
 		vehicle->SetR();
+		var x = GetX();
+		if (IsMaster())
+		{
+			// Position vehicle inbetween the two cases
+			if (vehicle->FitsInDoubleElevator())
+			{
+				x = GetX() + 12;
+				if (partner->GetX() < GetX())
+					x -= 24;
+			} else if (ObjectDistance(vehicle) > ObjectDistance(vehicle, partner))
+				x = partner->GetX();
+		}
+		vehicle->SetPosition(x, GetY() + GetBottom() - 3 - vehicle->GetBottom());
 		AddEffect("ElevatorControl", vehicle, 30, 5, vehicle, nil, this);
+		Sound("Connect");
 	}
 
-	return 1;
+	return FX_OK;
 }
 
 /*-- Power Consumption --*/
@@ -415,17 +446,9 @@ private func SetMoveDirection(int dir, bool user_requested, bool drill)
 	if (dir == COMD_Stop)
 		return Halt();
 
-	var speed = GetCaseSpeed();
-	// Note: can not move down with full speed because of solidmask problem.
-	if (!user_requested && dir == COMD_Up)
-		speed = GetAutoSpeed();
-
 	var action = "Drive";
 	if (drill)
-	{
 		action = "Drill";
-		speed = GetDrillSpeed();
-	}
 
 	if (has_power)
 	{
@@ -433,13 +456,14 @@ private func SetMoveDirection(int dir, bool user_requested, bool drill)
 		SetComDir(dir);
 		ForceSync();
 		elevator->StartEngine(dir);
+		if (IsMaster())
+			partner->ForwardEngineStart(dir);
 	}
 	else
 	{
 		StoreMovementData(dir, action, user_requested);
 		RegisterPowerRequest(GetNeededPower());
 	}
-	return;
 }
 
 private func Halt(bool user_requested, bool power_out)
@@ -448,9 +472,10 @@ private func Halt(bool user_requested, bool power_out)
 		return;
 
 	// Stop the engine if it was still moving.
-	if (GetYDir())
-		if(elevator)
-			elevator->StopEngine();
+	if(elevator)
+		elevator->StopEngine();
+	if (IsMaster())
+		partner->ForwardEngineStop();
 
 	// Clear speed.
 	SetAction("DriveIdle");
@@ -560,8 +585,6 @@ private func CheckIdle()
 private func ContactTop()
 {
 	Halt();
-	Sound("WoodHit*");
-	return;
 }
 
 private func ContactBottom()
@@ -579,8 +602,6 @@ private func ContactBottom()
 		}
 	}
 	Halt();
-	Sound("WoodHit*");
-	return;
 }
 
 /*-- Controls --*/
@@ -603,7 +624,7 @@ public func ControlDown(object clonk)
 	
 	// Pressing down when already on ground results in drilling.
 	var drill = !!GetContact(-1, CNAT_Bottom);
-	
+
 	StopAutomaticMovement();
 	SetMoveDirection(COMD_Down, true, drill);
 	return true;
@@ -660,7 +681,6 @@ private func Drilling()
 		rect.h = Max(rect.h, partner->GetY() + 13 + additional_y);
 	}
 	DigFreeRect(rect.x, rect.y, rect.w - rect.x, rect.h - rect.y);
-	return;
 }
 
 public func DigOutObject(object obj)

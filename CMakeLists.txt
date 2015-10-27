@@ -11,7 +11,7 @@
 # To redistribute this file separately, substitute the full license texts
 # for the above references.
 
-cmake_minimum_required (VERSION 2.8.7)
+cmake_minimum_required (VERSION 2.8.10)
 project (openclonk CXX C)
 
 # CMP0054: Only interpret if() arguments as variables or keywords when unquoted
@@ -52,19 +52,8 @@ CMAKE_DEPENDENT_OPTION(USE_SDL_MAINLOOP "Use SDL to create windows etc." OFF "NO
 CMAKE_DEPENDENT_OPTION(USE_X11 "Use X11 to create windows etc." ON
 	"UNIX AND NOT APPLE AND NOT USE_SDL_MAINLOOP AND NOT USE_CONSOLE" OFF)
 CMAKE_DEPENDENT_OPTION(USE_GTK "Use GTK for the developer mode" ON "USE_X11" OFF)
-CMAKE_DEPENDENT_OPTION(USE_GTK3 "Use GTK3 instead of GTK2" OFF "USE_GTK" OFF)
-
 CMAKE_DEPENDENT_OPTION(USE_COCOA "Use Apple Cocoa for the developer mode and the windows." ON "APPLE" OFF)
 option(WITH_AUTOMATIC_UPDATE "Automatic updates are downloaded from the project website." OFF)
-
-# Allow distributions to use the system tinyxml instead of our bundled copy.
-option(USE_SYSTEM_TINYXML "Use system tinyxml library" OFF)
-
-# Remove obsolete options
-unset(OC_BUILD_MULTIPROCESSOR CACHE)
-unset(USE_APPLE_CLANG CACHE)
-
-unset(HAVE_NATUPNP_H CACHE)
 
 ############################################################################
 # Check for compiler quirks and features
@@ -80,7 +69,6 @@ if(USE_GCC_STD_0X)
 endif()
 
 REQUIRE_CXX_SOURCE_COMPILES("#include <memory>\nint main() { std::unique_ptr<int> a; std::shared_ptr<int> b; }" HAVE_C11_SMART_PTRS)
-CHECK_CXX_SOURCE_COMPILES("int main() { void *d = nullptr; }" HAVE_NULLPTR)
 REQUIRE_CXX_SOURCE_COMPILES("int main() { static_assert(true, \"\"); }" HAVE_STATIC_ASSERT)
 CHECK_CXX_SOURCE_COMPILES("#include <memory>\nint main() { auto a = std::make_unique<int>(0); }" HAVE_MAKE_UNIQUE)
 REQUIRE_CXX_SOURCE_COMPILES("template<class... T> class C; int main() { return 0; }" HAVE_VARIADIC_TEMPLATES)
@@ -573,11 +561,13 @@ set(MAPE_SOURCES
 	src/mape/window.h
 )
 
+find_program(GDK_PIXBUF_CSOURCE gdk-pixbuf-csource)
+
 # generated source files
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/mape-icons.h
 	COMMAND
-		gdk-pixbuf-csource "--raw" "--static" "--build-list"
+		${GDK_PIXBUF_CSOURCE} "--raw" "--static" "--build-list"
 		"mape_icon_ocd" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/ocd.ico"
 		"mape_icon_ocf" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/ocf.ico"
 		"mape_icon_ocg" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/ocg.ico"
@@ -621,7 +611,7 @@ if(USE_GTK)
 	add_custom_command(
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/editor-icons.h
 		COMMAND
-			gdk-pixbuf-csource "--raw" "--rle" "--static" "--build-list"
+			${GDK_PIXBUF_CSOURCE} "--raw" "--rle" "--static" "--build-list"
 			"brush_pixbuf_data" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/Brush_Trans.png"
 			"halt_pixbuf_data" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/Halt_Trans.png"
 			"picker_pixbuf_data" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/Picker_Trans.png"
@@ -659,7 +649,7 @@ if(USE_GTK)
 	add_custom_command(
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/oc-icon.h
 		COMMAND
-			gdk-pixbuf-csource "--raw" "--rle" "--static" "--build-list"
+			${GDK_PIXBUF_CSOURCE} "--raw" "--rle" "--static" "--build-list"
 			"oc_icon_pixbuf_data" "${CMAKE_CURRENT_SOURCE_DIR}/src/res/oc.ico"
 			> ${CMAKE_CURRENT_BINARY_DIR}/oc-icon.h
 		DEPENDS
@@ -777,7 +767,6 @@ CHECK_INCLUDE_FILE_CXX(sys/stat.h HAVE_SYS_STAT_H)
 CHECK_INCLUDE_FILE_CXX(sys/types.h HAVE_SYS_TYPES_H)
 CHECK_INCLUDE_FILE_CXX(unistd.h HAVE_UNISTD_H)
 CHECK_INCLUDE_FILE_CXX(execinfo.h HAVE_EXECINFO_H)
-CHECK_INCLUDE_FILE_CXX(langinfo.h HAVE_LANGINFO_H)
 CHECK_INCLUDE_FILE_CXX(poll.h HAVE_POLL_H)
 CHECK_INCLUDE_FILE_CXX(sys/inotify.h HAVE_SYS_INOTIFY_H)
 CHECK_INCLUDE_FILE_CXX(sys/timerfd.h HAVE_SYS_TIMERFD_H)
@@ -869,32 +858,9 @@ endif()
 
 # Set GTK link directory. This needs to be done before add_executable,
 # otherwise the path is not used for linking clonk
+find_package(GTK3 COMPONENTS gthread gio gobject OPTIONAL_COMPONENTS gtksourceview)
 if(USE_GTK)
-	find_package(PkgConfig)
-	if (USE_GTK3)
-		pkg_check_modules(GTK3 REQUIRED "glib-2.0 >= 2.32" "gtk+-3.0 >= 3.4")
-		include_directories(${GTK3_INCLUDE_DIRS})
-		link_directories(${GTK3_LIBRARY_DIRS})
-	else()
-		pkg_check_modules(GTK REQUIRED "glib-2.0 >= 2.28" "gtk+-2.0 >= 2.20")
-		include_directories(${GTK_INCLUDE_DIRS})
-		link_directories(${GTK_LIBRARY_DIRS})
-	endif()
-endif()
-
-# Try to find GTK for mape
-find_package(PkgConfig)
-if (PKG_CONFIG_FOUND)
-	if (USE_GTK3)
-		pkg_check_modules(MAPE_GTK glib-2.0>=2.32 gthread-2.0 gtk+-3.0>=3.4 gtksourceview-3.0)
-	else()
-		pkg_check_modules(MAPE_GTK glib-2.0>=2.28 gthread-2.0 gtk+-2.0>=2.20 gtksourceview-2.0)
-	endif()
-endif()
-if(MAPE_GTK_FOUND)
-	# hrm, cmake doesn't have target_include_directories...
-	include_directories(${MAPE_GTK_INCLUDE_DIRS})
-	link_directories(${MAPE_GTK_LIBRARY_DIRS})
+	link_directories(${GTK3_LIBRARY_DIRS})
 endif()
 
 # Select an audio library
@@ -913,6 +879,7 @@ endif()
 if(HAVE_PRECOMPILED_HEADERS)
 	if(MSVC_VERSION)
 		list(INSERT OC_SYSTEM_SOURCES 0 src/C4Include.cpp)
+		list(INSERT MAPE_SOURCES 0 src/C4Include.cpp)
 	endif()
 endif()
 
@@ -978,12 +945,11 @@ add_executable(openclonk WIN32 MACOSX_BUNDLE
 	${OC_CLONK_SOURCES}
 )
 
-if(MAPE_GTK_FOUND)
+if(GTK3_FOUND AND GTK3_gtksourceview_FOUND)
 	add_executable(mape ${MAPE_BASE_SOURCES} ${MAPE_SOURCES})
-	unseparate_arguments(MAPE_GTK_CFLAGS "${MAPE_GTK_CFLAGS}")
-	set_property(TARGET mape PROPERTY COMPILE_FLAGS "${MAPE_GTK_CFLAGS}")
-	unseparate_arguments(MAPE_GTK_LDFLAGS "${MAPE_GTK_LDFLAGS}")
-	set_property(TARGET mape PROPERTY LINK_FLAGS "${MAPE_GTK_LDFLAGS}")
+	set_property(TARGET mape APPEND PROPERTY COMPILE_FLAGS ${GTK3_COMPILE_DEFINITIONS})
+	target_include_directories(mape PRIVATE ${GTK3_INCLUDE_DIRS} ${GTK3_gtksourceview_INCLUDE_DIRS})
+	target_link_libraries(mape ${GTK3_LIBRARIES} ${GTK3_gtksourceview_LIBRARIES})
 endif()
 
 add_executable(c4group
@@ -1099,7 +1065,7 @@ if(Audio_FOUND)
 	include_directories(${Audio_INCLUDE_DIRS})
 endif()
 
-if(MAPE_GTK_FOUND)
+if(TARGET mape)
 	target_link_libraries(mape
 		libc4script
 		libmisc
@@ -1128,7 +1094,7 @@ if(HAVE_PTHREAD)
 	target_link_libraries(c4script
 		pthread
 	)
-	if(MAPE_GTK_FOUND)
+	if(TARGET mape)
 		target_link_libraries(mape
 			pthread
 		)
@@ -1144,7 +1110,7 @@ if(UNIX AND NOT APPLE)
 	target_link_libraries(c4script rt)
 	target_link_libraries(netpuncher rt)
 	target_link_libraries(openclonk rt)
-	if(MAPE_GTK_FOUND)
+	if(TARGET mape)
 		target_link_libraries(mape rt)
 	endif()
 endif()
@@ -1317,14 +1283,16 @@ endif()
 CHECK_INCLUDE_FILE_CXX(getopt.h HAVE_GETOPT_H)
 
 # TinyXML
-if(USE_SYSTEM_TINYXML)
-	find_package(TinyXML REQUIRED)
-	target_link_libraries(openclonk ${TinyXML_LIBRARIES})
-else()
+find_package(TinyXML)
+if(NOT TinyXML_FOUND)
 	add_subdirectory(thirdparty/tinyxml)
-	include_directories(SYSTEM thirdparty/tinyxml)
-	target_link_libraries(openclonk tinyxml)
+	set(TinyXML_INCLUDE_DIRS thirdparty/tinyxml)
+	set(TinyXML_LIBRARIES tinyxml)
+	set(TinyXML_FOUND TRUE)
 endif()
+
+include_directories(SYSTEM ${TinyXML_INCLUDE_DIRS})
+target_link_libraries(openclonk ${TinyXML_LIBRARIES})
 
 if(WIN32)
 	find_package(DbgHelp)
@@ -1351,22 +1319,12 @@ if(NOT USE_CONSOLE)
 	CHECK_CXX_SOURCE_COMPILES("#include <GL/glew.h>\nvoid GLAPIENTRY OpenGLDebugProc(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const char* message, const void* userParam) {}\nint main() { GLDEBUGPROCARB proc = &OpenGLDebugProc; }" GLDEBUGPROCARB_USERPARAM_IS_CONST)
 endif()
 if(USE_GTK)
-	if(USE_GTK3)
-		SET(WITH_DEVELOPER_MODE ${GTK3_FOUND})
-		SET(WITH_GLIB ${GTK3_FOUND})
-		target_link_libraries(openclonk
-			${GTK3_LIBRARIES}
-		)
-	else()
-		SET(WITH_DEVELOPER_MODE ${GTK_FOUND})
-		SET(WITH_GLIB ${GTK_FOUND})
-		target_link_libraries(openclonk
-			${GTK_LIBRARIES}
-		)
-	endif()
-endif()
-if(MAPE_GTK_FOUND)
-	target_link_libraries(mape ${MAPE_GTK_LIBRARIES})
+	SET(WITH_DEVELOPER_MODE ${GTK3_FOUND})
+	SET(WITH_GLIB ${GTK3_FOUND})
+	include_directories(${GTK3_INCLUDE_DIRS})
+	target_link_libraries(openclonk
+		${GTK3_LIBRARIES}
+	)
 endif()
 if(USE_X11)
 	FINDLIB(X11_LIBRARIES X11)
@@ -1396,7 +1354,7 @@ if (WIN32)
 	target_link_libraries(c4group ws2_32)
 	target_link_libraries(netpuncher ws2_32 winmm)
 	target_link_libraries(c4script ws2_32 winmm)
-	if(MAPE_GTK_FOUND)
+	if(TARGET mape)
 		target_link_libraries(mape winmm)
 		# Suppress the console window for mape even though only a main() and not
 		# a WinMain() entry point is provided.

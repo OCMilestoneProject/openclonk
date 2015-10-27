@@ -32,6 +32,16 @@ public func GetDescription(int plr)
 	return this.Description;
 }
 
+public func GetPictureDefinition()
+{
+	return this.Picture ?? this;
+}
+
+public func GetPictureName()
+{
+	return this.PictureName ?? "";
+}
+
 /*-- Proplist --*/
 local Name = "$Name$";
 local Description = "$Description$";

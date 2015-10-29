@@ -5,21 +5,25 @@
     Author: Armin
 */
 
+/**
+	Heals the object over time for /amount/ HP.
+	Calling the function multiple times results in faster healing (as opposed to longer healing).
+*/
 global func Heal(int amount)
 {
 	// Add effect.
-	var effect = this->AddEffect("HealingOverTime", this, 1, 36);
-	effect.healing_amount = amount;
-	effect.done;
-	return effect;
+	var fx = this->AddEffect("HealingOverTime", this, 1, 36);
+	fx.healing_amount = amount;
+	fx.done = 0;
+	return fx;
 }
 
-global func FxHealingOverTimeTimer(object target, proplist effect)
+global func FxHealingOverTimeTimer(object target, effect fx)
 {
 	// Stop healing the Clonk if he reached full health.
-	if (target->GetEnergy() >= target.MaxEnergy/1000  || effect.done >= effect.healing_amount )
+	if (target->GetEnergy() >= target.MaxEnergy/1000  || fx.done >= fx.healing_amount)
 		return -1;
 	target->DoEnergy(1);
-	effect.done++;
-	return true;
+	fx.done++;
+	return FX_OK;
 }

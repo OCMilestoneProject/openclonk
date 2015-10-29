@@ -44,7 +44,7 @@ protected func ControlUse(object clonk)
 }
 
 // Nutritional value depends on the completion of the mushroom.
-public func NutritionalValue() { return 3 * GetCon() / 10; }
+public func NutritionalValue() { return 3 * GetCon() / 30; }
 
 public func IsAnimalFood()
 {

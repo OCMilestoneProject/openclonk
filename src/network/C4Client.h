@@ -49,7 +49,7 @@ protected:
 	int iVersion[4];
 
 	// status
-	bool fActivated, fObserver;
+	bool fActivated, fObserver, fLobbyReady;
 
 public:
 
@@ -58,10 +58,12 @@ public:
 	bool        isHost()          const { return iID == C4ClientIDHost; }
 	bool        isActivated()     const { return fActivated; }
 	bool        isObserver()      const { return fObserver; }
+	bool		isLobbyReady()	  const { return fLobbyReady; }
 	void SetID(int32_t inID)            { iID = inID; }
 	void SetName(const char *sznName)   { Name.CopyValidated(sznName); }
 	void SetActivated(bool fnActivated) { fActivated = fnActivated; fObserver = false; }
 	void SetObserver(bool fnObserver)   { fActivated &= !(fObserver = fnObserver); }
+	void SetLobbyReady(bool fnLobbyReady){ fLobbyReady = fnLobbyReady; }
 
 	// misc
 	const char *getName()     const { return Name.getData(); }
@@ -92,6 +94,7 @@ private:
 
 	bool fLocal; // Local, NoSync
 	class C4Network2Client *pNetClient; // Local, NoSync
+	time_t last_lobby_ready_change; // Local, NoSync: Time when the lobby ready state was changed last through the SetLobbyReady call. 0 for never changed.
 
 	bool fIsIgnored; // Local, NoSync: chat messages from this client are suppressed
 
@@ -106,6 +109,7 @@ public:
 	const char *getNick()     const { return Core.getNick(); }
 	bool        isActivated() const { return Core.isActivated(); }
 	bool        isObserver()  const { return Core.isObserver(); }
+	bool		isLobbyReady()const { return Core.isLobbyReady(); }
 	bool        isRegistered()const { return Core.isRegistered(); }
 	bool IsIgnored() const { return fIsIgnored; }
 
@@ -117,6 +121,7 @@ public:
 
 	void SetActivated(bool fnActivated);
 	void SetObserver() { Core.SetObserver(true); }
+	void SetLobbyReady(bool fnLobbyReady, time_t *time_since_last_change = NULL);
 	void SetLocal();
 
 	void ToggleIgnore() { fIsIgnored = !fIsIgnored; }

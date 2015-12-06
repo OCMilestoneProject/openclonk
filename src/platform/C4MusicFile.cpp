@@ -175,7 +175,7 @@ void C4MusicFileSDL::SetVolume(int iLevel)
 
 C4MusicFileOgg::C4MusicFileOgg() :
 	playing(false), streaming_done(false), loaded(false), channel(0), current_section(0), byte_pos_total(0), volume(1.0f),
-	is_loading_from_file(false), last_source_file_pos(0), last_playback_pos_sec(0)
+	is_loading_from_file(false), last_source_file_pos(0), last_playback_pos_sec(0), last_interruption_time()
 {
 	for (size_t i=0; i<num_buffers; ++i)
 		buffers[i] = 0;
@@ -200,6 +200,7 @@ void C4MusicFileOgg::Clear()
 	source_file.Close();
 	last_source_file_pos = 0;
 	last_playback_pos_sec = 0;
+	last_interruption_time = C4TimeMilliseconds();
 }
 
 bool C4MusicFileOgg::Init(const char *strFile)
@@ -294,6 +295,23 @@ bool C4MusicFileOgg::Init(const char *strFile)
 	return loaded = true;
 }
 
+StdStrBuf C4MusicFileOgg::GetDebugInfo() const
+{
+	StdStrBuf result;
+	result.Append(FileName);
+	result.AppendFormat("[%.0lf]", last_playback_pos_sec);
+	result.AppendChar('[');
+	bool sec = false;
+	for (auto i = categories.cbegin(); i != categories.cend(); ++i)
+	{
+		if (sec) result.AppendChar(',');
+		result.Append(i->getData());
+		sec = true;
+	}
+	result.AppendChar(']');
+	return result;
+}
+
 void C4MusicFileOgg::UnprepareSourceFileReading()
 {
 	// The file loader could just keep all files open. But if someone symlinks
@@ -385,6 +403,7 @@ void C4MusicFileOgg::Stop(int fadeout_ms)
 		ALfloat playback_pos_in_buffer = 0;
 		alErrorCheck(alGetSourcef(channel, AL_SEC_OFFSET, &playback_pos_in_buffer));
 		last_playback_pos_sec += playback_pos_in_buffer;
+		last_interruption_time = C4TimeMilliseconds::Now();
 		// stop!
 		alSourceStop(channel);
 		// clear queue

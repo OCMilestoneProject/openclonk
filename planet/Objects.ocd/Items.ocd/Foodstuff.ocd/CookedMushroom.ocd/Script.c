@@ -16,6 +16,7 @@ func Hit()
 protected func ControlUse(object clonk)
 {
 	clonk->Eat(this);
+	return true;
 }
 
 public func IsAnimalFood()

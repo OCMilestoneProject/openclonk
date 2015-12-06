@@ -111,6 +111,7 @@ public:
 	bool SetMode(int32_t iMode);
 	bool SetPix2(int32_t x, int32_t y, BYTE fgPix, BYTE bgPix); // set landscape pixel (bounds checked)
 	bool _SetPix2(int32_t x, int32_t y, BYTE fgPix, BYTE bgPix); // set landsape pixel (bounds not checked)
+	void _SetPix2Tmp(int32_t x, int32_t y, BYTE fgPix, BYTE bgPix); // set landsape pixel (bounds not checked, no material count updates, no landscape relighting). Material must be reset to original value with this function before modifying landscape in any other way. Only used for temporary pixel changes by SolidMask (C4SolidMask::RemoveTemporary, C4SolidMask::PutTemporary).
 	bool InsertMaterial(int32_t mat, int32_t *tx, int32_t *ty, int32_t vx = 0, int32_t vy = 0, bool query_only=false); // modifies tx/ty to actual insertion position
 	bool InsertDeadMaterial(int32_t mat, int32_t tx, int32_t ty);
 	bool FindMatPath(int32_t &fx, int32_t &fy, int32_t ydir, int32_t mdens, int32_t mslide) const;
@@ -321,10 +322,6 @@ public:
 	bool ClearPix(int32_t tx, int32_t ty);	// also used by mass mover (corrode)
 
 private:
-	std::vector<int32_t> GetRoundPolygon(int32_t x, int32_t y, int32_t size, int32_t smoothness) const;
-	std::vector<int32_t> GetRectangle(int32_t tx, int32_t ty, int32_t wdt, int32_t hgt) const;
-	C4Rect getBoundingBox(int *vtcs, int length) const;
-
 	CSurface8* CreateDefaultBkgSurface(CSurface8& sfcFg, bool msbAsIft) const;
 	void DigMaterial2Objects(int32_t tx, int32_t ty, C4MaterialList *mat_list, C4Object *pCollect = NULL);
 	void BlastMaterial2Objects(int32_t tx, int32_t ty, C4MaterialList *mat_list, int32_t caused_by, int32_t str, C4ValueArray *out_objects);

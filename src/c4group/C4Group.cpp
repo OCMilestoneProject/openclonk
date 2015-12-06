@@ -59,7 +59,6 @@ int iC4GroupRewindFilePtrNoWarn=0;
 char C4Group_TempPath[_MAX_PATH+1]="";
 char C4Group_Ignore[_MAX_PATH+1]="cvs;CVS;Thumbs.db;.orig;.svn";
 const char **C4Group_SortList = NULL;
-time_t C4Group_AssumeTimeOffset=0;
 bool (*C4Group_ProcessCallback)(const char *, int)=NULL;
 
 void C4Group_SetProcessCallback(bool (*fnCallback)(const char *, int))
@@ -405,29 +404,6 @@ void MemScramble(BYTE *bypBuffer, int iSize)
 
 //---------------------------------- C4Group ---------------------------------------------
 
-C4GroupHeader::C4GroupHeader()
-{
-	ZeroMem(this,sizeof(C4GroupHeader));
-}
-
-void C4GroupHeader::Init()
-{
-	SCopy(C4GroupFileID,id,sizeof(id)-1);
-	Ver1=C4GroupFileVer1; Ver2=C4GroupFileVer2;
-	Entries=0;
-	std::memset(reserved, '\0', sizeof(reserved));
-}
-
-C4GroupEntryCore::C4GroupEntryCore()
-{
-	ZeroMem(this,sizeof(C4GroupEntryCore));
-}
-
-C4GroupEntry::C4GroupEntry()
-{
-	ZeroMem(this,sizeof(C4GroupEntry));
-}
-
 C4GroupEntry::~C4GroupEntry()
 {
 	if (HoldBuffer)
@@ -442,7 +418,8 @@ C4GroupEntry::~C4GroupEntry()
 
 void C4GroupEntry::Set(const DirectoryIterator &iter, const char * path)
 {
-	ZeroMem(this,sizeof(C4GroupEntry));
+	InplaceReconstruct(this);
+
 	SCopy(GetFilename(*iter),FileName,_MAX_FNAME);
 	SCopy(*iter, DiskPath, _MAX_PATH-1);
 	Size = FileSize(*iter);
@@ -474,7 +451,7 @@ void C4Group::Init()
 	FilePtr=0;
 	EntryOffset=0;
 	Modified=false;
-	Head.Init();
+	InplaceReconstruct(&Head);
 	FirstEntry=NULL;
 	SearchPtr=NULL;
 	pInMemEntry=NULL; iInMemEntrySize=0u;
@@ -1500,7 +1477,7 @@ bool C4Group::Extract(const char *szFiles, const char *szExtractTo, const char *
 			if (StdOutput) printf("%s\n",tentry->FileName);
 			cbytes+=tentry->Size;
 			if (fnProcessCallback)
-				fnProcessCallback(tentry->FileName,100*cbytes/Max(tbytes,1));
+				fnProcessCallback(tentry->FileName,100*cbytes/std::max(tbytes,1));
 
 			// Extract
 			if (!ExtractEntry(tentry->FileName,szExtractTo))

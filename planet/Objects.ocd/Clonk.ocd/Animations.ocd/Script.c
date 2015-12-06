@@ -1088,16 +1088,16 @@ func GetSwimRotation()
 
 func Hit(int iXSpeed, int iYSpeed)
 {
-	if (this->IsWalking())
+	if (this->IsWalking() && iYSpeed > 450)
 	{
 		// roll :D
-		var e;
-		if (e = GetEffect("ScheduleRollOnLanding", this))
+		var x_movement = ComDir2XY(GetComDir())[0];
+		var looking_right = GetDir() == DIR_Right;
+		if ((x_movement > 0 && looking_right) || (x_movement < 0 && !looking_right))
 		{
 			DoRoll();
-			RemoveEffect(nil, this, e);
 		}
-		else if (iYSpeed > 450) // Force kneel-down when hitting the ground at high velocity.
+		else // Force kneel-down when hitting the ground at high velocity.
 			DoKneel(true);
 	}
 	return _inherited(iXSpeed, iYSpeed, ...);

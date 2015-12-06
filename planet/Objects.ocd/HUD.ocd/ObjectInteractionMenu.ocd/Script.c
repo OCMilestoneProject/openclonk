@@ -90,7 +90,11 @@ func Destruction()
 	for (var menu in current_menus)
 	{
 		if (menu && menu.menu_object)
+		{
+			// Notify the object of the deleted menu.
+			DoInteractionMenuClosedCallback(menu.target);
 			menu.menu_object->RemoveObject();
+		}
 	}
 	// remove all remaining contained dummy objects to prevent script warnings about objects in removed containers
 	var i = ContentsCount(), obj = nil;
@@ -143,7 +147,7 @@ func FxIntCheckObjectsStart(target, effect fx, temp)
 
 func FxIntCheckObjectsTimer(target, effect fx)
 {
-	var new_objects = FindObjects(Find_AtPoint(target->GetX(), target->GetY()), Find_NoContainer(), Find_Layer(target->GetObjectLayer()),
+	var new_objects = FindObjects(Find_AtRect(target->GetX() - 5, target->GetY() - 10, 10, 20), Find_NoContainer(), Find_Layer(target->GetObjectLayer()),
 		// Find all containers and objects with a custom menu.
 		Find_Or(Find_Func("IsContainer"), Find_Func("HasInteractionMenu")),
 		// Do not show objects with an extra slot though - even if they are containers. They count as items here.
@@ -185,6 +189,8 @@ func UpdateObjects(array new_objects)
 		// sub menus close automatically (and remove their dummy) due to a clever usage of OnClose
 		current_menus[i].menu_object->RemoveObject();
 		current_menus[i] = nil;
+		// Notify the target of the now closed menu.
+		DoInteractionMenuClosedCallback(target);
 	}
 	
 	current_objects = new_objects;
@@ -237,6 +243,9 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	var other_menu = current_menus[1 - slot];
 	if (old_menu)
 	{
+		// Notify other object of the closed menu.
+		DoInteractionMenuClosedCallback(old_menu.target);
+		
 		// Re-enable entry in (other!) sidebar.
 		if (other_menu)
 		{
@@ -404,8 +413,8 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	// Show "put/take all items" buttons if applicable. Also update tooltip.
 	var show_grab_all = current_menus[0] && current_menus[1];
 	show_grab_all = show_grab_all 
-					&& (current_menus[0].target->~IsContainer() || current_menus[0].target->~IsClonk())
-					&& (current_menus[1].target->~IsContainer() || current_menus[1].target->~IsClonk());
+					&& (current_menus[0].target->~IsContainer())
+					&& (current_menus[1].target->~IsContainer());
 	if (show_grab_all)
 	{
 		current_center_column_target.Visibility = VIS_Owner;
@@ -435,6 +444,30 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	{
 		GuiUpdate({Symbol = Icon_Cancel}, current_main_menu_id, 1 + 1 - slot, obj);
 	}
+	
+	// And notify the object of the fresh menu.
+	DoInteractionMenuOpenedCallback(obj);
+}
+
+private func DoInteractionMenuOpenedCallback(object obj)
+{
+	if (!obj) return;
+	if (obj._open_interaction_menus == nil)
+		obj._open_interaction_menus = 0;
+	
+	obj._open_interaction_menus += 1;
+	
+	var is_first = obj._open_interaction_menus == 1;
+	obj->~OnShownInInteractionMenuStart(is_first);
+}
+
+private func DoInteractionMenuClosedCallback(object obj)
+{
+	if (!obj) return;
+	obj._open_interaction_menus = Max(0, obj._open_interaction_menus - 1);
+	
+	var is_last = obj._open_interaction_menus == 0;
+	obj->~OnShownInInteractionMenuStop(is_last);
 }
 
 // Toggles the menu state between minimized and maximized.
@@ -466,7 +499,7 @@ public func OnMoveAllToClicked(int menu_id)
 	{
 		if (!current_menus[i] || !current_menus[i].target)
 			return;
-		if (!current_menus[i].target->~IsContainer() && !current_menus[i].target->~IsClonk())
+		if (!current_menus[i].target->~IsContainer())
 			return;
 	}
 	// Take all from the other object and try to put into the target.
@@ -635,18 +668,20 @@ func CreateMainMenu(object obj, int slot)
 	var error_message = nil;
 	if (obj->GetCon() < 100) error_message = Format("$MsgNotFullyConstructed$", obj->GetName());
 	else if (Hostile(cursor->GetOwner(), obj->GetOwner())) error_message = Format("$MsgHostile$", obj->GetName(), GetTaggedPlayerName(obj->GetOwner()));
+	else if (obj->~IsClonk() && !obj->~GetAlive()) error_message = Format("$MsgDeadClonk$", obj->GetName());
 	
 	if (error_message)
 	{
 		container.Style = GUI_TextVCenter | GUI_TextHCenter;
 		container.Text = error_message;
+		current_menus[slot].menus = [];
 		return big_menu;
 	}
 	
 	var menus = obj->~GetInteractionMenus(cursor) ?? [];
 	// get all interaction info from the object and put it into a menu
 	// contents first
-	if (obj->~IsContainer() || obj->~IsClonk())
+	if (obj->~IsContainer())
 	{
 		var info =
 		{
@@ -823,6 +858,14 @@ private func OnContentsSelection(symbol, extra_data)
 	var other_target = current_menus[1 - extra_data.slot].target;
 	if (!other_target) return;
 	
+	// Allow transfer only into containers.
+	if (!other_target->~IsContainer())
+	{
+		// Todo: other sound for "nope".
+		Sound("LightMetalHit*", nil, 10, GetController(), nil, nil, -50);
+		return;
+	}
+	
 	var transfer_only_one = GetPlayerControlState(GetOwner(), CON_ModifierMenu1) == 0; // Transfer ONE object of the stack?
 	var to_transfer = nil;
 	
@@ -935,6 +978,9 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 		}
 		// How many objects are this object?!
 		var object_amount = obj->~GetStackCount() ?? 1;
+		// Infinite stacks work differently - showing an arbitrary amount would not make sense.
+		if (object_amount > 1 && obj->~IsInfiniteStackCount())
+			object_amount = 1;
 		// Empty containers can be stacked.
 		for (var inv in inventory)
 		{
@@ -987,21 +1033,28 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 				// And if the object has contents, show the first one, too.
 				if (obj->ContentsCount() != 0)
 				{
+					var first_contents = obj->Contents(0);
 					// Add to GUI.
 					custom.bottom.contents = 
 					{
-						Symbol = obj->Contents(0),
+						Symbol = first_contents ,
 						Margin = "0.125em",
 						Priority = 2
 					};
 					// Possibly add text for stackable items - this is an special exception for the Library_Stackable.
-					var count = obj->Contents(0)->~GetStackCount();
-					count = count ?? obj->ContentsCount(obj->Contents(0)->GetID());
+					var count = first_contents->~GetStackCount();
+					// Infinite stacks display an own overlay.
+					if ((count > 1) && (first_contents->~IsInfiniteStackCount())) count = nil;
+					
+					count = count ?? obj->ContentsCount(first_contents->GetID());
 					if (count > 1)
 					{
 						custom.bottom.contents.Text = Format("%dx", count);
 						custom.bottom.contents.Style = GUI_TextBottom | GUI_TextRight;
 					}
+					var overlay = first_contents->~GetInventoryIconOverlay();
+					if (overlay)
+						custom.bottom.contents.overlay = overlay;
 					// Also make the chest smaller, so that the contents symbol is not obstructed.
 					custom.bottom.container.Bottom = "1em";
 					custom.bottom.container.Left = "1em";
@@ -1016,8 +1069,9 @@ func FxIntRefreshContentsMenuTimer(target, effect, time)
 				{
 					custom = MenuStyle_Grid->MakeEntryProplist(symbol, nil);
 					custom.Priority = obj->GetValue();
+					custom.top = {};
 				}
-				custom._overlay = overlay;
+				custom.top._overlay = overlay;
 			}
 			
 			// Add to menu!
@@ -1109,7 +1163,7 @@ func DoMenuRefresh(int slot, int menu_index, array new_entries)
 			var new_entry = new_entries[ni];
 			if (!EntriesEqual(new_entry, old_entry))
 			{
-				if ((new_entry.symbol == old_entry.symbol) && (new_entry.extra_data == old_entry.extra_data))
+				if ((new_entry.symbol == old_entry.symbol) && (new_entry.extra_data == old_entry.extra_data) && (new_entry.fx == old_entry.fx))
 					symbol_equal_index = ni;
 				continue;
 			}
@@ -1142,6 +1196,8 @@ func DoMenuRefresh(int slot, int menu_index, array new_entries)
 		}
 		if (removed)
 		{
+			if (old_entry.fx)
+				RemoveEffect(nil, nil, old_entry.fx);
 			menu.menu_object->RemoveItem(old_entry.unique_index, current_main_menu_id);
 			current_entries[c] = nil;
 		}
@@ -1169,8 +1225,13 @@ func DoMenuRefresh(int slot, int menu_index, array new_entries)
 		if (existing) continue;
 		
 		new_entry.unique_index = ++menu.entry_index_count;
-		menu.menu_object->AddItem(new_entry.symbol, new_entry.text, new_entry.unique_index, this, "OnMenuEntrySelected", { slot = slot, index = menu_index }, new_entry["custom"], current_main_menu_id);
+		var added_entry = menu.menu_object->AddItem(new_entry.symbol, new_entry.text, new_entry.unique_index, this, "OnMenuEntrySelected", { slot = slot, index = menu_index }, new_entry["custom"], current_main_menu_id);
+		new_entry.ID = added_entry.ID;
 		
+		if (new_entry.fx)
+		{
+			EffectCall(nil, new_entry.fx, "OnMenuOpened", current_main_menu_id, new_entry.ID, menu.menu_object);
+		}
 	}
 	menu.entries = new_entries;
 }

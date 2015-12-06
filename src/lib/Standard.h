@@ -20,18 +20,34 @@
 #ifndef INC_STANDARD
 #define INC_STANDARD
 
+#include <type_traits>
+#pragma push_macro("new")
+#undef new
+
+// The Clear/Default functions that exist on most OpenClonk classes are A
+// BAD IDEA because the caller has no guarantee that every member has been
+// properly cleared/initialized. The proper way to handle this, which is
+// using ctors/dtors, is hard to integrate into the current design. To help
+// with this, InplaceReconstruct will destroy and default-construct an object
+// in the same memory. The nothrow test attempts to ensure that the object
+// will not end up in a destroyed state when the ctor fails (by checking that
+// the ctor cannot fail beforehand).
+template<class T>
+typename std::enable_if<std::is_nothrow_default_constructible<T>::value>::type
+inline InplaceReconstruct(T *obj)
+{
+	obj->~T();
+	new (obj) T();
+}
+#pragma pop_macro("new")
+
 #include "PlatformAbstraction.h"
 
-
 // Small helpers
-template <class T> inline T Max(T val1, T val2) { return val1 > val2 ? val1 : val2; }
-template <class T> inline T Min(T val1, T val2) { return val1 < val2 ? val1 : val2; }
 template <class T> inline T Abs(T val) { return val > 0 ? val : -val; }
 template <class T, class U, class V> inline bool Inside(T ival, U lbound, V rbound) { return ival >= lbound && ival <= rbound; }
 template <class T> inline T Clamp(T bval, T lbound, T rbound) { return bval < lbound ? lbound : bval > rbound ? rbound : bval; }
 template <class T> inline int Sign(T val) { return val < 0 ? -1 : val > 0 ? 1 : 0; }
-template <class T> inline void Swap(T &v1, T &v2) { T t = v1; v1 = v2; v2 = t; }
-template <class T> inline void Toggle(T &v) { v = !v; }
 
 inline int DWordAligned(int val)
 {
@@ -45,7 +61,9 @@ int Pow(int base, int exponent);
 int32_t StrToI32(const char *s, int base, const char **scan_end);
 
 #include <cstring>
-inline void ZeroMem(void *lpMem, size_t dwSize)
+template <class T>
+typename std::enable_if<std::is_pod<T>::value>::type
+inline ZeroMem(T *lpMem, size_t dwSize)
 {
 	std::memset(lpMem,'\0',dwSize);
 }
@@ -85,17 +103,13 @@ bool SEqualUntil(const char *szStr1, const char *szStr2, char cWild);
 bool SEqualNoCase(const char *szStr1, const char *szStr2, int iLen=-1);
 bool SEqual2NoCase(const char *szStr1, const char *szStr2, int iLen = -1);
 
-inline int SCompare(const char *szStr1, const char *szStr2) { return szStr1&&szStr2?std::strcmp(szStr1,szStr2):0; }
-
 void SCopy(const char *szSource, char *sTarget);
 void SCopy(const char *szSource, char *sTarget, size_t iMaxL);
 void SCopyUntil(const char *szSource, char *sTarget, char cUntil, int iMaxL=-1, int iIndex=0);
 void SCopyUntil(const char *szSource, char *sTarget, const char * sUntil, size_t iMaxL);
 void SCopyIdentifier(const char *szSource, char *sTarget, int iMaxL=0);
-bool SCopyPrecedingIdentifier(const char *pBegin, const char *pIdentifier, char *sTarget, int iSize);
 bool SCopySegment(const char *fstr, int segn, char *tstr, char sepa=';', int iMaxL=-1, bool fSkipWhitespace=false);
 bool SCopySegmentEx(const char *fstr, int segn, char *tstr, char sepa1, char sepa2, int iMaxL=-1, bool fSkipWhitespace=false);
-bool SCopyNamedSegment(const char *szString, const char *szName, char *sTarget, char cSeparator=';', char cNameSeparator='=', int iMaxL=-1);
 bool SCopyEnclosed(const char *szSource, char cOpen, char cClose, char *sTarget, int iSize);
 
 void SAppend(const char *szSource, char *szTarget, int iMaxL=-1);
@@ -113,8 +127,6 @@ void SReplaceChar(char *str, char fc, char tc);
 
 const char *SSearch(const char *szString, const char *szIndex);
 const char *SSearchNoCase(const char *szString, const char *szIndex);
-const char *SSearchIdentifier(const char *szString, const char *szIndex);
-const char *SSearchFunction(const char *szString, const char *szIndex);
 
 const char *SAdvanceSpace(const char *szSPos);
 const char *SAdvancePast(const char *szSPos, char cPast);
@@ -127,7 +139,6 @@ bool SRemoveModule(char *szList, const char *szModule, bool fCaseSensitive=false
 bool SRemoveModules(char *szList, const char *szModules, bool fCaseSensitive=false);
 int SModuleCount(const char *szList);
 
-void SRemoveComments(char *szScript);
 void SNewSegment(char *szStr, const char *szSepa=";");
 void SCapitalize(char *szString);
 void SWordWrap(char *szText, char cSpace, char cSepa, int iMaxLine);

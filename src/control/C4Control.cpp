@@ -918,7 +918,7 @@ void C4ControlClientJoin::CompileFunc(StdCompiler *pComp)
 void C4ControlClientUpdate::Execute() const
 {
 	// host only
-	if (iByClient != C4ClientIDHost) return;
+	if (iByClient != C4ClientIDHost && eType != CUT_SetReady) return;
 	// find client
 	C4Client *pClient = Game.Clients.getClientByID(iID);
 	if (!pClient) return;
@@ -951,6 +951,26 @@ void C4ControlClientUpdate::Execute() const
 		// remove all players ("soft kick")
 		::Players.RemoveAtClient(iID, true);
 		break;
+	case CUT_SetReady:
+		{
+		// nothing to do?
+		if (pClient->isLobbyReady() == !!iData) break;
+		// ready/unready (while keeping track of time)
+		time_t last_change_time = MinReadyAnnouncementDelay;
+		pClient->SetLobbyReady(!!iData, &last_change_time);
+		// log to others, but don't spam
+		if (last_change_time >= MinReadyAnnouncementDelay)
+		{
+			if (!pClient->isLocal())
+			{
+				LogF(LoadResStr(iData ? "IDS_NET_CLIENT_READY" : "IDS_NET_CLIENT_UNREADY"), strClient.getData(), pClient->getName());
+			}
+			// Also update icons
+			C4GameLobby::MainDlg *lobby = ::Network.GetLobby();
+			if (lobby) lobby->OnClientReadyStateChange();
+		}
+		break;
+		}
 	}
 }
 
@@ -959,6 +979,8 @@ void C4ControlClientUpdate::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(mkIntAdaptT<uint8_t>(eType), "Type", CUT_None));
 	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iID), "ClientID", C4ClientIDUnknown));
 	if (eType == CUT_Activate)
+		pComp->Value(mkNamingAdapt(mkIntPackAdapt(iData), "Data", 0));
+	if (eType == CUT_SetReady)
 		pComp->Value(mkNamingAdapt(mkIntPackAdapt(iData), "Data", 0));
 	C4ControlPacket::CompileFunc(pComp);
 }
@@ -1735,7 +1757,7 @@ void C4ControlVote::Execute() const
 		int32_t iPositive = 0, iNegative = 0, iVotes = 0;
 		// If there are no teams, count as if all were in the same team
 		// (which happens to be equivalent to "everyone is in his own team" here)
-		for (int32_t i = 0; i < Max<int32_t>(Game.Teams.GetTeamCount(), 1); i++)
+		for (int32_t i = 0; i < std::max<int32_t>(Game.Teams.GetTeamCount(), 1); i++)
 		{
 			C4Team *pTeam = Game.Teams.GetTeamByIndex(i);
 			// Votes for this team

@@ -34,7 +34,8 @@
 C4ClientCore::C4ClientCore()
 		: iID(-1),
 		fActivated(false),
-		fObserver(false)
+		fObserver(false),
+		fLobbyReady(false)
 {
 	Name.Ref(""); CUID.Ref(""); Nick.Ref("");
 }
@@ -90,7 +91,7 @@ int32_t C4ClientCore::getDiffLevel(const C4ClientCore &CCore2) const
 	if (iID != CCore2.getID() || Name != CCore2.getName())
 		return C4ClientCoreDL_IDChange;
 	// status change?
-	if (fActivated != CCore2.isActivated() || fObserver != CCore2.isObserver())
+	if (fActivated != CCore2.isActivated() || fObserver != CCore2.isObserver() || fLobbyReady != CCore2.isLobbyReady())
 		return C4ClientCoreDL_IDMatch;
 	// otherwise: identical
 	return C4ClientCoreDL_None;
@@ -103,6 +104,7 @@ void C4ClientCore::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(iID, "ID", C4ClientIDUnknown));
 	pComp->Value(mkNamingAdapt(fActivated, "Activated", false));
 	pComp->Value(mkNamingAdapt(fObserver, "Observer", false));
+	pComp->Value(mkNamingAdapt(fLobbyReady, "Ready", false));
 	pComp->Value(mkNamingAdapt(Name, "Name", ""));
 	pComp->Value(mkNamingAdapt(CUID, "CUID", ""));
 	pComp->Value(mkNamingAdapt(Nick, "Nick", ""));
@@ -112,12 +114,12 @@ void C4ClientCore::CompileFunc(StdCompiler *pComp)
 // *** C4Client
 
 C4Client::C4Client()
-		: pNetClient(NULL), fIsIgnored(false)
+		: fLocal(false), pNetClient(NULL), fIsIgnored(false), last_lobby_ready_change(0)
 {
 }
 
 C4Client::C4Client(const C4ClientCore &Core)
-		: Core(Core), fLocal(false), pNetClient(NULL), fIsIgnored(false), pNext(NULL)
+		: Core(Core), fLocal(false), pNetClient(NULL), fIsIgnored(false), pNext(NULL), last_lobby_ready_change(0)
 {
 
 }
@@ -134,6 +136,19 @@ void C4Client::SetActivated(bool fnActivated)
 	// activity
 	if (fnActivated && pNetClient)
 		pNetClient->SetLastActivity(Game.FrameCounter);
+}
+
+void C4Client::SetLobbyReady(bool fnLobbyReady, time_t *time_since_last_change)
+{
+	// Change state
+	Core.SetLobbyReady(fnLobbyReady);
+	// Keep track of times
+	if (time_since_last_change)
+	{
+		time_t now = time(NULL);
+		*time_since_last_change = now - last_lobby_ready_change;
+		last_lobby_ready_change = now;
+	}
 }
 
 void C4Client::SetLocal()

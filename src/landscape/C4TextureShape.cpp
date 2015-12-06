@@ -56,6 +56,7 @@ bool C4TextureShape::Load(C4Group &group, const char *filename, int32_t base_tex
 	shape_border_y.resize(255, false);
 	// Create shape data surface as downscaled version where equal pixel colors are assigned the same index
 	std::map<uint32_t, uint8_t> clr2shape;
+	std::vector<int32_t> first_px_pos_x(255), first_px_pos_y(255);
 	if (!data.Create(base_tex_wdt, base_tex_hgt)) return false;
 	for (int32_t y = 0; y < data.Hgt; ++y)
 	{
@@ -79,6 +80,8 @@ bool C4TextureShape::Load(C4Group &group, const char *filename, int32_t base_tex
 					px_data = num_shapes;
 					clr2shape[px] = num_shapes;
 					shape_pixnum.push_back(1);
+					first_px_pos_x[num_shapes] = x;
+					first_px_pos_y[num_shapes] = y;
 					++num_shapes;
 					if (num_shapes >= 255)
 					{
@@ -98,6 +101,17 @@ bool C4TextureShape::Load(C4Group &group, const char *filename, int32_t base_tex
 				if (!y || y == data.Hgt - 1) shape_border_y[px_data] = true;
 			}
 			data._SetPix(x, y, px_data);
+		}
+	}
+	// Show a summary about found shapes in this texture
+	if (Config.Developer.DebugShapeTextures)
+	{
+		LogF("Shape texture summary for %s (%d x %d downscaled to %d x %d):", filename, (int)png.iWdt, (int)png.iHgt, (int)base_tex_wdt, (int)base_tex_wdt);
+		for (auto iter : clr2shape)
+		{
+			unsigned int clr = iter.first;
+			int i = iter.second;
+			LogF("  Color 0x%08x: %d pixels. First seen pos: %d/%d", clr, int(shape_pixnum[i]), int(first_px_pos_x[i]), int(first_px_pos_y[i]));
 		}
 	}
 
@@ -167,10 +181,10 @@ void C4TextureShape::Draw(CSurface8 * sfcMap, CSurface8* sfcMapBkg, int32_t iMap
 	if (!num_shapes) return;
 	// Get affected range of shapes in pixels
 	// Add max polygon size because polygons may extent far onto outside pixels
-	int32_t x0 = Max<int32_t>(0, iMapX*MapZoom + iOffX - GetMaxPolyWidth()),
-		y0 = Max<int32_t>(0, iMapY*MapZoom + iOffY - GetMaxPolyHeight());
-	int32_t x1 = Min<int32_t>(::Landscape.Width, x0 + iMapWdt*MapZoom + GetMaxPolyWidth() * 2),
-		y1 = Min<int32_t>(::Landscape.Height, y0 + iMapHgt*MapZoom + GetMaxPolyHeight() * 2);
+	int32_t x0 = std::max<int32_t>(0, iMapX*MapZoom + iOffX - GetMaxPolyWidth()),
+		y0 = std::max<int32_t>(0, iMapY*MapZoom + iOffY - GetMaxPolyHeight());
+	int32_t x1 = std::min<int32_t>(::Landscape.Width, x0 + iMapWdt*MapZoom + GetMaxPolyWidth() * 2),
+		y1 = std::min<int32_t>(::Landscape.Height, y0 + iMapHgt*MapZoom + GetMaxPolyHeight() * 2);
 	// Range in shape blocks.
 	// A shape block is the coverage of the size of one loaded shape data surface
 	int32_t rblock_x0 = x0 / data.Wdt;
@@ -232,7 +246,7 @@ void C4TextureShape::Draw(CSurface8 * sfcMap, CSurface8* sfcMapBkg, int32_t iMap
 						// This may overwrite the previous pixBkg when multiple chunks are covered
 						// So effectively, it will always have the background of the bottom right map coverage
 						// Could manage priorities here and ensure the center determines the background
-						// - but it's just for the corner case of map designers switching background material within a single path.
+						// - but it's just for the corner case of map designers switching background material within a single patch.
 						activation.Add(block_x1, block_y1, shape_idx, 0, 0, pixBkg);
 						activation.Add(block_x2, block_y1, shape_idx, 1, 0, pixBkg);
 						activation.Add(block_x1, block_y2, shape_idx, 0, 1, pixBkg);

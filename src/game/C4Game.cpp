@@ -353,7 +353,7 @@ bool C4Game::Init()
 	// Must be done here, because InitGame calls PlayerInfos.InitLocal
 	if (!*PlayerFilenames)
 	{
-		SCopy(Config.General.Participants, PlayerFilenames, Min(sizeof(PlayerFilenames), sizeof(Config.General.Participants)) - 1);
+		SCopy(Config.General.Participants, PlayerFilenames, std::min(sizeof(PlayerFilenames), sizeof(Config.General.Participants)) - 1);
 	}
 
 	// Join a game?
@@ -893,7 +893,7 @@ void C4Game::ClearObjectPtrs(C4Object *pObj)
 		cObj->ClearPointers(pObj);
 	}
 	// check in inactive objects as well
-	for (C4Object *cObj : Objects)
+	for (C4Object *cObj : Objects.InactiveObjects)
 	{
 		cObj->ClearPointers(pObj);
 	}
@@ -1570,7 +1570,7 @@ void C4Game::DrawCrewOverheadText(C4TargetFacet &cgo, int32_t iPlayer)
 				// Word wrap to cgo width
 				int32_t iCharWdt, dummy;
 				::GraphicsResource.FontRegular.GetTextExtent("m", iCharWdt, dummy, false);
-				int32_t iMaxLine = Max<int32_t>(cgo.Wdt / iCharWdt, 20);
+				int32_t iMaxLine = std::max<int32_t>(cgo.Wdt / iCharWdt, 20);
 				SWordWrap(szText, ' ', '|', iMaxLine);
 				// Center text vertically, too
 				int textWidth, textHeight;
@@ -1665,6 +1665,8 @@ void C4Game::CompileFunc(StdCompiler *pComp, CompileSettings comp, C4ValueNumber
 		pComp->Value(mkNamingAdapt(NextMissionText,       "NextMissionText",       StdCopyStrBuf()));
 		pComp->Value(mkNamingAdapt(NextMissionDesc,       "NextMissionDesc",       StdCopyStrBuf()));
 		pComp->NameEnd();
+
+
 
 		// Music settings
 		pComp->Value(mkNamingAdapt(::Application.MusicSystem, "Music"));
@@ -2285,6 +2287,7 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 	// Denumerate game data pointers
 	if (!fLoadSection) ScriptEngine.Denumerate(numbers);
 	if (!fLoadSection && pGlobalEffects) pGlobalEffects->Denumerate(numbers);
+	if (!fLoadSection) GlobalSoundModifier.Denumerate(numbers);
 	numbers->Denumerate();
 	if (!fLoadSection) ScriptGuiRoot->Denumerate(numbers);
 	// Object.PostLoad must happen after number->Denumerate(), becuase UpdateFace() will access Action proplist,
@@ -3344,7 +3347,7 @@ void C4Game::InitRules()
 	int32_t cnt,cnt2;
 	C4ID idType; int32_t iCount;
 	for (cnt=0; (idType=Parameters.Rules.GetID(cnt,&iCount)); cnt++)
-		for (cnt2=0; cnt2<Max<int32_t>(iCount,1); cnt2++)
+		for (cnt2=0; cnt2<std::max<int32_t>(iCount,1); cnt2++)
 			CreateObject(idType,NULL);
 }
 
@@ -3555,7 +3558,7 @@ bool C4Game::ToggleDebugMode()
 {
 	// debug mode not allowed
 	if (!Parameters.AllowDebug && !DebugMode) { GraphicsSystem.FlashMessage(LoadResStr("IDS_MSG_DEBUGMODENOTALLOWED")); return false; }
-	Toggle(DebugMode);
+	DebugMode = !DebugMode;
 	if (!DebugMode) GraphicsSystem.DeactivateDebugOutput();
 	GraphicsSystem.FlashMessageOnOff(LoadResStr("IDS_CTL_DEBUGMODE"), DebugMode);
 	return true;

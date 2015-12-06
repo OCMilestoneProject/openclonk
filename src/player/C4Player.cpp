@@ -349,7 +349,7 @@ bool C4Player::Init(int32_t iNumber, int32_t iAtClient, const char *szAtClientNa
 	if (Game.pNetworkStatistics) CreateGraphs();
 
 	// init sound mod
-	SetSoundModifier(SoundModifier._getPropList());
+	SetSoundModifier(SoundModifier.getPropList());
 
 	return true;
 }
@@ -431,7 +431,7 @@ void C4Player::PlaceReadyCrew(int32_t tx1, int32_t tx2, int32_t ty, C4Object *Fi
 	for (cnt=0; (id=Game.C4S.PlrStart[PlrStartIndex].ReadyCrew.GetID(cnt,&iCount)); cnt++)
 	{
 		// Minimum one clonk if empty id
-		iCount = Max<int32_t>(iCount,1);
+		iCount = std::max<int32_t>(iCount,1);
 
 		for (int32_t cnt2=0; cnt2<iCount; cnt2++)
 		{
@@ -685,17 +685,24 @@ bool C4Player::SetWealth(int32_t iVal)
 	return true;
 }
 
-void C4Player::SetViewMode(int32_t iMode, C4Object *pTarget)
+void C4Player::SetViewMode(int32_t iMode, C4Object *pTarget, bool immediate_position)
 {
 	// safe back
 	ViewMode=iMode; ViewTarget=pTarget;
+	// immediate position set desired?
+	if (immediate_position)
+	{
+		UpdateView();
+		C4Viewport *vp = ::Viewports.GetViewport(this->Number);
+		if (vp) vp->AdjustPosition(true);
+	}
 }
 
-void C4Player::ResetCursorView()
+void C4Player::ResetCursorView(bool immediate_position)
 {
 	// reset view to cursor if any cursor exists
 	if (!ViewCursor && !Cursor) return;
-	SetViewMode(C4PVM_Cursor);
+	SetViewMode(C4PVM_Cursor, NULL, immediate_position);
 }
 
 void C4Player::Evaluate()
@@ -711,9 +718,9 @@ void C4Player::Evaluate()
 	LastRound.Duration = Game.Time;
 	LastRound.Won = !Eliminated;
 	// Melee: personal value gain score ...check ::Objects(C4D_Goal)
-	if (Game.C4S.Game.IsMelee()) LastRound.Score = Max<int32_t>(CurrentScore-InitialScore,0);
+	if (Game.C4S.Game.IsMelee()) LastRound.Score = std::max<int32_t>(CurrentScore-InitialScore,0);
 	// Cooperative: shared score
-	else LastRound.Score = Max(::Players.AverageScoreGain(),0);
+	else LastRound.Score = std::max(::Players.AverageScoreGain(),0);
 	LastRound.Level = 0; // unknown...
 	LastRound.Bonus = SuccessBonus * LastRound.Won;
 	LastRound.FinalScore = LastRound.Score + LastRound.Bonus;
@@ -1107,6 +1114,10 @@ void C4Player::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 	pComp->Value(mkNamingPtrAdapt( pMsgBoardQuery,  "MsgBoardQueries"        ));
 	pComp->Value(mkNamingAdapt(mkParAdapt(SoundModifier, numbers), "SoundModifier", C4Value()));
 	
+	if (pComp->isCompiler())
+	{
+		SoundModifier.Denumerate(numbers);
+	}
 
 	// Keys held down
 	pComp->Value(Control);
@@ -1413,7 +1424,7 @@ int igOffX, igOffY;
 int VisibilityCheck(int iVis, int sx, int sy, int cx, int cy)
 {
 	sx -= igOffX; sy -= igOffY; cx -= igOffX; cy -= igOffY;
-	int st = Max(1, Max(Abs(sx - cx), Abs(sy - cy)));
+	int st = std::max(1, std::max(Abs(sx - cx), Abs(sy - cy)));
 	for (int i = 0; i <= st; i++)
 	{
 		int x = (sx * (st - i) + cx * i) / st, y = (sy * (st - i) + cy * i) / st;

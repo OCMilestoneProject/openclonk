@@ -29,6 +29,7 @@
 #include <C4Game.h>
 #include <C4Network2.h>
 #include "C4GraphicsResource.h"
+#include "C4GameControl.h"
 
 namespace C4GameLobby
 {
@@ -196,11 +197,17 @@ namespace C4GameLobby
 		C4GUI::CallbackButton<MainDlg> *btnExit;
 		btnExit = new C4GUI::CallbackButton<MainDlg>(LoadResStr("IDS_DLG_EXIT"), caBottom.GetFromLeft(100), &MainDlg::OnExitBtn);
 		if (fHost)
+		{
 			btnRun = new C4GUI::CallbackButton<MainDlg>(LoadResStr("IDS_DLG_GAMEGO"), caBottom.GetFromRight(100), &MainDlg::OnRunBtn);
+			checkReady = NULL;
+		}
 		else
-			// 2do: Ready-checkbox
+		{
+			checkReady = new C4GUI::CheckBox(caBottom.GetFromRight(90), LoadResStr("IDS_DLG_READY"), false);
+			checkReady->SetOnChecked(new C4GUI::CallbackHandler<MainDlg>(this, &MainDlg::OnReadyCheck));
 			caBottom.GetFromRight(90);
-		pGameOptionButtons = new C4GameOptionButtons(caBottom.GetCentered(caBottom.GetInnerWidth(), Min<int32_t>(C4GUI_IconExHgt, caBottom.GetHeight())), true, fHost, true);
+		}
+		pGameOptionButtons = new C4GameOptionButtons(caBottom.GetCentered(caBottom.GetInnerWidth(), std::min<int32_t>(C4GUI_IconExHgt, caBottom.GetHeight())), true, fHost, true);
 
 		// players / resources sidebar
 		C4GUI::ComponentAligner caRight(caMain.GetFromRight(iClientListWdt), iIndentX3,iIndentY4);
@@ -269,7 +276,8 @@ namespace C4GameLobby
 		}
 		else
 		{
-			// 2do: Ready-checkbox
+			AddElement(checkReady);
+			checkReady->SetToolTip(LoadResStr("IDS_DLGTIP_READY"));
 		}
 		// set initial focus
 		SetFocus(pEdt, false);
@@ -293,6 +301,12 @@ namespace C4GameLobby
 	{
 		// abort dlg
 		Close(false);
+	}
+
+	void MainDlg::OnReadyCheck(C4GUI::Element *pCheckBox)
+	{
+		bool rIsOn = static_cast<C4GUI::CheckBox *>(pCheckBox)->GetChecked();
+		::Control.DoInput(CID_ClientUpdate, new C4ControlClientUpdate(::Game.Clients.getLocalID(), CUT_SetReady, rIsOn), CDT_Direct);
 	}
 
 	void MainDlg::SetCountdownState(CountdownState eToState, int32_t iTimer)
@@ -736,7 +750,7 @@ namespace C4GameLobby
 	void Countdown::OnSec1Timer()
 	{
 		// count down
-		iStartTimer = Max<int32_t>(iStartTimer - 1, 0);
+		iStartTimer = std::max<int32_t>(iStartTimer - 1, 0);
 		// only send "important" start timer numbers to all clients
 		if (iStartTimer <= AlmostStartCountdownTime || // last seconds
 		    (iStartTimer <= 600 && !(iStartTimer % 10)) || // last minute: 10s interval

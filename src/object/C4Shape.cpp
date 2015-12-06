@@ -35,19 +35,7 @@ bool C4Shape::AddVertex(int32_t iX, int32_t iY)
 
 void C4Shape::Default()
 {
-	ZeroMem(this,sizeof (C4Shape));
-	AttachMat=MNone;
-	ContactDensity=C4M_Solid;
-}
-
-C4Shape::C4Shape()
-{
-	Default();
-}
-
-void C4Shape::Clear()
-{
-	ZeroMem(this, sizeof (C4Shape));
+	InplaceReconstruct(this);
 }
 
 void C4Shape::Rotate(C4Real Angle, bool bUpdateVertices)
@@ -449,7 +437,7 @@ void C4Shape::CopyFrom(C4Shape rFrom, bool bCpyVertices, bool fCopyVerticesFromS
 	if (bCpyVertices)
 	{
 		// truncate / copy vertex count
-		VtxNum = (fCopyVerticesFromSelf ? Min<int32_t>(VtxNum, C4D_VertexCpyPos) : rFrom.VtxNum);
+		VtxNum = (fCopyVerticesFromSelf ? std::min<int32_t>(VtxNum, C4D_VertexCpyPos) : rFrom.VtxNum);
 		// restore vertices from back of own buffer (retaining count)
 		int32_t iCopyPos = (fCopyVerticesFromSelf ? C4D_VertexCpyPos : 0);
 		C4Shape &rVtxFrom = (fCopyVerticesFromSelf ? *this : rFrom);
@@ -522,7 +510,7 @@ int32_t C4Shape::GetVertexContact(int32_t iVtx, DWORD dwCheckMask, int32_t tx, i
 void C4Shape::CreateOwnOriginalCopy(C4Shape &rFrom)
 {
 	// copy vertices from original buffer, including count
-	VtxNum = Min<int32_t>(rFrom.VtxNum, C4D_VertexCpyPos);
+	VtxNum = std::min<int32_t>(rFrom.VtxNum, C4D_VertexCpyPos);
 	memcpy(VtxX+C4D_VertexCpyPos, rFrom.VtxX, VtxNum*sizeof(*VtxX));
 	memcpy(VtxY+C4D_VertexCpyPos, rFrom.VtxY, VtxNum*sizeof(*VtxY));
 	memcpy(VtxCNAT+C4D_VertexCpyPos, rFrom.VtxCNAT, VtxNum*sizeof(*VtxCNAT));

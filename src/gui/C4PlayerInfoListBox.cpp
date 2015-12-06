@@ -291,7 +291,7 @@ void C4PlayerInfoListBox::PlayerListItem::UpdateIcon(C4PlayerInfo *pInfo, C4Play
 		if (!pIcon->EnsureOwnSurface()) return;
 		// draw join info
 		C4Facet fctDraw = pIcon->GetFacet();
-		int32_t iSizeMax = Max<int32_t>(fctDraw.Wdt, fctDraw.Hgt);
+		int32_t iSizeMax = std::max<int32_t>(fctDraw.Wdt, fctDraw.Hgt);
 		int32_t iCrewClrHgt = iSizeMax/2;
 		fctDraw.Hgt -= iCrewClrHgt; fctDraw.Y += iCrewClrHgt;
 		fctDraw.Wdt = iSizeMax/2;
@@ -843,7 +843,17 @@ C4GUI::Icons C4PlayerInfoListBox::ClientListItem::GetCurrentStatusIcon()
 	// host?
 	if (GetClient()->isHost()) return C4GUI::Ico_Host;
 	// active client?
-	if (GetClient()->isActivated()) return C4GUI::Ico_Client;
+	if (GetClient()->isActivated())
+	{
+		if (GetClient()->isLobbyReady())
+		{
+			return C4GUI::Ico_Ready;
+		}
+		else
+		{
+			return C4GUI::Ico_Client;
+		}
+	}
 	// observer
 	return C4GUI::Ico_ObserverClient;
 }

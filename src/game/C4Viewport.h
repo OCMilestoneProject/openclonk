@@ -95,7 +95,7 @@ protected:
 	float Zoom;
 	float ZoomTarget;
 	float ZoomLimitMin,ZoomLimitMax;
-	bool ZoomInitialized;
+	int32_t ViewportOpenFrame; // Game FrameCounter in which viewport was opened. Used to init zoom during initial fullscreen viewport movement chaos, but not change it later e.g. when other local players join.
 	int32_t Player;
 	bool PlayerLock;
 	int32_t OutX,OutY;
@@ -110,8 +110,9 @@ protected:
 	void DrawPlayerInfo(C4TargetFacet &cgo);
 	void InitZoom();
 	void BlitOutput();
-	void AdjustPosition();
+	void AdjustZoomAndPosition();
 public:
+	void AdjustPosition(bool immediate = false);
 	C4ViewportWindow* GetWindow() {return pWindow;}
 	bool UpdateOutputSize();
 	bool ViewPositionByScrollBars();

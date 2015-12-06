@@ -621,6 +621,8 @@ public func ControlUseStart(object clonk, int x, int y)
 
 public func ControlDown(object clonk)
 {
+	if (!elevator) return true;
+	
 	if (IsSlave())
 		return Control2Master("ControlDown", clonk);
 	
@@ -634,6 +636,8 @@ public func ControlDown(object clonk)
 
 public func ControlUp(object clonk)
 {
+	if (!elevator) return true;
+	
 	if (IsSlave()) 
 		return Control2Master("ControlUp", clonk);
 	

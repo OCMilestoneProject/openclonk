@@ -14,8 +14,8 @@ protected func Initialize()
 	
 	// Goal: Capture the flag, with bases in both hideouts.
 	var goal = CreateObject(Goal_CaptureTheFlag, 0, 0, NO_OWNER);
-	goal->SetFlagBase(1, 120, 506);
-	goal->SetFlagBase(2, LandscapeWidth() - 120, 506);
+	goal->SetFlagBase(1, 120, 502);
+	goal->SetFlagBase(2, LandscapeWidth() - 120, 502);
 	
 	// Rules
 	CreateObject(Rule_Restart);
@@ -108,6 +108,44 @@ protected func OnPlayerRelaunch(int plr)
 	relaunch->StartRelaunch(clonk);
 	relaunch->SetRelaunchTime(8, true);
 	return;
+}
+
+// Game call from RelaunchContainer when a Clonk has left the respawn.
+public func OnClonkLeftRelaunch(object clonk)
+{
+	// Randomize the Clonk's position a bit.
+	var x = clonk->GetX();
+	var y = clonk->GetY();
+	clonk->SetPosition(x + RandomX(-20, 20), y + RandomX(-20, 10));
+	if (clonk->Stuck()) clonk->SetPosition(x, y);
+	
+	// Some small spark-like particles that just fly around.
+	var sparks =
+	{
+		Prototype = Particles_Glimmer(),
+		Size = PV_Random(0, 1),
+		R = 200, G = 0, B = 200,
+		ForceX = PV_Random(-5, 5, 10),
+		ForceY = PV_Random(-5, 5, 10),
+		Attach = ATTACH_Front
+	};
+	
+	if (GetPlayerTeam(clonk->GetOwner()) == 1)
+	{
+		sparks.R = 255;
+		sparks.B = 0;
+	}
+	clonk->CreateParticle("Flash", 0, 0, PV_Random(-20, 20), PV_Random(-20, 20), PV_Random(10, 400), sparks, 100);
+	
+	// And a larger flash as if the Clonk had just been teleported there.
+	var flash =
+	{
+		Prototype = Particles_Flash(),
+		Size = 10,
+		Stretch = PV_Linear(40000, 0),
+		R = sparks.R, G = sparks.G, B = sparks.B
+	};
+	clonk->CreateParticle("StarSpark", 0, 0, 0, 0, 10, flash, 1);
 }
 
 func RelaunchWeaponList() { return [Bow, Shield, Sword, Javelin, Shovel, Firestone, Dynamite, Loam]; }

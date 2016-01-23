@@ -1,0 +1,32 @@
+commit e0f020ce9cbfa2195b113c030677393eaa92974c
+Author: Armin Schäfer <arminnessie@gmail.com>
+Date:   Tue Jan 19 21:46:58 2016 +0100
+
+    Fix AppendCommand(Jump) without target.
+
+diff --git a/src/object/C4Command.cpp b/src/object/C4Command.cpp
+index 1ffac95..f3a9d37 100644
+--- a/src/object/C4Command.cpp
++++ b/src/object/C4Command.cpp
+@@ -895,12 +895,16 @@ void C4Command::Drop()
+ 
+ void C4Command::Jump()
+ {
+-	// Already in air and target position given
+-	if (cObj->GetProcedure()==DFA_FLIGHT && Tx._getInt())
++	// Already in air?
++	if (cObj->GetProcedure()==DFA_FLIGHT)
+ 	{
+-		if (cObj->GetX()<Tx._getInt()) cObj->Action.ComDir=COMD_Right;
+-		else if (cObj->GetX()>Tx._getInt()) cObj->Action.ComDir=COMD_Left;
+-		else cObj->Action.ComDir=COMD_Stop;
++		// Check whether target position is given
++		if (Tx._getInt())
++		{
++			if (cObj->GetX()<Tx._getInt()) cObj->Action.ComDir=COMD_Right;
++			else if (cObj->GetX()>Tx._getInt()) cObj->Action.ComDir=COMD_Left;
++			else cObj->Action.ComDir=COMD_Stop;
++		}
+ 	}
+ 	else
+ 	{

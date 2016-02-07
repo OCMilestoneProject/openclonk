@@ -480,13 +480,7 @@ private func Death()
 	
 	this.MeshTransformation = Trans_Rotate(Random(360), 0, 1, 0);
 	
-	AddTimer(this.Decaying, 500);
-}
-
-private func Decaying()
-{
-	if (GetCon()<20) RemoveObject(); else DoCon(-5);
-	return true;
+	Decay();
 }
 
 local ActMap = {

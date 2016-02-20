@@ -10,4 +10,4 @@ Crew=Clonk=1
 
 [Landscape]
 NoScan=1
-MapZoom=15
+MapZoom=12

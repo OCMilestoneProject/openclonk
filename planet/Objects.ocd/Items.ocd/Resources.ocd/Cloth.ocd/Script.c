@@ -12,7 +12,7 @@ public func GetCarryTransform(clonk)
 
 private func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 }
 
 public func IsLoomProduct() { return true; }
@@ -25,5 +25,4 @@ private func Definition(def)
 local Name = "$Name$";
 local Description = "$Description$";
 local Collectible = 1;
-local Rebuy = true;
 local Plane = 470;

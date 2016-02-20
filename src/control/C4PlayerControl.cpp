@@ -734,6 +734,21 @@ void C4PlayerControlAssignmentSets::CompileFunc(StdCompiler *pComp)
 	}
 	pComp->Value(mkNamingAdapt(clear_previous, "ClearPrevious", false));
 	pComp->Value(mkSTLContainerAdapt(Sets, StdCompiler::SEP_NONE));
+
+	// Remove all sets that have gamepad controls, since gamepad
+	// support is broken at the moment. Disable this once we have gamepad
+	// support again!
+	if (pComp->isCompiler())
+	{
+		AssignmentSetList::iterator iter = Sets.begin();
+		for (AssignmentSetList::iterator iter = Sets.begin(); iter != Sets.end(); )
+		{
+			if (iter->HasGamepad())
+				iter = Sets.erase(iter);
+			else
+				++iter;
+		}
+	}
 }
 
 bool C4PlayerControlAssignmentSets::operator ==(const C4PlayerControlAssignmentSets &cmp) const
@@ -1222,7 +1237,7 @@ bool C4PlayerControl::ExecuteControlAction(int32_t iControl, C4PlayerControlDef:
 	case C4PlayerControlDef::CDA_MenuLeft:   if (!pPlr || !pPlr->Menu.IsActive() || fUp) return false; pPlr->Menu.Control(COM_MenuLeft ,0); return true; // navigate
 	case C4PlayerControlDef::CDA_MenuUp:     if (!pPlr || !pPlr->Menu.IsActive() || fUp) return false; pPlr->Menu.Control(COM_MenuUp   ,0); return true; // navigate
 	case C4PlayerControlDef::CDA_MenuRight:  if (!pPlr || !pPlr->Menu.IsActive() || fUp) return false; pPlr->Menu.Control(COM_MenuRight,0); return true; // navigate
-	case C4PlayerControlDef::CDA_MenuDown:  if (!pPlr || !pPlr->Menu.IsActive() || fUp) return false; pPlr->Menu.Control(COM_MenuRight,0); return true; // navigate
+	case C4PlayerControlDef::CDA_MenuDown:  if (!pPlr || !pPlr->Menu.IsActive() || fUp) return false; pPlr->Menu.Control(COM_MenuDown,0); return true; // navigate
 	case C4PlayerControlDef::CDA_ObjectMenuTextComplete:   if (!pCursorMenu || fUp || !pCursorMenu->IsTextProgressing()) return false; pCursorMenu->Control(COM_MenuShowText,0); return true; // fast-foward text display
 	case C4PlayerControlDef::CDA_ObjectMenuOK:     if (!pCursorMenu || fUp) return false; pCursorMenu->Control(COM_MenuEnter,0); return true; // ok on item
 	case C4PlayerControlDef::CDA_ObjectMenuOKAll:  if (!pCursorMenu || fUp) return false; pCursorMenu->Control(COM_MenuEnterAll,0); return true; // alt ok on item
@@ -1267,8 +1282,10 @@ bool C4PlayerControl::ExecuteControlScript(int32_t iControl, C4ID idControlExtra
 	{
 		x = rKeyExtraData.game_x; y = rKeyExtraData.game_y;
 	}
+	C4Value vx = (x == C4KeyEventData::KeyPos_None) ? C4VNull : C4VInt(x);
+	C4Value vy = (y == C4KeyEventData::KeyPos_None) ? C4VNull : C4VInt(y);
 	// exec control function
-	C4AulParSet Pars(C4VInt(iPlr), C4VInt(iControl), C4VPropList(C4Id2Def(idControlExtraData)), C4VInt(x), C4VInt(y), C4VInt(rKeyExtraData.iStrength), C4VBool(fRepeated), C4VBool(fUp));
+	C4AulParSet Pars(iPlr, iControl, C4Id2Def(idControlExtraData), vx, vy, rKeyExtraData.iStrength, fRepeated, fUp);
 	return ::ScriptEngine.GetPropList()->Call(PSF_PlayerControl, &Pars).getBool();
 }
 

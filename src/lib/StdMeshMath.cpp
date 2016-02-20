@@ -59,6 +59,12 @@ StdMeshVector StdMeshVector::Cross(const StdMeshVector& lhs, const StdMeshVector
 	return v;
 }
 
+void StdMeshVector::Normalize()
+{
+	const float len = sqrt(x*x + y*y + z*z);
+	x /= len; y /= len; z /= len;
+}
+
 StdMeshQuaternion StdMeshQuaternion::Zero()
 {
 	StdMeshQuaternion q;
@@ -337,10 +343,106 @@ StdMeshMatrix StdMeshMatrix::TransformInverse(const StdMeshTransformation& trans
 	return m;
 }
 
+StdMeshMatrix StdMeshMatrix::LookAt(const StdMeshVector& eye, const StdMeshVector& center, const StdMeshVector& up)
+{
+	// See http://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
+	StdMeshVector z = eye - center;
+	z.Normalize();
+
+	StdMeshVector x = StdMeshVector::Cross(up, z);
+	x.Normalize();
+
+	StdMeshVector y = StdMeshVector::Cross(z, x);
+
+	StdMeshMatrix m;
+	m.a[0][0] = x.x; m.a[0][1] = x.y; m.a[0][2] = x.z; m.a[0][3] = -x.x*eye.x - x.y*eye.y - x.z*eye.z;
+	m.a[1][0] = y.x; m.a[1][1] = y.y; m.a[1][2] = y.z; m.a[1][3] = -y.x*eye.x - y.y*eye.y - y.z*eye.z;
+	m.a[2][0] = z.x; m.a[2][1] = z.y; m.a[2][2] = z.z; m.a[2][3] = -z.x*eye.x - z.y*eye.y - z.z*eye.z;
+	return m;
+}
+
 float StdMeshMatrix::Determinant() const
 {
 	return a[0][0]*a[1][1]*a[2][2] + a[0][1]*a[1][2]*a[2][0] + a[0][2]*a[1][0]*a[2][1]
 	       - a[0][0]*a[1][2]*a[2][1] - a[0][1]*a[1][0]*a[2][2] - a[0][2]*a[1][1]*a[2][0];
+}
+
+StdProjectionMatrix StdProjectionMatrix::Identity()
+{
+	StdProjectionMatrix m;
+	m.a[0][0] = 1.0f; m.a[0][1] = 0.0f; m.a[0][2] = 0.0f; m.a[0][3] = 0.0f;
+	m.a[1][0] = 0.0f; m.a[1][1] = 1.0f; m.a[1][2] = 0.0f; m.a[1][3] = 0.0f;
+	m.a[2][0] = 0.0f; m.a[2][1] = 0.0f; m.a[2][2] = 1.0f; m.a[2][3] = 0.0f;
+	m.a[3][0] = 0.0f; m.a[3][1] = 0.0f; m.a[3][2] = 0.0f; m.a[3][3] = 1.0f;
+	return m;
+}
+
+StdProjectionMatrix StdProjectionMatrix::Translate(float dx, float dy, float dz)
+{
+	StdProjectionMatrix m;
+	m.a[0][0] = 1.0f; m.a[0][1] = 0.0f; m.a[0][2] = 0.0f; m.a[0][3] = dx;
+	m.a[1][0] = 0.0f; m.a[1][1] = 1.0f; m.a[1][2] = 0.0f; m.a[1][3] = dy;
+	m.a[2][0] = 0.0f; m.a[2][1] = 0.0f; m.a[2][2] = 1.0f; m.a[2][3] = dz;
+	m.a[3][0] = 0.0f; m.a[3][1] = 0.0f; m.a[3][2] = 0.0f; m.a[3][3] = 1.0f;
+	return m;
+}
+
+StdProjectionMatrix StdProjectionMatrix::Scale(float sx, float sy, float sz)
+{
+	StdProjectionMatrix m;
+	m.a[0][0] = sx;   m.a[0][1] = 0.0f; m.a[0][2] = 0.0f; m.a[0][3] = 0.0f;
+	m.a[1][0] = 0.0f; m.a[1][1] = sy;   m.a[1][2] = 0.0f; m.a[1][3] = 0.0f;
+	m.a[2][0] = 0.0f; m.a[2][1] = 0.0f; m.a[2][2] = sz;   m.a[2][3] = 0.0f;
+	m.a[3][0] = 0.0f; m.a[3][1] = 0.0f; m.a[3][2] = 0.0f; m.a[3][3] = 1.0f;
+	return m;
+}
+
+StdProjectionMatrix StdProjectionMatrix::Rotate(float angle, float rx, float ry, float rz)
+{
+	StdProjectionMatrix m;
+
+	// We do normalize the rx,ry,rz vector here: This is only required for
+	// precalculations anyway, thus not time-critical.
+	float abs = sqrt(rx*rx+ry*ry+rz*rz);
+	rx/=abs; ry/=abs; rz/=abs;
+	float c = cos(angle), s = sin(angle);
+
+	m.a[0][0] = rx*rx*(1-c)+c;    m.a[0][1] = rx*ry*(1-c)-rz*s; m.a[0][2] = rx*rz*(1-c)+ry*s; m.a[0][3] = 0.0f;
+	m.a[1][0] = ry*rx*(1-c)+rz*s; m.a[1][1] = ry*ry*(1-c)+c;    m.a[1][2] = ry*rz*(1-c)-rx*s; m.a[1][3] = 0.0f;
+	m.a[2][0] = rz*rx*(1-c)-ry*s; m.a[2][1] = ry*rz*(1-c)+rx*s; m.a[2][2] = rz*rz*(1-c)+c;    m.a[2][3] = 0.0f;
+	m.a[3][0] = 0.0f; m.a[3][1] = 0.0f; m.a[3][2] = 0.0f; m.a[3][3] = 1.0f;
+	return m;
+}
+
+StdProjectionMatrix StdProjectionMatrix::Orthographic(float left, float right, float bottom, float top)
+{
+	StdProjectionMatrix matrix;
+	matrix(0,0) = 2.0f / (right - left);
+	matrix(0,1) = 0.0f;
+	matrix(0,2) = 0.0f;
+	matrix(0,3) = -(right + left) / (right - left);
+	matrix(1,0) = 0.0f;
+	matrix(1,1) = 2.0f / (top - bottom);
+	matrix(1,2) = 0.0f;
+	matrix(1,3) = -(top + bottom) / (top - bottom);
+	matrix(2,0) = 0.0f;
+	matrix(2,1) = 0.0f;
+	matrix(2,2) = -1.0f;
+	matrix(2,3) = 0.0f;
+	matrix(3,0) = 0.0f;
+	matrix(3,1) = 0.0f;
+	matrix(3,2) = 0.0f;
+	matrix(3,3) = 1.0f;
+	return matrix;
+}
+
+StdMeshMatrix StdProjectionMatrix::Upper3x4(const StdProjectionMatrix& matrix)
+{
+	StdMeshMatrix m;
+	m(0, 0) = matrix.a[0][0]; m(0, 1) = matrix.a[0][1]; m(0, 2) = matrix.a[0][2]; m(0, 3) = matrix.a[0][3];
+	m(1, 0) = matrix.a[1][0]; m(1, 1) = matrix.a[1][1]; m(1, 2) = matrix.a[1][2]; m(1, 3) = matrix.a[1][3];
+	m(2, 0) = matrix.a[2][0]; m(2, 1) = matrix.a[2][1]; m(2, 2) = matrix.a[2][2]; m(2, 3) = matrix.a[2][3];
+	return m;
 }
 
 StdMeshTransformation StdMeshMatrix::Decompose() const
@@ -449,6 +551,39 @@ StdMeshMatrix operator+(const StdMeshMatrix& lhs, const StdMeshMatrix& rhs)
 	return m;
 }
 
+StdProjectionMatrix operator*(const StdProjectionMatrix& lhs, const StdProjectionMatrix& rhs)
+{
+	StdProjectionMatrix m;
+
+	m(0,0) = lhs(0,0)*rhs(0,0) + lhs(0,1)*rhs(1,0) + lhs(0,2)*rhs(2,0) + lhs(0,3)*rhs(3,0);
+	m(1,0) = lhs(1,0)*rhs(0,0) + lhs(1,1)*rhs(1,0) + lhs(1,2)*rhs(2,0) + lhs(1,3)*rhs(3,0);
+	m(2,0) = lhs(2,0)*rhs(0,0) + lhs(2,1)*rhs(1,0) + lhs(2,2)*rhs(2,0) + lhs(2,3)*rhs(3,0);
+	m(3,0) = lhs(3,0)*rhs(0,0) + lhs(3,1)*rhs(1,0) + lhs(3,2)*rhs(2,0) + lhs(3,3)*rhs(3,0);
+
+	m(0,1) = lhs(0,0)*rhs(0,1) + lhs(0,1)*rhs(1,1) + lhs(0,2)*rhs(2,1) + lhs(0,3)*rhs(3,1);
+	m(1,1) = lhs(1,0)*rhs(0,1) + lhs(1,1)*rhs(1,1) + lhs(1,2)*rhs(2,1) + lhs(1,3)*rhs(3,1);
+	m(2,1) = lhs(2,0)*rhs(0,1) + lhs(2,1)*rhs(1,1) + lhs(2,2)*rhs(2,1) + lhs(2,3)*rhs(3,1);
+	m(3,1) = lhs(3,0)*rhs(0,1) + lhs(3,1)*rhs(1,1) + lhs(3,2)*rhs(2,1) + lhs(3,3)*rhs(3,1);
+
+	m(0,2) = lhs(0,0)*rhs(0,2) + lhs(0,1)*rhs(1,2) + lhs(0,2)*rhs(2,2) + lhs(0,3)*rhs(3,2);
+	m(1,2) = lhs(1,0)*rhs(0,2) + lhs(1,1)*rhs(1,2) + lhs(1,2)*rhs(2,2) + lhs(1,3)*rhs(3,2);
+	m(2,2) = lhs(2,0)*rhs(0,2) + lhs(2,1)*rhs(1,2) + lhs(2,2)*rhs(2,2) + lhs(2,3)*rhs(3,2);
+	m(3,2) = lhs(3,0)*rhs(0,2) + lhs(3,1)*rhs(1,2) + lhs(3,2)*rhs(2,2) + lhs(3,3)*rhs(3,2);
+
+	m(0,3) = lhs(0,0)*rhs(0,3) + lhs(0,1)*rhs(1,3) + lhs(0,2)*rhs(2,3) + lhs(0,3)*rhs(3,3);
+	m(1,3) = lhs(1,0)*rhs(0,3) + lhs(1,1)*rhs(1,3) + lhs(1,2)*rhs(2,3) + lhs(1,3)*rhs(3,3);
+	m(2,3) = lhs(2,0)*rhs(0,3) + lhs(2,1)*rhs(1,3) + lhs(2,2)*rhs(2,3) + lhs(2,3)*rhs(3,3);
+	m(3,3) = lhs(3,0)*rhs(0,3) + lhs(3,1)*rhs(1,3) + lhs(3,2)*rhs(2,3) + lhs(3,3)*rhs(3,3);
+
+	return m;
+}
+
+StdProjectionMatrix& operator*=(StdProjectionMatrix& lhs, const StdProjectionMatrix& rhs)
+{
+	lhs = lhs * rhs;
+	return lhs;
+}
+
 StdMeshQuaternion operator-(const StdMeshQuaternion& rhs)
 {
 	StdMeshQuaternion q;
@@ -546,6 +681,21 @@ StdMeshVector operator+(const StdMeshVector& lhs, const StdMeshVector& rhs)
 {
 	StdMeshVector v(lhs);
 	v += rhs;
+	return v;
+}
+
+StdMeshVector& operator-=(StdMeshVector& lhs, const StdMeshVector& rhs)
+{
+	lhs.x -= rhs.x;
+	lhs.y -= rhs.y;
+	lhs.z -= rhs.z;
+	return lhs;
+}
+
+StdMeshVector operator-(const StdMeshVector& lhs, const StdMeshVector& rhs)
+{
+	StdMeshVector v(lhs);
+	v -= rhs;
 	return v;
 }
 

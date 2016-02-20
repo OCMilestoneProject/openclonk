@@ -83,6 +83,7 @@ public:
 
 	// saved as a reference to a global constant?
 	virtual class C4PropListStatic * IsStatic() { return NULL; }
+	const class C4PropListStatic * IsStatic() const { return const_cast<C4PropList*>(this)->IsStatic(); }
 	// saved as a reference to separately saved objects?
 	virtual bool IsNumbered() const { return false; }
 	// some proplists have references that are not reference-counted
@@ -112,7 +113,6 @@ public:
 	C4Value Call(const char * k, C4AulParSet *pPars=0, bool fPassErrors=false);
 	C4PropertyName GetPropertyP(C4PropertyName k) const;
 	int32_t GetPropertyInt(C4PropertyName k, int32_t default_val = 0) const;
-	bool GetPropertyBoolByS(C4String * k, bool default_val = false) const;
 	C4PropList *GetPropertyPropList(C4PropertyName k) const;
 	bool HasProperty(C4String * k) const { return Properties.Has(k); }
 	// not allowed on frozen proplists

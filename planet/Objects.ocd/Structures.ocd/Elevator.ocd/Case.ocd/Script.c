@@ -48,6 +48,33 @@ public func CallCase(object clonk)
 	MoveTo(nil, nil, clonk, true);
 }
 
+// Called when an interaction is highlighted.
+public func DrawCustomInteractionSelector(object dummy, object clonk, int interaction_index, extra_data)
+{
+	if (extra_data && extra_data.Fn == "CallCase")
+	{
+		var max_y = clonk->GetY() - GetY();
+		// Relocate the dummy to the Clonk.
+		dummy->SetVertex(0, VTX_Y, -max_y);
+		
+		// And draw some particles upwards.
+		var particles =
+		{
+			Prototype = Particles_Trajectory(),
+			Size = PV_Sin(PV_Step(5, PV_Random(90)), 2, 3),
+		};
+		particles = Particles_Colored(particles, GetPlayerColor(clonk->GetOwner()));
+		
+		var dir = 1;
+		if (max_y < 0) dir = -1;
+		max_y = Abs(max_y);
+		for (var y = 0; y < max_y; y += 5)
+			dummy->CreateParticle("SphereSpark", 0, -y * dir + 10, 0, 0, 0, particles, 1);
+		return true;
+	}
+	return false;
+}
+
 /*-- Callbacks --*/
 
 // Case is not a structure, but uses the library.
@@ -149,7 +176,7 @@ public func ExecuteSync()
 		SetSolidMask(0, 3, 48, 3, -24, 23);
 	partner->SetSolidMask(0, 0, 0, 0, 0, 0);
 
-	Sound("Click");
+	Sound("UI::Click");
 }
 
 // sets additional vertices to partner's position
@@ -339,7 +366,7 @@ private func FxFetchVehiclesTimer(object target, proplist effect, int time)
 		}
 		vehicle->SetPosition(x, GetY() + GetBottom() - 3 - vehicle->GetBottom());
 		AddEffect("ElevatorControl", vehicle, 30, 5, vehicle, nil, this);
-		Sound("Connect");
+		Sound("Objects::Connect");
 	}
 
 	return FX_OK;
@@ -614,7 +641,7 @@ public func ControlUseStart(object clonk, int x, int y)
 	if (IsSlave()) 
 		return Control2Master("ControlUseStart", clonk, x, y);
 	MoveTo(GetY() + y, 0, nil, true);
-	Sound("Click", nil, nil, clonk->GetOwner());
+	Sound("UI::Click", nil, nil, clonk->GetOwner());
 	// Do not trigger a UseStop-callback.
 	return false;
 }
@@ -644,7 +671,7 @@ public func ControlUp(object clonk)
 	// what is that player even doing
 	if (GetY() <= elevator->GetY() + 20)
 	{
-		Sound("Click", nil, nil, clonk->GetOwner());
+		Sound("UI::Click", nil, nil, clonk->GetOwner());
 		return true;
 	}
 	
@@ -738,7 +765,7 @@ local ActMap = {
 		Length = 1,
 		PhaseCall = "Drilling",
 		NextAction = "Drill",
-		Sound = "ElevatorDrilling",
+		Sound = "Structures::Elevator::Drilling",
 		DigFree = 1
 	}
 };
@@ -748,3 +775,5 @@ local Description = "$Description$";
 local Touchable = 2;
 local HitPoints = 50;
 local Plane = 250;
+local BorderBound = C4D_Border_Top | C4D_Border_Bottom;
+local ContactCalls = true;

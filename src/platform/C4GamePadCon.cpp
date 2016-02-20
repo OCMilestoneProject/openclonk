@@ -173,7 +173,7 @@ void C4GamePadOpener::SetGamePad(int iNewGamePad)
 	C4GamePadControl::pInstance->OpenGamepad(iGamePad = iNewGamePad);
 }
 
-#elif defined(HAVE_SDL)
+#elif defined(HAVE_SDL) && !defined(USE_CONSOLE)
 
 #include <SDL.h>
 
@@ -184,16 +184,16 @@ bool C4GamePadControl::AnyButtonDown()
 
 C4GamePadControl::C4GamePadControl()
 {
-	// Initialize SDL, if necessary.
-	if (!SDL_WasInit(SDL_INIT_JOYSTICK)
-	    && SDL_Init(SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE))
-		LogF("SDL: %s", SDL_GetError());
+	// FIXME: Port to SDL_INIT_GAMECONTROLLER
+	if (SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_EVENTS) != 0)
+		LogF("SDL_InitSubSystem(SDL_INIT_JOYSTICK): %s", SDL_GetError());
 	SDL_JoystickEventState(SDL_ENABLE);
 	if (!SDL_NumJoysticks()) Log("No Gamepad found");
 }
 
 C4GamePadControl::~C4GamePadControl()
 {
+	SDL_QuitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_EVENTS);
 }
 
 void C4GamePadControl::Execute(bool)

@@ -71,7 +71,7 @@ private func GetAttraction(proplist coordinates)
 {
 	// GetAttraction will only be called for the swarm master, perfect to have just one being make sound
 	if(!Random(30))
-		Sound("MosquitoBuzz", nil,nil,nil,nil, 200);
+		Sound("Animals::MosquitoBuzz", nil,nil,nil,nil, 200);
 
 	if (!lovely_place) lovely_place = CreateArray(3);
 	if (!lovely_place[1])
@@ -250,3 +250,5 @@ local MaxEnergy = 20000;
 local MaxBreath = 250;
 local Placement = 2;
 local NoBurnDecay = 1;
+local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
+local ContactCalls = true;

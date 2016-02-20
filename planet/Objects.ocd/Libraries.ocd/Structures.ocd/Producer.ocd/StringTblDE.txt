@@ -1,5 +1,5 @@
 Production=Produktion
+Producing=Produziert
 QueueRemove=Eins weniger produzieren.
-infinite=immer
 InfiniteProduction=Endlosproduktion
 Click=Klick

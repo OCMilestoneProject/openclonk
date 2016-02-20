@@ -1,0 +1,29 @@
+# Dialogue: homeless
+DlgHomelessFood=Hast du etwas zu essen für einen armen Mann?
+DlgHomelessNo=Nein, ich habe nichts dabei.
+DlgHomelessShame=Schade.
+DlgHomelessYes=Ja, hier ist etwas %s.
+DlgHomelessReward=Vielen Dank! Ich habe diese alte Keule hier, vielleicht hilft sie dir gegen die Räuber.
+
+# Dialogue: village head
+DlgVillageHeadHowToAttack=Wie soll ich denn alleine gegen die Räuber kämpfen?
+DlgVillageHeadNoIdea=Vom Kämpfen habe ich leider keine Ahnung. Ich kann dir diese Axt hier geben, aber eine gute Waffe ist das nicht.
+DlgVillageHeadThanks=Na gut, danke trotzdem. Ich versuche mein Bestes.
+DlgVillageHeadGoodLuck=Viel Glück! Sag Bescheid, wenn die Höhle sicher ist.
+
+# Sequence: intro
+MsgVillageHeadAnnoyed=Die dunkle Fraktion ist zu weit gegangen. Wir müssen zurückschlagen.
+MsgClonkHowToStrike=Wie sollen wir zurückschlagen? Das sind so viele und die sind bis an die Zähne bewaffnet.
+MsgVillageHeadOrganize=Wir müssen uns mit anderen Dörfern zusammenschließen. Deshalb sind wir jetzt unterwegs zu einem.
+MsgClonkPoorGuy=Schau dir diesen armen Kerl an. Seine Hütte ist abgebrannt. Was ist passiert?
+MsgHomelessRobbers=Räuber haben mir alles genommen und mein Haus in Brand gesetzt.
+MsgClonkWhere=Wie schrecklich. Weißt du, wo die Räuber jetzt sind?
+MsgHomelessLocation=Die verstecken sich in der Höhle, wo sonst auch.
+MsgVillageHeadTeachThem=Nun, %s hier wird denen eine Lektion erteilen.
+MsgHomelessHappy=Das wäre toll.
+
+# Sequence: outro
+MsgClonkSafe=%s, es ist jetzt sicher hier unten!
+MsgVillageHeadComing=Gut, ich bin auf dem Weg.
+MsgVillageHeadTakeElevator=Lass uns mit dem Fahrstuhl zur Oberfläche fahren.
+MsgVillageHeadPassedCave=Dank dir sind wir sicher durch diese Höhle gekommen und können nun sicher zum nächsten Dorf gelangen!

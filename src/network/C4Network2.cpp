@@ -1024,7 +1024,7 @@ bool C4Network2::InitNetIO(bool fNoClientID, bool fHost)
 	int16_t iPortDiscovery = fHost ? Config.Network.PortDiscovery : -1;
 	int16_t iPortRefServer = fHost ? Config.Network.PortRefServer : -1;
 	// init subclass
-	if (!NetIO.Init(Config.Network.PortTCP, Config.Network.PortUDP, iPortDiscovery, iPortRefServer, fHost))
+	if (!NetIO.Init(Config.Network.PortTCP, Config.Network.PortUDP, iPortDiscovery, iPortRefServer, fHost, Config.Network.EnableUPnP))
 		return false;
 	// set core (unset ID if sepecified, has to be set later)
 	C4ClientCore Core = Game.Clients.getLocalCore();
@@ -1975,11 +1975,6 @@ bool C4Network2::LeagueStart(bool *pCancel)
 		// Failed
 		return false;
 	}
-
-	// We have an internet connection, so let's punch the master server here in order to open an udp port
-	C4NetIO::addr_t PuncherAddr;
-	if (ResolveAddress(Config.Network.PuncherAddress, &PuncherAddr, C4NetStdPortPuncher))
-		NetIO.Punch(PuncherAddr);
 
 	// Let's wait for response
 	StdStrBuf Message = FormatString(LoadResStr("IDS_NET_LEAGUE_REGGAME"), pLeagueClient->getServerName());

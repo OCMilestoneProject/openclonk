@@ -79,6 +79,39 @@ public func IsStructureWithoutBasement()
 }
 
 
+/*-- SolidMask --*/
+
+// Move objects out of the solid mask of a structure: it assumes the structure's shape is fully covered by it solid mask (e.g. basement, bridge).
+private func MoveOutOfSolidMask()
+{
+	// Find all objects inside the basement which are stuck.
+	var wdt = GetObjWidth();
+	var hgt = GetObjHeight();
+	var lying_around = FindObjects(Find_Or(Find_Category(C4D_Vehicle), Find_Category(C4D_Object), Find_Category(C4D_Living)), Find_AtRect(-wdt / 2, -hgt / 2, wdt, hgt), Find_NoContainer());
+	// Move up these objects.
+	for (var obj in lying_around)
+	{
+		var x = obj->GetX();
+		var y = obj->GetY();
+		var delta_y = 0;
+		var max_delta = obj->GetObjHeight() + hgt;
+		// Move up object until it is not stuck any more.
+		while (obj->Stuck() || obj->GetContact(-1, CNAT_Bottom))
+		{
+			// Only move up the object by at most its height plus the basements height.
+			if (delta_y > max_delta)
+			{
+				obj->SetPosition(x, y);
+				break;
+			}
+			delta_y++;
+			obj->SetPosition(x, y - delta_y);
+		}
+	}
+	return;
+}
+
+
 /*-- Value --*/
 
 public func CalcDefValue()
@@ -196,6 +229,12 @@ public func GetRepairMaterials()
 // Always show an interaction menu with at least the damage entry.
 public func HasInteractionMenu() { return true; }
 
+public func RejectInteractionMenu(object clonk)
+{
+	if (GetCon() < 100) return Format("$MsgNotFullyConstructed$", GetName());
+	return _inherited(clonk, ...);
+}
+
 // Show damage and allow a player to repair the building when damaged.
 public func GetInteractionMenus(object clonk)
 {
@@ -276,7 +315,7 @@ public func OnRepairSelected(id symbol, string action, object cursor)
 	if (!hammer)
 	{
 		PlayerMessage(cursor->GetOwner(), "$YouNeedAHammer$");
-		Sound("Click2", nil, nil, cursor->GetOwner());
+		Sound("UI::Click2", nil, nil, cursor->GetOwner());
 		return;
 	}
 	
@@ -301,7 +340,7 @@ public func OnRepairSelected(id symbol, string action, object cursor)
 	if (total_repair_value == 0)
 	{
 		PlayerMessage(cursor->GetOwner(), "$YouNeedMaterials$");
-		Sound("Click2", nil, nil, cursor->GetOwner());
+		Sound("UI::Click2", nil, nil, cursor->GetOwner());
 		return;
 	}
 	
@@ -320,8 +359,7 @@ public func OnRepairSelected(id symbol, string action, object cursor)
 	}
 	lib_structure.repair_materials = new_list;
 	
-	// todo: add sound for repairing..
-	Sound("Ding");
+	Sound("Structures::Repair");
 }
 
 // On hovering, show a list of materials that are needed for repairing the structure.

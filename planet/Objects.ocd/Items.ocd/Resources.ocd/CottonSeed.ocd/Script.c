@@ -14,13 +14,20 @@ public func GetCarryBone() { return "main"; }
 
 private func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
+}
+
+public func IsFuel() { return true; }
+public func GetFuelAmount(bool get_partial)
+{ 
+	if (get_partial)
+		return GetCon()/2;
+	return 50;
 }
 
 local Collectible = 1;
 local Name = "$Name$";
 local Description = "$Description$";
-local Rebuy = true;
 local Plane = 460;
 local BlastIncinerate = 5;
 local ContactIncinerate = 2;

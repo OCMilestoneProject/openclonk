@@ -26,7 +26,7 @@
 #include <C4FileMonitor.h>
 #include <C4GameVersion.h>
 #include <C4Language.h>
-
+#include <C4GameScript.h>
 #include <C4Record.h>
 
 #include <StdMeshLoader.h>
@@ -406,8 +406,6 @@ bool C4DefList::Reload(C4Def *pDef, DWORD dwLoadWhat, const char *szLanguage, C4
 	BuildTable();
 	// handle skeleton appends and includes
 	AppendAndIncludeSkeletons();
-	// update script engine - this will also do include callbacks and Freeze() this
-	::ScriptEngine.ReLink(this);
 	// restore graphics
 	GfxBackup.AssignUpdate();
 	// Success
@@ -448,7 +446,7 @@ void C4DefList::CallEveryDefinition()
 			strncpy(sz, it->first.ToString(), 32+1);
 			AddDbgRec(RCT_Definition, sz, 32);
 		}
-		C4AulParSet Pars(C4VPropList(it->second));
+		C4AulParSet Pars(it->second);
 		it->second->Call(PSF_Definition, &Pars);
 	}
 }

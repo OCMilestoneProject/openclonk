@@ -12,6 +12,7 @@
 
 // does not need power
 public func PowerNeed() { return 0; }
+public func IsPowerConsumer() { return false; }
 
 public func LampPosition(id def) { return [GetCalcDir()*-11,2]; }
 
@@ -37,7 +38,7 @@ private func ProductionTime(id toProduce) { return 290; }
 public func OnProductionStart(id product)
 {
 	AddEffect("Smelting", this, 100, 1, this);
-	Sound("FurnaceStart");
+	Sound("Structures::Furnace::Start");
 	return;
 }
 
@@ -63,7 +64,7 @@ func CollectionZone()
 
 func Collection()
 {
-	Sound("Clonk");
+	Sound("Objects::Clonk");
 	return;
 }
 
@@ -79,7 +80,7 @@ public func FxSmeltingTimer(object target, proplist effect, int time)
 	
 	// Furnace sound after some time.
 	if (time == 30)
-		Sound("FurnaceLoop", false, 100, nil, +1);
+		Sound("Structures::Furnace::Loop", false, 100, nil, +1);
 
 	// Pour after some time.
 	if(time == 244)
@@ -87,7 +88,7 @@ public func FxSmeltingTimer(object target, proplist effect, int time)
 
 	//Molten metal hits cast... Sizzling sound
 	if (time == 256)
-		Sound("Sizzle");
+		Sound("Liquids::Sizzle");
 
 	// Fire from the pouring exit.
 	if (Inside(time, 244, 290))
@@ -96,8 +97,8 @@ public func FxSmeltingTimer(object target, proplist effect, int time)
 	if (time == 290)
 	{
 		SetMeshMaterial("Metal", 1);
-		Sound("FurnaceLoop", false ,100, nil, -1);
-		Sound("FurnaceStop");
+		Sound("Structures::Furnace::Loop", false ,100, nil, -1);
+		Sound("Structures::Furnace::Stop");
 		return -1;
 	}
 	return 1;

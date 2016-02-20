@@ -17,10 +17,11 @@
 #define C4FOWREGION_H
 
 #include "C4Rect.h"
-#include "C4Surface.h"
 #include "C4FacetEx.h"
 #include "C4Player.h"
 #include "C4FoW.h"
+
+class C4Surface;
 
 class C4FoWRegion
 {
@@ -31,25 +32,29 @@ public:
 private:
 	C4FoW *pFoW;
 	C4Player *pPlayer;
-	C4Surface *pSurface, *pBackSurface;
+	std::unique_ptr<C4Surface> pSurface, pBackSurface;
 	C4Rect Region, OldRegion;
 	FLOAT_RECT ViewportRegion; // Region covered by visible viewport
 
 #ifndef USE_CONSOLE
 	GLuint hFrameBufDraw, hFrameBufRead;
+	GLuint hVBO;
+	unsigned int vaoid;
 #endif
 
 public:
 	const C4FoW* getFoW() const { return pFoW; }
 	const C4Rect &getRegion() const { return Region; }
 	const FLOAT_RECT &getViewportRegion() const { return ViewportRegion; }
-	const C4Surface *getSurface() const { return pSurface; }
-	const C4Surface *getBackSurface() const { return pBackSurface; }
+	int32_t getSurfaceHeight() const;
+	int32_t getSurfaceWidth() const;
 
-	void Clear();
+#ifndef USE_CONSOLE
+	GLuint getSurfaceName() const;
+#endif
 
 	void Update(C4Rect r, const FLOAT_RECT& vp);
-	void Render(const C4TargetFacet *pOnScreen = NULL);
+	bool Render(const C4TargetFacet *pOnScreen = NULL);
 
 	// Fills a 2x3 matrix to transform fragment coordinates to light texture coordinates
 	void GetFragTransform(const C4Rect& clipRect, const C4Rect& outRect, float lightTransform[6]) const;

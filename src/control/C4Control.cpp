@@ -20,6 +20,7 @@
 #include <C4Include.h>
 #include <C4Control.h>
 
+#include <C4AulExec.h>
 #include <C4Object.h>
 #include <C4GameSave.h>
 #include <C4GameLobby.h>
@@ -191,7 +192,7 @@ void C4ControlSet::Execute() const
 		if (Game.Parameters.isLeague())
 		{
 			Log("/set maxplayer disabled in league!");
-			C4GUI::GUISound("Error");
+			C4GUI::GUISound("UI::Error");
 			break;
 		}
 		// set it
@@ -233,18 +234,15 @@ void C4ControlScript::Execute() const
 	if (!Game.Parameters.AllowDebug) return;
 
 	// execute
-	C4Object *pObj = NULL;
-	C4AulScript *pScript;
+	C4PropList *pPropList = NULL;
 	if (iTargetObj == SCOPE_Console)
-		pScript = &::GameScript;
+		pPropList = ::GameScript.GetPropList();
 	else if (iTargetObj == SCOPE_Global)
-		pScript = &::ScriptEngine;
-	else if ((pObj = ::Objects.SafeObjectPointer(iTargetObj)))
-		pScript = &(pObj->Def->Script);
-	else
+		pPropList = ::ScriptEngine.GetPropList();
+	else if (!(pPropList = ::Objects.SafeObjectPointer(iTargetObj)))
 		// default: Fallback to global context
-		pScript = &::ScriptEngine;
-	C4Value rVal(pScript->DirectExec(pObj, szScript, "console script", false, fUseVarsFromCallerContext ? AulExec.GetContext(AulExec.GetContextDepth()-1) : NULL));
+		pPropList = ::ScriptEngine.GetPropList();
+	C4Value rVal(AulExec.DirectExec(pPropList, szScript, "console script", false, fUseVarsFromCallerContext ? AulExec.GetContext(AulExec.GetContextDepth()-1) : NULL));
 #ifndef NOAULDEBUG
 	C4AulDebug* pDebug;
 	if ( (pDebug = C4AulDebug::GetDebugger()) )
@@ -254,10 +252,7 @@ void C4ControlScript::Execute() const
 #endif
 	// show messages
 	// print script
-	if (pObj)
-		LogF("-> %s::%s", pObj->Def->GetName(), szScript);
-	else
-		LogF("-> %s", szScript);
+	LogF("-> %s::%s", pPropList->GetName(), szScript);
 	// print result
 	if (!LocalControl())
 	{
@@ -293,7 +288,7 @@ void C4ControlMsgBoardReply::Execute() const
 
 	// execute callback if answer present
 	if (!reply) return;
-	C4AulParSet pars(C4VString(reply), C4VInt(player));
+	C4AulParSet pars(C4VString(reply), player);
 	if (target_object)
 		target_object->Call(PSF_InputCallback, &pars);
 	else
@@ -330,7 +325,7 @@ void C4ControlMsgBoardCmd::Execute() const
 	}
 
 	// Run script
-	C4Value rv(::ScriptEngine.DirectExec(nullptr, script.getData(), "message board command"));
+	C4Value rv(::AulExec.DirectExec(::ScriptEngine.GetPropList(), script.getData(), "message board command"));
 #ifndef NOAULDEBUG
 	C4AulDebug* pDebug = C4AulDebug::GetDebugger();
 	if (pDebug)
@@ -374,9 +369,9 @@ void C4ControlPlayerSelect::Execute() const
 			if (pObj->Category & C4D_MouseSelect)
 			{
 				if (fIsAlt)
-					pObj->Call(PSF_MouseSelectionAlt, &C4AulParSet(C4VInt(iPlr)));
+					pObj->Call(PSF_MouseSelectionAlt, &C4AulParSet(iPlr));
 				else
-					pObj->Call(PSF_MouseSelection, &C4AulParSet(C4VInt(iPlr)));
+					pObj->Call(PSF_MouseSelection, &C4AulParSet(iPlr));
 			}
 		}
 	// count
@@ -464,7 +459,7 @@ C4ControlPlayerMouse *C4ControlPlayerMouse::DragDrop(const C4Player *player, con
 void C4ControlPlayerMouse::Execute() const
 {
 	const char *callback_name = nullptr;
-	C4AulParSet pars(C4VInt(player));
+	C4AulParSet pars(player);
 
 	switch (action)
 	{
@@ -489,10 +484,7 @@ void C4ControlPlayerMouse::Execute() const
 	
 	// Do call
 	if (!callback_name) return;
-	if (callback_name[0] == '~') ++callback_name;
-	C4AulFunc *callback = ::ScriptEngine.GetFirstFunc(::Strings.RegString(callback_name));
-	if (!callback) return;
-	callback->Exec(nullptr, &pars);
+	::ScriptEngine.Call(callback_name, &pars);
 }
 
 void C4ControlPlayerMouse::CompileFunc(StdCompiler *pComp)
@@ -504,44 +496,6 @@ void C4ControlPlayerMouse::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(old_obj, "OldObj"));
 }
 
-// *** C4ControlPlayerCommand
-
-C4ControlPlayerCommand::C4ControlPlayerCommand(int32_t iPlr, int32_t iCmd, int32_t iX, int32_t iY,
-    C4Object *pTarget, C4Object *pTarget2, int32_t iData, int32_t iAddMode)
-		: iPlr(iPlr), iCmd(iCmd), iX(iX), iY(iY),
-		iTarget(pTarget ? pTarget->Number : 0), iTarget2(pTarget2 ? pTarget2->Number : 0),
-		iData(iData), iAddMode(iAddMode)
-{
-
-}
-
-void C4ControlPlayerCommand::Execute() const
-{
-	C4Player *pPlr=::Players.Get(iPlr);
-	if (pPlr)
-	{
-		pPlr->CountControl(C4Player::PCID_Command, iCmd+iX+iY+iTarget+iTarget2);
-		pPlr->ObjectCommand(iCmd,
-		                    ::Objects.ObjectPointer(iTarget),
-		                    iX,iY,
-		                    ::Objects.ObjectPointer(iTarget2),
-		                    C4Value(iData),
-		                    iAddMode);
-	}
-}
-
-void C4ControlPlayerCommand::CompileFunc(StdCompiler *pComp)
-{
-	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iPlr), "Player", -1));
-	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iCmd), "Cmd", 0));
-	pComp->Value(mkNamingAdapt(iX, "X", 0));
-	pComp->Value(mkNamingAdapt(iY, "Y", 0));
-	pComp->Value(mkNamingAdapt(iTarget, "Target", 0));
-	pComp->Value(mkNamingAdapt(iTarget2, "Target2", 0));
-	pComp->Value(mkNamingAdapt(iData, "Data", 0));
-	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iAddMode), "AddMode", 0));
-	C4ControlPacket::CompileFunc(pComp);
-}
 // *** C4ControlMenuCommand
 
 C4ControlMenuCommand::C4ControlMenuCommand(int32_t actionID, int32_t player, int32_t menuID, int32_t subwindowID, C4Object *target, int32_t actionType)
@@ -683,7 +637,7 @@ void C4ControlPlayerAction::Execute() const
 		C4Object *goal = ::Objects.SafeObjectPointer(target);
 		if (!goal) return;
 		// Call it
-		C4AulParSet pars(C4VInt(source_player->Number));
+		C4AulParSet pars(source_player->Number);
 		goal->Call("Activate", &pars);
 		break;
 	}
@@ -700,10 +654,8 @@ void C4ControlPlayerAction::Execute() const
 		if (!target_player) return;
 		
 		// Proxy the hostility change through C4Aul, in case a script wants to capture it
-		C4AulParSet pars(C4VInt(source_player->Number), C4VInt(target_player->Number), C4VBool(param_int != 0));
-		C4AulFunc *callback = ::ScriptEngine.GetFirstFunc(::Strings.RegString("SetHostility"));
-		assert(callback); // this should always exist since the engine provides a default implementation
-		callback->Exec(nullptr, &pars);
+		C4AulParSet pars(source_player->Number, target_player->Number, param_int != 0);
+		::ScriptEngine.Call("SetHostility", &pars);
 		break;
 	}
 
@@ -717,20 +669,16 @@ void C4ControlPlayerAction::Execute() const
 		if (!team && target != TEAMID_New) return;
 
 		// Proxy the team switch through C4Aul, in case a script wants to capture it
-		C4AulParSet pars(C4VInt(source_player->Number), C4VInt(target));
-		C4AulFunc *callback = ::ScriptEngine.GetFirstFunc(::Strings.RegString("SetPlayerTeam"));
-		assert(callback);
-		callback->Exec(nullptr, &pars);
+		C4AulParSet pars(source_player->Number, target);
+		::ScriptEngine.Call("SetPlayerTeam", &pars);
 		break;
 	}
 
 	case CPA_InitScenarioPlayer:
 	{
 		// Proxy the call through C4Aul, in case a script wants to capture it
-		C4AulParSet pars(C4VInt(source_player->Number), C4VInt(target));
-		C4AulFunc *callback = ::ScriptEngine.GetFirstFunc(::Strings.RegString("InitScenarioPlayer"));
-		assert(callback);
-		callback->Exec(nullptr, &pars);
+		C4AulParSet pars(source_player->Number, target);
+		::ScriptEngine.Call("InitScenarioPlayer", &pars);
 		break;
 	}
 
@@ -738,11 +686,8 @@ void C4ControlPlayerAction::Execute() const
 	{
 		// Notify scripts about player control selection
 		const char *callback_name = PSF_InitializePlayerControl;
-		if (callback_name[0] == '~') ++callback_name;
-		C4AulFunc *callback = ::ScriptEngine.GetFirstFunc(::Strings.RegString(callback_name));
-		if (!callback) return;
 		
-		C4AulParSet pars(C4VInt(source_player->Number));
+		C4AulParSet pars(source_player->Number);
 		// If the player is using a control set, its name is stored in param_str
 		if (param_str)
 		{
@@ -751,7 +696,7 @@ void C4ControlPlayerAction::Execute() const
 			pars[3] = C4VBool(CPA_IPC_HasMouse == (param_int & CPA_IPC_HasMouse));
 			pars[4] = C4VBool(CPA_IPC_HasGamepad == (param_int & CPA_IPC_HasGamepad));
 		}
-		callback->Exec(nullptr, &pars);
+		::ScriptEngine.Call(callback_name, &pars);
 		break;
 	}
 
@@ -840,7 +785,7 @@ void C4ControlSyncCheck::Execute() const
 		LogFatal("Network: Synchronization loss!");
 		LogFatal(FormatString("Network: %s Frm %i Ctrl %i Rnc %i Cpx %i PXS %i MMi %i Obc %i Oei %i Sct %i", szThis, Frame,ControlTick,RandomCount,AllCrewPosX,PXSCount,MassMoverIndex,ObjectCount,ObjectEnumerationIndex, SectShapeSum).getData());
 		LogFatal(FormatString("Network: %s Frm %i Ctrl %i Rnc %i Cpx %i PXS %i MMi %i Obc %i Oei %i Sct %i", szOther, SyncCheck.Frame,SyncCheck.ControlTick,SyncCheck.RandomCount,SyncCheck.AllCrewPosX,SyncCheck.PXSCount,SyncCheck.MassMoverIndex,SyncCheck.ObjectCount,SyncCheck.ObjectEnumerationIndex, SyncCheck.SectShapeSum).getData());
-		StartSoundEffect("SyncError");
+		StartSoundEffect("UI::SyncError");
 #ifdef _DEBUG
 		// Debug safe
 		C4GameSaveNetwork SaveGame(false);

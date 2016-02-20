@@ -1,2 +1,8 @@
 Name=Wind generator
 Description=Generates electricity from the wind.
+Efficiency=Efficiency
+EfficiencyUnknown=The efficiency could not yet be estimated.
+EfficiencyGood=The location of the wind generator is very good.
+EfficiencyMedium=The location of the wind generator could be better.
+EfficiencyBad=The location of the wind generator is very bad.
+EfficiencyGeneral=The efficiency is higher the more free sky is in close proximity around the wind generator.

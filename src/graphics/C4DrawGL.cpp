@@ -25,6 +25,7 @@
 #include "C4Rect.h"
 #include "C4Config.h"
 #include <C4App.h>
+#include "lib/StdColors.h"
 
 #ifndef USE_CONSOLE
 
@@ -103,10 +104,10 @@ namespace
 #undef USERPARAM_CONST
 
 CStdGL::CStdGL():
-		pMainCtx(0)
+	pMainCtx(0), CurrentVBO(0), NextVAOID(VAOIDs.end())
 {
+	GenericVBOs[0] = 0;
 	Default();
-	byByteCnt=4;
 	// global ptr
 	pGL = this;
 	lines_tex = 0;
@@ -169,10 +170,7 @@ bool CStdGL::UpdateClipper()
 	ClipAll=false;
 	// set it
 	glViewport(clipRect.x, RenderTarget->Hgt-clipRect.y-clipRect.Hgt, clipRect.Wdt, clipRect.Hgt);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-
-	gluOrtho2D((GLdouble) clipRect.x, (GLdouble) (clipRect.x + clipRect.Wdt), (GLdouble) (clipRect.y + clipRect.Hgt), (GLdouble) clipRect.y);
+	ProjectionMatrix = StdProjectionMatrix::Orthographic(clipRect.x, clipRect.x + clipRect.Wdt, clipRect.y + clipRect.Hgt, clipRect.y);
 	return true;
 }
 
@@ -207,11 +205,10 @@ bool CStdGL::PrepareRendering(C4Surface * sfcToSurface)
 
 bool CStdGL::PrepareSpriteShader(C4Shader& shader, const char* name, int ssc, C4GroupSet* pGroups, const char* const* additionalDefines, const char* const* additionalSlices)
 {
-	static const char vertexSlice[] = 
-		"  gl_FrontColor = gl_Color;"
-		"  gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;";
-
 	const char* uniformNames[C4SSU_Count + 1];
+	uniformNames[C4SSU_ProjectionMatrix] = "projectionMatrix";
+	uniformNames[C4SSU_ModelViewMatrix] = "modelviewMatrix";
+	uniformNames[C4SSU_NormalMatrix] = "normalMatrix";
 	uniformNames[C4SSU_ClrMod] = "clrMod";
 	uniformNames[C4SSU_Gamma] = "gamma";
 	uniformNames[C4SSU_BaseTex] = "baseTex";
@@ -223,46 +220,67 @@ bool CStdGL::PrepareSpriteShader(C4Shader& shader, const char* name, int ssc, C4
 	uniformNames[C4SSU_AmbientTex] = "ambientTex";
 	uniformNames[C4SSU_AmbientTransform] = "ambientTransform";
 	uniformNames[C4SSU_AmbientBrightness] = "ambientBrightness";
-	uniformNames[C4SSU_Bones] = "bones";
-	uniformNames[C4SSU_CullMode] = "cullMode";
+	uniformNames[C4SSU_MaterialAmbient] = "materialAmbient"; // unused
+	uniformNames[C4SSU_MaterialDiffuse] = "materialDiffuse"; // unused
+	uniformNames[C4SSU_MaterialSpecular] = "materialSpecular"; // unused
+	uniformNames[C4SSU_MaterialEmission] = "materialEmission"; // unused
+	uniformNames[C4SSU_MaterialShininess] = "materialShininess"; // unused
+	uniformNames[C4SSU_Bones] = "bones"; // unused
+	uniformNames[C4SSU_CullMode] = "cullMode"; // unused
 	uniformNames[C4SSU_Count] = NULL;
+
+	const char* attributeNames[C4SSA_Count + 1];
+	attributeNames[C4SSA_Position] = "oc_Position";
+	attributeNames[C4SSA_Normal] = "oc_Normal"; // unused
+	attributeNames[C4SSA_TexCoord] = "oc_TexCoord"; // only used if C4SSC_Base is set
+	attributeNames[C4SSA_Color] = "oc_Color";
+	attributeNames[C4SSA_BoneIndices0] = "oc_BoneIndices0"; // unused
+	attributeNames[C4SSA_BoneIndices1] = "oc_BoneIndices1"; // unused
+	attributeNames[C4SSA_BoneWeights0] = "oc_BoneWeights0"; // unused
+	attributeNames[C4SSA_BoneWeights1] = "oc_BoneWeights1"; // unused
+	attributeNames[C4SSA_Count] = NULL;
 
 	// Clear previous content
 	shader.Clear();
 	shader.ClearSlices();
 
-	shader.AddVertexSlice(C4Shader_Vertex_PositionPos, vertexSlice);
-
-	// Add texture coordinate if we have base texture, overlay, or normal map
-	if ( (ssc & (C4SSC_BASE | C4SSC_OVERLAY | C4SSC_NORMAL)) != 0)
-		shader.AddTexCoord("texcoord");
-
-	// Then load slices for fragment shader
-	shader.AddFragmentSlice(-1, "#define OPENCLONK\n#define OC_SPRITE");
-	if (ssc & C4SSC_MOD2) shader.AddFragmentSlice(-1, "#define OC_CLRMOD_MOD2");
-	if (ssc & C4SSC_NORMAL) shader.AddFragmentSlice(-1, "#define OC_WITH_NORMALMAP");
-	if (ssc & C4SSC_LIGHT) shader.AddFragmentSlice(-1, "#define OC_DYNAMIC_LIGHT");
-	if (ssc & C4SSC_BASE) shader.AddFragmentSlice(-1, "#define OC_HAVE_BASE");
-	if (ssc & C4SSC_OVERLAY) shader.AddFragmentSlice(-1, "#define OC_HAVE_OVERLAY");
+	// Start with #defines
+	shader.AddDefine("OPENCLONK");
+	shader.AddDefine("OC_SPRITE");
+	if (ssc & C4SSC_MOD2) shader.AddDefine("OC_CLRMOD_MOD2");
+	if (ssc & C4SSC_NORMAL) shader.AddDefine("OC_WITH_NORMALMAP");
+	if (ssc & C4SSC_LIGHT) shader.AddDefine("OC_DYNAMIC_LIGHT");
+	if (ssc & C4SSC_BASE) shader.AddDefine("OC_HAVE_BASE");
+	if (ssc & C4SSC_OVERLAY) shader.AddDefine("OC_HAVE_OVERLAY");
 
 	if (additionalDefines)
 		for (const char* const* define = additionalDefines; *define != NULL; ++define)
-			shader.AddFragmentSlice(-1, FormatString("#define %s", *define).getData());
+			shader.AddDefine(*define);
 
-	shader.LoadSlices(pGroups, "CommonShader.glsl");
-	shader.LoadSlices(pGroups, "ObjectShader.glsl");
+	// Then load slices for fragment and vertex shader
+	shader.LoadVertexSlices(pGroups, "SpriteVertexShader.glsl");
+	shader.LoadFragmentSlices(pGroups, "CommonShader.glsl");
+	shader.LoadFragmentSlices(pGroups, "ObjectShader.glsl");
 
 	if (additionalSlices)
 		for (const char* const* slice = additionalSlices; *slice != NULL; ++slice)
-			shader.LoadSlices(pGroups, *slice);
+			shader.LoadFragmentSlices(pGroups, *slice);
 
-	if (!shader.Init(name, uniformNames))
+	if (!shader.Init(name, uniformNames, attributeNames))
 	{
 		shader.ClearSlices();
 		return false;
 	}
 
 	return true;
+}
+
+void CStdGL::ObjectLabel(uint32_t identifier, uint32_t name, int32_t length, const char * label)
+{
+#ifdef GL_KHR_debug
+	if (glObjectLabel)
+		glObjectLabel(identifier, name, length, label);
+#endif
 }
 
 CStdGLCtx *CStdGL::CreateContext(C4Window * pWindow, C4AbstractApp *pApp)
@@ -276,7 +294,7 @@ CStdGLCtx *CStdGL::CreateContext(C4Window * pWindow, C4AbstractApp *pApp)
 	if (first_ctx)
 	{
 		pMainCtx = pCtx;
-		Log("  gl: Create first context...");
+		LogF("  gl: Create first %scontext...", Config.Graphics.DebugOpenGL ? "debug " : "");
 	}
 	bool success = pCtx->Init(pWindow, pApp);
 	if (Config.Graphics.DebugOpenGL && glDebugMessageCallbackARB)
@@ -336,55 +354,7 @@ CStdGLCtx *CStdGL::CreateContext(C4Window * pWindow, C4AbstractApp *pApp)
 	return pCtx;
 }
 
-#ifdef USE_WIN32_WINDOWS
-CStdGLCtx *CStdGL::CreateContext(HWND hWindow, C4AbstractApp *pApp)
-{
-	// safety
-	if (!hWindow) return NULL;
-	// create it
-	CStdGLCtx *pCtx = new CStdGLCtx();
-	if (!pCtx->Init(NULL, pApp, hWindow))
-	{
-		delete pCtx; Error("  gl: Error creating secondary context!"); return NULL;
-	}
-	if (Config.Graphics.DebugOpenGL && glDebugMessageCallbackARB)
-	{
-		glDebugMessageCallbackARB(&OpenGLDebugProc, nullptr);
-		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
-	}
-	if (!pMainCtx)
-	{
-		pMainCtx = pCtx;
-	}
-	else
-	{
-		// creation selected the new context - switch back to previous context
-		RenderTarget = NULL;
-		pCurrCtx = NULL;
-	}
-	// done
-	return pCtx;
-}
-#endif
-
-bool CStdGL::CreatePrimarySurfaces(unsigned int, unsigned int, int iColorDepth, unsigned int)
-{
-	// store options
-	bool ok = RestoreDeviceObjects();
-
-	// - AMD GPUs have supported OpenGL 2.1 since 2007
-	// - nVidia GPUs have supported OpenGL 2.1 since 2005
-	// - Intel integrated GPUs have supported OpenGL 2.1 since Clarkdale (maybe earlier).
-	// And we've already been using features from OpenGL 2.1. Nobody has complained yet.
-	// So checking for 2.1 support should be fine.
-	if (!GLEW_VERSION_2_1)
-	{
-		return Error("  gl: OpenGL Version 2.1 or higher required. A better graphics driver will probably help.");
-	}
-	return ok;
-}
-
-void CStdGL::SetupMultiBlt(C4ShaderCall& call, const C4BltTransform* pTransform, GLuint baseTex, GLuint overlayTex, GLuint normalTex, DWORD dwOverlayModClr)
+void CStdGL::SetupMultiBlt(C4ShaderCall& call, const C4BltTransform* pTransform, GLuint baseTex, GLuint overlayTex, GLuint normalTex, DWORD dwOverlayModClr, StdProjectionMatrix* out_modelview)
 {
 	// Initialize multi blit shader.
 	int iAdditive = dwBlitMode & C4GFXBLIT_ADDITIVE;
@@ -439,7 +409,7 @@ void CStdGL::SetupMultiBlt(C4ShaderCall& call, const C4BltTransform* pTransform,
 
 		// Dynamic Light
 		call.AllocTexUnit(C4SSU_LightTex);
-		glBindTexture(GL_TEXTURE_2D, pFoW->getSurface()->textures[0].texName);
+		glBindTexture(GL_TEXTURE_2D, pFoW->getSurfaceName());
 
 		float lightTransform[6];
 		pFoW->GetFragTransform(ClipRect, OutRect, lightTransform);
@@ -457,36 +427,69 @@ void CStdGL::SetupMultiBlt(C4ShaderCall& call, const C4BltTransform* pTransform,
 
 	call.SetUniform1f(C4SSU_CullMode, 0.0f);
 
+	// The primary reason we use a 4x4 matrix for the modelview matrix is that
+	// that the C4BltTransform pTransform parameter can have projection components
+	// (see SetObjDrawTransform2). Still, for sprites the situation is a bit
+	// unsatisfactory because there's no distinction between modelview and projection
+	// components in the BltTransform. Object rotation is part of the BltTransform
+	// for sprites, which should be part of the modelview matrix, so that lighting
+	// is correct for rotated sprites. This is much more common than projection
+	// components in the BltTransform, and therefore we turn the BltTransform into
+	// the modelview matrix and not the projection matrix.
+	StdProjectionMatrix default_modelview = StdProjectionMatrix::Identity();
+	StdProjectionMatrix& modelview = out_modelview ? *out_modelview : default_modelview;
+
 	// Apply zoom and transform
-	glPushMatrix();
-	glTranslatef(ZoomX, ZoomY, 0.0f);
+	Translate(modelview, ZoomX, ZoomY, 0.0f);
 	// Scale Z as well so that we don't distort normals.
-	glScalef(Zoom, Zoom, Zoom);
-	glTranslatef(-ZoomX, -ZoomY, 0.0f);
+	Scale(modelview, Zoom, Zoom, Zoom);
+	Translate(modelview, -ZoomX, -ZoomY, 0.0f);
 
 	if(pTransform)
 	{
-		// Decompose scale factors and scale Z accordingly to X and Y, again to avoid distorting normals
-		// We could instead work around this by using the projection matrix, but then for object rotations (SetR)
-		// the normals would not be correct.
-		const float sx = sqrt(pTransform->mat[0]*pTransform->mat[0] + pTransform->mat[1]*pTransform->mat[1]);
-		const float sy = sqrt(pTransform->mat[3]*pTransform->mat[3] + pTransform->mat[4]*pTransform->mat[4]);
-		const float sz = sqrt(sx * sy);
-		const GLfloat transform[16] = { pTransform->mat[0], pTransform->mat[3], 0, pTransform->mat[6], pTransform->mat[1], pTransform->mat[4], 0, pTransform->mat[7], 0, 0, sz, 0, pTransform->mat[2], pTransform->mat[5], 0, pTransform->mat[8] };
-		glMultMatrixf(transform);
-	}
-}
+		float sz = 1.0f;
+		if (pFoW != NULL && normalTex != 0)
+		{
+			// Decompose scale factors and scale Z accordingly to X and Y, again to avoid distorting normals
+			// We could instead work around this by using the projection matrix, but then for object rotations (SetR)
+			// the normals would not be correct.
+			const float sx = sqrt(pTransform->mat[0]*pTransform->mat[0] + pTransform->mat[1]*pTransform->mat[1]);
+			const float sy = sqrt(pTransform->mat[3]*pTransform->mat[3] + pTransform->mat[4]*pTransform->mat[4]);
+			sz = sqrt(sx * sy);
+		}
 
-void CStdGL::ResetMultiBlt()
-{
-	glPopMatrix();
+		// Multiply modelview matrix with transform
+		StdProjectionMatrix transform;
+		transform(0, 0) = pTransform->mat[0];
+		transform(0, 1) = pTransform->mat[1];
+		transform(0, 2) = 0.0f;
+		transform(0, 3) = pTransform->mat[2];
+		transform(1, 0) = pTransform->mat[3];
+		transform(1, 1) = pTransform->mat[4];
+		transform(1, 2) = 0.0f;
+		transform(1, 3) = pTransform->mat[5];
+		transform(2, 0) = 0.0f;
+		transform(2, 1) = 0.0f;
+		transform(2, 2) = sz;
+		transform(2, 3) = 0.0f;
+		transform(3, 0) = pTransform->mat[6];
+		transform(3, 1) = pTransform->mat[7];
+		transform(3, 2) = 0.0f;
+		transform(3, 3) = pTransform->mat[8];
+		modelview *= transform;
+	}
+
+	call.SetUniformMatrix4x4(C4SSU_ProjectionMatrix, ProjectionMatrix);
+	call.SetUniformMatrix4x4(C4SSU_ModelViewMatrix, modelview);
+
+	if (pFoW != NULL && normalTex != 0)
+		call.SetUniformMatrix3x3Transpose(C4SSU_NormalMatrix, StdMeshMatrix::Inverse(StdProjectionMatrix::Upper3x4(modelview)));
 }
 
 void CStdGL::PerformMultiPix(C4Surface* sfcTarget, const C4BltVertex* vertices, unsigned int n_vertices, C4ShaderCall* shader_call)
 {
 	// Draw on pixel center:
-	glPushMatrix();
-	glTranslatef(0.5f, 0.5f, 0.0f);
+	StdProjectionMatrix transform = StdProjectionMatrix::Translate(0.5f, 0.5f, 0.0f);
 
 	// This is a workaround. Instead of submitting the whole vertex array to the GL, we do it
 	// in batches of 256 vertices. The intel graphics driver on Linux crashes with
@@ -498,20 +501,16 @@ void CStdGL::PerformMultiPix(C4Surface* sfcTarget, const C4BltVertex* vertices, 
 	if (!shader_call)
 	{
 		C4ShaderCall call(GetSpriteShader(false, false, false));
-		SetupMultiBlt(call, NULL, 0, 0, 0, 0);
+		SetupMultiBlt(call, NULL, 0, 0, 0, 0, &transform);
 		for(unsigned int i = 0; i < n_vertices; i += BATCH_SIZE)
-			PerformMultiBlt(sfcTarget, OP_POINTS, &vertices[i], std::min(n_vertices - i, BATCH_SIZE), false);
-		ResetMultiBlt();
+			PerformMultiBlt(sfcTarget, OP_POINTS, &vertices[i], std::min(n_vertices - i, BATCH_SIZE), false, &call);
 	}
 	else
 	{
-		SetupMultiBlt(*shader_call, NULL, 0, 0, 0, 0);
+		SetupMultiBlt(*shader_call, NULL, 0, 0, 0, 0, &transform);
 		for(unsigned int i = 0; i < n_vertices; i += BATCH_SIZE)
-			PerformMultiBlt(sfcTarget, OP_POINTS, &vertices[i], std::min(n_vertices - i, BATCH_SIZE), false);
-		ResetMultiBlt();
+			PerformMultiBlt(sfcTarget, OP_POINTS, &vertices[i], std::min(n_vertices - i, BATCH_SIZE), false, shader_call);
 	}
-
-	glPopMatrix();
 }
 
 void CStdGL::PerformMultiLines(C4Surface* sfcTarget, const C4BltVertex* vertices, unsigned int n_vertices, float width, C4ShaderCall* shader_call)
@@ -562,15 +561,13 @@ void CStdGL::PerformMultiLines(C4Surface* sfcTarget, const C4BltVertex* vertices
 	if (!shader_call)
 	{
 		C4ShaderCall call(GetSpriteShader(true, false, false));
-		SetupMultiBlt(call, NULL, lines_tex, 0, 0, 0);
-		PerformMultiBlt(sfcTarget, OP_TRIANGLES, tri_vertices, n_vertices * 3, true);
-		ResetMultiBlt();
+		SetupMultiBlt(call, NULL, lines_tex, 0, 0, 0, NULL);
+		PerformMultiBlt(sfcTarget, OP_TRIANGLES, tri_vertices, n_vertices * 3, true, &call);
 	}
 	else
 	{
-		SetupMultiBlt(*shader_call, NULL, lines_tex, 0, 0, 0);
-		PerformMultiBlt(sfcTarget, OP_TRIANGLES, tri_vertices, n_vertices * 3, true);
-		ResetMultiBlt();
+		SetupMultiBlt(*shader_call, NULL, lines_tex, 0, 0, 0, NULL);
+		PerformMultiBlt(sfcTarget, OP_TRIANGLES, tri_vertices, n_vertices * 3, true, shader_call);
 	}
 
 	delete[] tri_vertices;
@@ -582,38 +579,63 @@ void CStdGL::PerformMultiTris(C4Surface* sfcTarget, const C4BltVertex* vertices,
 	if (!shader_call)
 	{
 		C4ShaderCall call(GetSpriteShader(pTex != NULL, pOverlay != NULL, pNormal != NULL));
-		SetupMultiBlt(call, pTransform, pTex ? pTex->texName : 0, pOverlay ? pOverlay->texName : 0, pNormal ? pNormal->texName : 0, dwOverlayModClr);
-		PerformMultiBlt(sfcTarget, OP_TRIANGLES, vertices, n_vertices, pTex != NULL);
-		ResetMultiBlt();
+		SetupMultiBlt(call, pTransform, pTex ? pTex->texName : 0, pOverlay ? pOverlay->texName : 0, pNormal ? pNormal->texName : 0, dwOverlayModClr, NULL);
+		PerformMultiBlt(sfcTarget, OP_TRIANGLES, vertices, n_vertices, pTex != NULL, &call);
 	}
 	else
 	{
-		SetupMultiBlt(*shader_call, pTransform, pTex ? pTex->texName : 0, pOverlay ? pOverlay->texName : 0, pNormal ? pNormal->texName : 0, dwOverlayModClr);
-		PerformMultiBlt(sfcTarget, OP_TRIANGLES, vertices, n_vertices, pTex != NULL);
-		ResetMultiBlt();
+		SetupMultiBlt(*shader_call, pTransform, pTex ? pTex->texName : 0, pOverlay ? pOverlay->texName : 0, pNormal ? pNormal->texName : 0, dwOverlayModClr, NULL);
+		PerformMultiBlt(sfcTarget, OP_TRIANGLES, vertices, n_vertices, pTex != NULL, shader_call);
 	}
 }
 
-void CStdGL::PerformMultiBlt(C4Surface* sfcTarget, DrawOperation op, const C4BltVertex* vertices, unsigned int n_vertices, bool has_tex)
+void CStdGL::PerformMultiBlt(C4Surface* sfcTarget, DrawOperation op, const C4BltVertex* vertices, unsigned int n_vertices, bool has_tex, C4ShaderCall* shader_call)
 {
 	// Only direct rendering
 	assert(sfcTarget->IsRenderTarget());
 	if(!PrepareRendering(sfcTarget)) return;
 
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
+	// Select a buffer
+	const unsigned int vbo_index = CurrentVBO;
+	CurrentVBO = (CurrentVBO + 1) % N_GENERIC_VBOS;
 
-	if(has_tex)
+	// Upload data into the buffer, resize buffer if necessary
+	glBindBuffer(GL_ARRAY_BUFFER, GenericVBOs[vbo_index]);
+	if (GenericVBOSizes[vbo_index] < n_vertices)
 	{
-		// We use the texture coordinate array in texture0 for
-		// the base, overlay and normal textures
-		glClientActiveTexture(GL_TEXTURE0);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		glTexCoordPointer(2, GL_FLOAT, sizeof(C4BltVertex), &vertices[0].tx);
+		GenericVBOSizes[vbo_index] = n_vertices;
+		glBufferData(GL_ARRAY_BUFFER, n_vertices * sizeof(C4BltVertex), vertices, GL_STREAM_DRAW);
+	}
+	else
+	{
+		glBufferSubData(GL_ARRAY_BUFFER, 0, n_vertices * sizeof(C4BltVertex), vertices);
 	}
 
-	glVertexPointer(2, GL_FLOAT, sizeof(C4BltVertex), &vertices[0].ftx);
-	glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(C4BltVertex), &vertices[0].color[0]);
+	// Choose the VAO that corresponds to the chosen VBO. Also, use one
+	// that supplies texture coordinates if we have texturing enabled.
+	GLuint vao;
+	const unsigned int vao_index = vbo_index + (has_tex ? N_GENERIC_VBOS : 0);
+	const unsigned int vao_id = GenericVAOs[vao_index];
+	const bool has_vao = GetVAO(vao_id, vao);
+	glBindVertexArray(vao);
+	if (!has_vao)
+	{
+		// Initialize VAO for this context
+		const GLuint position = shader_call->GetAttribute(C4SSA_Position);
+		const GLuint color = shader_call->GetAttribute(C4SSA_Color);
+		const GLuint texcoord = has_tex ? shader_call->GetAttribute(C4SSA_TexCoord) : 0;
+
+		glEnableVertexAttribArray(position);
+		glEnableVertexAttribArray(color);
+		if (has_tex)
+			glEnableVertexAttribArray(texcoord);
+
+
+		glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, sizeof(C4BltVertex), reinterpret_cast<const uint8_t*>(offsetof(C4BltVertex, ftx)));
+		glVertexAttribPointer(color, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(C4BltVertex), reinterpret_cast<const uint8_t*>(offsetof(C4BltVertex, color)));
+		if (has_tex)
+			glVertexAttribPointer(texcoord, 2, GL_FLOAT, GL_FALSE, sizeof(C4BltVertex), reinterpret_cast<const uint8_t*>(offsetof(C4BltVertex, tx)));
+	}
 
 	switch (op)
 	{
@@ -628,9 +650,8 @@ void CStdGL::PerformMultiBlt(C4Surface* sfcTarget, DrawOperation op, const C4Blt
 		break;
 	}
 
-	if(has_tex) glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 C4Shader* CStdGL::GetSpriteShader(bool haveBase, bool haveOverlay, bool haveNormal)
@@ -743,13 +764,26 @@ bool CStdGL::RestoreDeviceObjects()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	const char * linedata = byByteCnt == 2 ? "\xff\xf0\xff\xff" : "\xff\xff\xff\x00\xff\xff\xff\xff";
-	glTexImage2D(GL_TEXTURE_2D, 0, 4, 1, 2, 0, GL_BGRA, byByteCnt == 2 ? GL_UNSIGNED_SHORT_4_4_4_4_REV : GL_UNSIGNED_INT_8_8_8_8_REV, linedata);
+	static const char * linedata = "\xff\xff\xff\x00\xff\xff\xff\xff";
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 2, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, linedata);
 
 	MaxTexSize = 64;
 	GLint s = 0;
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &s);
 	if (s>0) MaxTexSize = s;
+
+	// Generic VBOs
+	glGenBuffers(N_GENERIC_VBOS, GenericVBOs);
+	for (unsigned int i = 0; i < N_GENERIC_VBOS; ++i)
+	{
+		GenericVBOSizes[i] = GENERIC_VBO_SIZE;
+		glBindBuffer(GL_ARRAY_BUFFER, GenericVBOs[i]);
+		glBufferData(GL_ARRAY_BUFFER, GenericVBOSizes[i] * sizeof(C4BltVertex), NULL, GL_STREAM_DRAW);
+		GenericVAOs[i] = GenVAOID();
+		GenericVAOs[i + N_GENERIC_VBOS] = GenVAOID();
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	// reset blit states
 	dwBlitMode = 0;
@@ -770,6 +804,17 @@ bool CStdGL::InvalidateDeviceObjects()
 		glDeleteTextures(1, &lines_tex);
 		lines_tex = 0;
 	}
+
+	// invalidate generic VBOs
+	if (GenericVBOs[0] != 0)
+	{
+		glDeleteBuffers(N_GENERIC_VBOS, GenericVBOs);
+		GenericVBOs[0] = 0;
+		CurrentVBO = 0;
+		for (unsigned int i = 0; i < N_GENERIC_VBOS * 2; ++i)
+			FreeVAOID(GenericVAOs[i]);
+	}
+
 	// invalidate shaders
 
 	// TODO: We don't do this here because we cannot re-validate them in
@@ -821,23 +866,28 @@ bool CStdGL::Error(const char *szMsg)
 	return r;
 }
 
+const char* CStdGL::GLErrorString(GLenum code)
+{
+	switch (code)
+	{
+	case GL_NO_ERROR: return "No error";
+	case GL_INVALID_ENUM: return "An unacceptable value is specified for an enumerated argument";
+	case GL_INVALID_VALUE: return "A numeric argument is out of range";
+	case GL_INVALID_OPERATION: return "The specified operation is not allowed in the current state";
+	case GL_INVALID_FRAMEBUFFER_OPERATION: return "The framebuffer object is not complete";
+	case GL_OUT_OF_MEMORY: return "There is not enough memory left to execute the command";
+	case GL_STACK_UNDERFLOW: return "An attempt has been made to perform an operation that would cause an internal stack to underflow";
+	case GL_STACK_OVERFLOW: return "An attempt has been made to perform an operation that would cause an internal stack to overflow";
+	default: assert(false); return "";
+	}
+}
+
 bool CStdGL::CheckGLError(const char *szAtOp)
 {
 	GLenum err = glGetError();
 	if (!err) return true;
 
-#ifdef USE_WIN32_WINDOWS
-	StdStrBuf err_buf(gluErrorUnicodeStringEXT(err));
-#else
-	// gluErrorString returns latin-1 strings. Our code expects UTF-8, so convert
-	// Also for some reason gluErrorString returns const GLubyte* instead of a more
-	// reasonable const char *, so cast it - C-style cast required here to match
-	// both unsigned and signed char
-	StdStrBuf err_buf((const char*)gluErrorString(err));
-	err_buf.EnsureUnicode();
-#endif
-
-	LogF("GL error with %s: %d - %s", szAtOp, err, err_buf.getData());
+	LogF("GL error with %s: %d - %s", szAtOp, err, GLErrorString(err));
 	return false;
 }
 
@@ -857,8 +907,123 @@ void CStdGL::Default()
 	pCurrCtx = NULL;
 	iPixelFormat=0;
 	sfcFmt=0;
-	iClrDpt=0;
 	Workarounds.LowMaxVertexUniformCount = false;
+}
+
+unsigned int CStdGL::GenVAOID()
+{
+	// Generate a new VAO ID. Make them sequential so that the actual
+	// VAOs in the context can be simply maintained with a lookup table.
+	unsigned int id;
+	if (NextVAOID == VAOIDs.begin())
+	{
+		// Insert at the beginning
+		id = 1;
+	}
+	else
+	{
+		// Insert at the end, or somewhere in the middle
+		std::set<unsigned int>::iterator iter = NextVAOID;
+		--iter;
+
+		id = *iter + 1;
+	}
+
+	// Actually insert the ID
+#ifdef NDEBUG
+	std::set<unsigned int>::iterator inserted_iter = VAOIDs.insert(NextVAOID, id);
+#else
+	std::pair<std::set<unsigned int>::iterator, bool> inserted = VAOIDs.insert(id);
+	assert(inserted.second == true);
+	std::set<unsigned int>::iterator inserted_iter = inserted.first;
+#endif
+
+	// Update next VAO ID: increment iterator until we find a gap
+	// in the sequence.
+	NextVAOID = inserted_iter;
+	unsigned int prev_id = id;
+	++NextVAOID;
+	while(NextVAOID != VAOIDs.end() && prev_id + 1 == *NextVAOID)
+	{
+		prev_id = *NextVAOID;
+		++NextVAOID;
+	}
+
+	return id;
+}
+
+void CStdGL::FreeVAOID(unsigned int vaoid)
+{
+	std::set<unsigned int>::iterator iter = VAOIDs.find(vaoid);
+	assert(iter != VAOIDs.end());
+
+	// Delete this VAO in the current context
+	if (pCurrCtx)
+	{
+		if (vaoid < pCurrCtx->hVAOs.size() && pCurrCtx->hVAOs[vaoid] != 0)
+		{
+			glDeleteVertexArrays(1, &pCurrCtx->hVAOs[vaoid]);
+			pCurrCtx->hVAOs[vaoid] = 0;
+		}
+	}
+
+	// For all other contexts, mark it to be deleted as soon as we select
+	// that context. Otherwise we would need to do a lot of context
+	// switching at this point.
+	for (std::list<CStdGLCtx*>::iterator iter = CStdGLCtx::contexts.begin(); iter != CStdGLCtx::contexts.end(); ++iter)
+	{
+		CStdGLCtx* ctx = *iter;
+		if (ctx != pCurrCtx && vaoid < ctx->hVAOs.size() && ctx->hVAOs[vaoid] != 0)
+			if (std::find(ctx->VAOsToBeDeleted.begin(), ctx->VAOsToBeDeleted.end(), vaoid) == ctx->VAOsToBeDeleted.end())
+				ctx->VAOsToBeDeleted.push_back(vaoid);
+	}
+
+	// Delete the VAO ID from our list of VAO IDs in use
+	// If the Next VAO ID is 1, then no matter what we delete we don't need
+	// to update anything. If it is not at the beginning, then move it to the
+	// gap we just created if it was at a higher place, to make sure we keep
+	// the numbers as sequential as possible.
+	unsigned int nextVaoID = 1;
+	if (NextVAOID != VAOIDs.begin())
+	{
+		std::set<unsigned int>::iterator next_vao_iter = NextVAOID;
+		--next_vao_iter;
+		nextVaoID = *next_vao_iter + 1;
+	}
+
+	assert(vaoid != nextVaoID);
+
+	if (vaoid < nextVaoID || iter == NextVAOID)
+		NextVAOID = VAOIDs.erase(iter);
+	else
+		VAOIDs.erase(iter);
+}
+
+bool CStdGL::GetVAO(unsigned int vaoid, GLuint& vao)
+{
+	assert(pCurrCtx != NULL);
+
+	if (vaoid >= pCurrCtx->hVAOs.size())
+	{
+		// Resize the VAO array so that all generated VAO IDs fit
+		// in it, and not only the one requested in this call.
+		// We hope to get away with fewer reallocations this way.
+		assert(VAOIDs.find(vaoid) != VAOIDs.end());
+		std::set<unsigned int>::iterator iter = VAOIDs.end();
+		--iter;
+
+		pCurrCtx->hVAOs.resize(*iter + 1);
+	}
+
+	if (pCurrCtx->hVAOs[vaoid] == 0)
+	{
+		glGenVertexArrays(1, &pCurrCtx->hVAOs[vaoid]);
+		vao = pCurrCtx->hVAOs[vaoid];
+		return false;
+	}
+
+	vao = pCurrCtx->hVAOs[vaoid];
+	return true;
 }
 
 #endif // USE_CONSOLE

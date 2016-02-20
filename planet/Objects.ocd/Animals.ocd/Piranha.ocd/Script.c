@@ -89,7 +89,7 @@ func DoEat(object obj)
 {
 	BiteEffect();
 	var len = GetAnimationLength("Bite");
-	PlayAnimation("Bite", 5,  Anim_Linear(0, 0, len, 36, ANIM_Remove), Anim_Const(1000));
+	PlayAnimation("Bite", 5,  Anim_Linear(0, 0, len, 36, ANIM_Remove), Anim_Const(1000)); // temp overrides Swim animation in same slot
 	if (obj->GetAlive())
 		obj->DoEnergy(-BiteStrength);
 	hunger -= 20;
@@ -101,7 +101,7 @@ func DoEat(object obj)
 
 private func BiteEffect()
 {
-	Sound("FishMunch*");
+	Sound("Animals::Fish::Munch*");
 }
 
 // Make this piranha a little larger than the mesh.
@@ -117,6 +117,8 @@ local MaxEnergy = 50000;
 local Placement = 1;
 local NoBurnDecay = 1;
 local BreatheWater = 1;
+local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
+local ContactCalls = true;
 
 func IsPrey() { return false; }
 func IsPredator() { return true; }

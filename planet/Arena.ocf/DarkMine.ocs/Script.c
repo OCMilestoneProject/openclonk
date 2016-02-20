@@ -10,10 +10,24 @@
 // List for storing the different large caves.
 static cave_list;
 
+// Game modes.
+static const GAMEMODE_Deathmatch = 0;
+static const GAMEMODE_LastManStanding = 1;
+static const GAMEMODE_KingOfTheHill = 2;
+
 protected func Initialize()
 {
 	// Goals and rules.
-	CreateObject(Goal_LastManStanding);
+	if (SCENPAR_GameMode == GAMEMODE_Deathmatch)
+		CreateObject(Goal_DeathMatch);
+	else if (SCENPAR_GameMode == GAMEMODE_LastManStanding)
+		CreateObject(Goal_LastManStanding);
+	else if (SCENPAR_GameMode == GAMEMODE_KingOfTheHill)
+	{
+		var goal = CreateObject(Goal_KingOfTheHill, LandscapeWidth() / 2, LandscapeHeight() / 2);
+		goal->SetRadius(72);
+		goal->SetPointLimit(Max(SCENPAR_NrRelaunchesKills, 1));
+	}
 	CreateObject(Rule_KillLogs);
 	CreateObject(Rule_Gravestones);
 	
@@ -43,7 +57,7 @@ protected func Initialize()
 protected func RelaunchCount() 
 { 
 	// Relaunch count depends on scenario setting.
-	return BoundBy(SCENPAR_NrRelaunches, 0, 3); 
+	return Max(SCENPAR_NrRelaunchesKills, 0); 
 }
 
 // Callback from the last man standing goal.
@@ -53,31 +67,61 @@ protected func KillsToRelaunch()
 	return 0; 
 }
 
-// Callback from the last man standing goal.
-// Takes over the role of initializing the player.
-protected func OnPlayerRelaunch(int plr, int relaunch_cnt)
+// Callback from the deathmatch goal.
+public func WinKillCount() 
 {
-	var is_relaunch = relaunch_cnt != RelaunchCount();
+	return Max(SCENPAR_NrRelaunchesKills, 1); 
+}
+
+// Forward callbacks to OnPlayerRelaunch for KotH goal.
+protected func InitializePlayer(int plr)
+{
+	if (SCENPAR_GameMode == GAMEMODE_KingOfTheHill)
+		GameCall("OnPlayerRelaunch", plr, false);
+	return _inherited(plr, ...);
+}
+
+// Forward callbacks to OnPlayerRelaunch for KotH goal.
+protected func RelaunchPlayer(int plr, int killer)
+{
+	if (SCENPAR_GameMode == GAMEMODE_KingOfTheHill)
+	{
+		var clonk = CreateObjectAbove(Clonk, 0, 0, plr);
+		clonk->MakeCrewMember(plr);
+		SetCursor(plr, clonk);
+		clonk->DoEnergy(100000);
+		GameCall("OnPlayerRelaunch", plr, true);
+	}
+	return _inherited(plr, killer);
+}
+
+// Callback from the last man standing and deathmatch goal.
+// Takes over the role of initializing the player.
+protected func OnPlayerRelaunch(int plr, bool is_relaunch)
+{
 	// Get the only clonk of the player.
 	var clonk = GetCrew(plr);
 	
 	// Players start in a random small cave, the cave depends on whether it is a relaunch.
 	var cave = FindStartCave(plr, is_relaunch);
 	clonk->SetPosition(cave[0], cave[1]);
+	// Ensure spawn position is free
+	for (var i=0; i<4; ++i) BlastFree(cave[0], cave[1], 13);
 
 	// Players start with a shovel, a pickaxe and two firestones.
 	clonk->CreateContents(Shovel);
 	clonk->CreateContents(Pickaxe);
-	clonk->CreateContents(Torch);
 	// Better weapons after relaunching.
 	if (!is_relaunch)
 	{
+		clonk->CreateContents(Torch);
 		clonk->CreateContents(Firestone, 2);
 	}
 	else
 	{
+		clonk->CreateContents(Lantern);
 		clonk->CreateContents(Javelin);
-		clonk->CreateContents(BombArrow);
+		clonk->CreateContents(IronBomb);
 	}
 	
 	// Set the zoom range to be standard low, but allow for zooming out
@@ -197,12 +241,13 @@ private func InitLorries()
 {
 	var wdt = LandscapeWidth();
 	var hgt = LandscapeHeight();
-	// Create lorries at random small caves, but only for half of them.
-	for (var index = GetLength(cave_list) - 1; index >= GetLength(cave_list) / 2; index--)
+	// Create lorries at random small caves, but only for 2/3 of them.
+	for (var index = GetLength(cave_list) - 1; index >= 2 * GetLength(cave_list) / 3; index--)
 	{
 		var cave = cave_list[index];
 		var lorry = CreateObjectAbove(Lorry, cave[0], cave[1]);
 		// Basic objects which are in every lorry.
+		lorry->CreateContents(Firestone, RandomX(4, 7));
 		lorry->CreateContents(Dynamite, RandomX(2, 4));
 		lorry->CreateContents(Loam, RandomX(2, 4));
 		// Objects which are only in half of the lorries.

@@ -90,7 +90,7 @@ private func RandomizeColor()
 
 public func CatchBlow(int damage, object from)
 {
-	Schedule(this, "Sound(\"PukaHurt*\")", RandomX(5, 20));
+	Schedule(this, "Sound(\"Animals::Puka::Hurt*\")", RandomX(5, 20));
 }
 
 private func CheckStuck()
@@ -161,7 +161,7 @@ private func StopHangle()
 public func Death()
 {
 	AddEffect("IntDeathSparks", this, 1, 1, this);
-	SoundAt("PukaDie");
+	SoundAt("Animals::Puka::Die");
 }
 
 private func FxIntDeathSparksStart(object target, effect fx, temp)
@@ -270,7 +270,7 @@ private func ActivityWalking()
 			{
 				if (Random(3))
 				{
-					Schedule(this, "Sound(\"PukaGulp\")", 40);
+					Schedule(this, "Sound(\"Animals::Puka::Gulp\")", 40);
 					return SetAction("LookAround");
 				}
 				return SetAction("ScratchFace");
@@ -422,7 +422,7 @@ private func FxIntTeleportStart(object target, effect fx, temp)
 		PV_Random(xdir - 5, xdir + 5), PV_Random(ydir - 5, ydir + 5),
 		PV_Random(1, 5), fx.particles, 200);
 		
-	SoundAt("PukaTeleportOut");
+	SoundAt("Animals::Puka::TeleportOut");
 }
 
 private func FxIntTeleportTimer(object target, effect fx, int time)
@@ -492,7 +492,7 @@ private func FxIntTeleportStop(object target, effect fx, int reason, temp)
 		PV_Random(xdir - 5, xdir + 5), PV_Random(ydir - 5, ydir + 5),
 		PV_Random(1, 5), fx.particles, 200);
 	
-	SoundAt("PukaTeleportIn");
+	SoundAt("Animals::Puka::TeleportIn");
 }
 
 public func TryStartTeleport()
@@ -634,7 +634,7 @@ private func ShockWater()
 	
 	AddEffect("Sparkle", this, 1, 1, this);
 	
-	Sound("PukaHiss*");
+	Sound("Animals::Puka::Hiss*");
 	return true;
 }
 
@@ -651,7 +651,7 @@ private func EndShockWater()
 		var angle = Angle(GetX(), GetY(), obj->GetX(), obj->GetY());
 		var xdir = +Sin(angle, 5);
 		var ydir = -Cos(angle, 5);
-		LaunchLightning(GetX() + x, GetY() + y, RandomX(50, 70), xdir, ydir, 10, 10, false);
+		LaunchLightning(GetX() + x, GetY() + y, RandomX(50, 70), xdir, ydir, 10, 10, true);
 	}
 	
 	// And some particles on the tail.
@@ -748,11 +748,14 @@ private func FxIntTurningTimer(object target, effect fx, int time)
 }
 
 // Immune to lightning.
-public func LightningStrike() { return true; }
+public func RejectLightningStrike() { return true; }
 
 local MaxEnergy = 30000;
 local MaxBreath = 10000;
 local NoBurnDecay = 1;
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;
+
 
 local ActMap = {
 Walk = {

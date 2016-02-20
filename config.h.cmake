@@ -1,3 +1,4 @@
+
 /* Generate minidumps on crash */
 #cmakedefine HAVE_DBGHELP 1
 
@@ -30,18 +31,6 @@
 
 /* Define if you have POSIX threads libraries and header files. */
 #cmakedefine HAVE_PTHREAD 1
-
-/* Define to 1 if you have the <readline.h> header file. */
-#cmakedefine HAVE_READLINE_H 1
-
-/* Define if your readline library has \`add_history' */
-#cmakedefine HAVE_READLINE_HISTORY 1
-
-/* Define to 1 if you have the <readline/history.h> header file. */
-#cmakedefine HAVE_READLINE_HISTORY_H 1
-
-/* Define to 1 if you have the <readline/readline.h> header file. */
-#cmakedefine HAVE_READLINE_READLINE_H 1
 
 /* Define to 1 if you have SDL. */
 #cmakedefine HAVE_SDL 1
@@ -88,34 +77,14 @@
 /* Define to 1 if you have the `__mingw_vasprintf' function. */
 #cmakedefine HAVE___MINGW_VASPRINTF 1
 
-#cmakedefine HAVE_VFW32
-
 /* Define to 1 if you have the <X11/extensions/Xrandr.h> header file. */
 #cmakedefine HAVE_X11_EXTENSIONS_XRANDR_H 1
-
-/* Define to 1 if you have the <X11/keysym.h> header file. */
-#cmakedefine HAVE_X11_KEYSYM_H 1
 
 /* compile without debug options */
 #cmakedefine NDEBUG 1
 
-/* dedicated server mode */
-#cmakedefine USE_CONSOLE 1
-
 /* MP3 music */
 #cmakedefine USE_MP3 1
-
-/* Define to 1 if SDL is used for the main loop */
-#cmakedefine USE_SDL_MAINLOOP 1
-
-/* Define to 1 if the X Window System is used */
-#cmakedefine USE_X11 1
-
-/* Enable automatic update system */
-#cmakedefine WITH_AUTOMATIC_UPDATE 1
-
-/* Developer mode */
-#cmakedefine WITH_DEVELOPER_MODE 1
 
 /* Define to 1 if the userParam parameter to GLDEBUGPROCARB is const, as the
    spec requires. */
@@ -127,17 +96,25 @@
 /* compile with debug options */
 #cmakedefine _DEBUG 1
 
-/* Define to 1 if you have support for precompiled headers */
-#cmakedefine HAVE_PRECOMPILED_HEADERS 1
-
-/* Use Apple Cocoa for the UI */
+#ifndef USE_CONSOLE
+/* The widgets for the windows and the editor GUI */
+#cmakedefine USE_SDL_MAINLOOP 1
+#cmakedefine USE_WIN32_WINDOWS 1
 #cmakedefine USE_COCOA 1
+#cmakedefine USE_GTK 1
+
+/* Enable automatic update system */
+#cmakedefine WITH_AUTOMATIC_UPDATE 1
 
 /* Select an audio provider */
+#define AUDIO_TK AUDIO_TK_${Audio_TK_UPPER}
+#else
+#define AUDIO_TK AUDIO_TK_NONE
+#endif
+
 #define AUDIO_TK_NONE 0
 #define AUDIO_TK_OPENAL 1
 #define AUDIO_TK_SDL_MIXER 3
-#define AUDIO_TK AUDIO_TK_${Audio_TK_UPPER}
 
 /* Include OpenAL extensions (alext.h) for sound modifiers */
 #cmakedefine HAVE_ALEXT 1

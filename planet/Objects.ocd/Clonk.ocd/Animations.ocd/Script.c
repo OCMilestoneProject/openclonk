@@ -307,12 +307,11 @@ func FxIntEyesClosedStop(target, effect, reason, tmp)
 
 func CloseEyes(iCounter)
 {
-	StopAnimation(GetRootAnimation(3));
 	lAnim.closedEyes += iCounter;
 	if(lAnim.closedEyes >= 1)
-		PlayAnimation("CloseEyes" , CLONK_ANIM_SLOT_Eyes, Anim_Linear(0, 0, GetAnimationLength("CloseEyes")/2, 3, ANIM_Hold), Anim_Const(1000));
+		PlayAnimation("CloseEyes" , CLONK_ANIM_SLOT_Eyes, Anim_Linear(0, 0, GetAnimationLength("CloseEyes")/2, 3, ANIM_Hold));
 	else
-		PlayAnimation("CloseEyes" , CLONK_ANIM_SLOT_Eyes, Anim_Linear(GetAnimationLength("CloseEyes")/2, GetAnimationLength("CloseEyes")/2, GetAnimationLength("CloseEyes"), 3, ANIM_Remove), Anim_Const(1000));
+		PlayAnimation("CloseEyes" , CLONK_ANIM_SLOT_Eyes, Anim_Linear(GetAnimationLength("CloseEyes")/2, GetAnimationLength("CloseEyes")/2, GetAnimationLength("CloseEyes"), 3, ANIM_Remove));
 }
 
 /*--
@@ -395,7 +394,7 @@ func GetCurrentWalkAnimation()
 func Footstep()
 {
 	if (GetMaterialVal("DigFree", "Material", GetMaterial(0,10)) == 0)
-		Sound("StepHard?");
+		Sound("Clonk::Movement::StepHard?");
 	else
 	{
 		var dir = Sign(GetXDir());
@@ -408,7 +407,7 @@ func Footstep()
 			B = clr & 0xff,
 		};
 		CreateParticle("Dust", PV_Random(dir * -2, dir * -1), 8, PV_Random(dir * 2, dir * 1), PV_Random(-2, -3), PV_Random(36, 2 * 36), particles, 5);
-		Sound("StepSoft?");
+		Sound("Clonk::Movement::StepSoft?");
 	}
 }
 
@@ -497,7 +496,7 @@ func FxIntWalkTimer(pTarget, effect)
 		effect.animation_id = PlayAnimation(anim, CLONK_ANIM_SLOT_Movement, GetWalkAnimationPosition(anim, 0), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
 	}
 	// The clonk has to stand, not making a pause animation yet and not doing other actions with the hands (e.g. loading the bow)
-	else if(anim == Clonk_WalkStand && !GetHandAction())
+	else if(anim == Clonk_WalkStand && !GetHandAction() && GetMenu() == nil)
 	{
 		if (effect.footstop_time) effect.footstep_time = 0;
 		if(!effect.idle_animation_time)
@@ -510,6 +509,8 @@ func FxIntWalkTimer(pTarget, effect)
 				var rand = Random(GetLength(Clonk_IdleActions));
 				PlayAnimation(Clonk_IdleActions[rand][0], CLONK_ANIM_SLOT_Movement, Anim_Linear(0, 0, GetAnimationLength(Clonk_IdleActions[rand][0]), Clonk_IdleActions[rand][1], ANIM_Remove), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
 				effect.idle_animation_time = Clonk_IdleActions[rand][1]-5;
+				if (!Random(10))
+					this->PlaySoundIdle();
 			}
 		}
 	}
@@ -583,7 +584,13 @@ func CheckScaleTop()
 {
 	// Test whether the clonk has reached a top corner
 	// That is, the leg vertices are the only ones attached to the wall
-	if(GBackSolid(-3+6*GetDir(),-3) || GBackSolid(-5+10*GetDir(),2)) return false;
+
+	// Check the head vertex
+	if (GBackSolid(-1+2*GetDir(),-7)) return false;
+	// Check the shoulder vertices
+	if(GBackSolid(-3+6*GetDir(),-3)) return false;
+	// Check the hip vertices
+	if(GBackSolid(-5+10*GetDir(),2)) return false;
 	return true;
 }
 
@@ -606,6 +613,7 @@ func FxIntScaleTimer(target, number, time)
 		dist *= 100;
 		// add the fractional part of the position (dist counts in the opposite direction of y)
 		dist -= GetY(100)-GetY()*100;
+		dist = BoundBy(dist, 0, GetAnimationLength("ScaleTop"));
 		if(number.animation_mode != 1)
 		{
 			number.animation_id = PlayAnimation("ScaleTop", CLONK_ANIM_SLOT_Movement, Anim_Const(GetAnimationLength("ScaleTop")*dist/800), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
@@ -769,7 +777,7 @@ func FxFallTimer(object target, effect, int timer)
 	}
 	if(timer == 2 && GetYDir() < 1)
 	{
-		Sound("Rustle?");
+		Sound("Clonk::Movement::Rustle?");
 	}
 
 	if(GetYDir() > 55 && GetAction() == "Jump")
@@ -1013,29 +1021,32 @@ func FxIntSwimTimer(pTarget, effect, iTime)
 	// Swimming
 	else if(!GBackSemiSolid(0, -5))
 	{
-		var percent = GetAnimationPosition(GetRootAnimation(5))*200/GetAnimationLength("Swim");
-		percent = (percent%100);
-		if( percent < 40 )
+		if (GBackLiquid()) // re-check water background before effects to prevent waves in wrong color
 		{
-			if(iTime%5 == 0)
+			var percent = GetAnimationPosition(GetRootAnimation(5)) * 200 / GetAnimationLength("Swim");
+			percent = (percent % 100);
+			if (percent < 40)
 			{
-				var phases = PV_Linear(0, 7);
-				if (GetDir() == 1) phases = PV_Linear(8, 15);
-				var color = GetAverageTextureColor(GetTexture(0, 0));
-				var particles =
+				if (iTime % 5 == 0)
 				{
-					Size = 16,
-					Phase = phases,
-					CollisionVertex = 750,
-					OnCollision = PC_Die(),
-					R = (color >> 16) & 0xff,
-					G = (color >>  8) & 0xff,
-					B = (color >>  0) & 0xff,
-					Attach = ATTACH_Front,
-				};
-				CreateParticle("Wave", 0, -4, (RandomX(-5,5)-(-1+2*GetDir())*4)/4, 0, 16, particles);
+					var phases = PV_Linear(0, 7);
+					if (GetDir() == 1) phases = PV_Linear(8, 15);
+					var color = GetAverageTextureColor(GetTexture(0, 0));
+					var particles =
+					{
+						Size = 16,
+						Phase = phases,
+						CollisionVertex = 750,
+						OnCollision = PC_Die(),
+						R = (color >> 16) & 0xff,
+						G = (color >> 8) & 0xff,
+						B = (color >> 0) & 0xff,
+						Attach = ATTACH_Front,
+					};
+					CreateParticle("Wave", 0, -4, (RandomX(-5, 5) - (-1 + 2 * GetDir()) * 4) / 4, 0, 16, particles);
+				}
+				Sound("Liquids::Swim?");
 			}
-			Sound("Splash?");
 		}
 		// Animation speed by X
 		if(effect.animation_name != "Swim")
@@ -1109,7 +1120,7 @@ func DoKneel(bool create_dust)
 
 	SetXDir(0);
 	SetAction("Kneel");
-	Sound("RustleLand");
+	Sound("Clonk::Movement::RustleLand");
 	PlayAnimation("KneelDown", CLONK_ANIM_SLOT_Movement, Anim_Linear(0, 0, GetAnimationLength("KneelDown"), iKneelDownSpeed, ANIM_Remove), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
 
 	ScheduleCall(this, "EndKneel", iKneelDownSpeed, 1);
@@ -1150,7 +1161,7 @@ func DoRoll()
 func OnStartRoll()
 {	
 	SetTurnForced(GetDir());
-	Sound("Roll");
+	Sound("Clonk::Movement::Roll");
 	if(GetDir() == 1) lAnim.rollDir = 1;
 	else
 		lAnim.rollDir = -1;
@@ -1168,7 +1179,7 @@ func OnAbortRoll()
 		RemoveEffect(nil, this, e);
 }
 
-func FxRollingTimer(object target, int num, int timer)
+func FxRollingTimer(object target, effect effect, int timer)
 {
 	if(GetContact(-1)) SetXDir(23 * lAnim.rollDir);
 
@@ -1217,50 +1228,63 @@ func FxRollingStop(object target, proplist effect, int reason, temp)
 	The effect just is responsible for the sound and the termination of digging.
 --*/
 
-func StartDigging()
+public func StartDigging()
 {
-	if(!GetEffect("IntDig", this))
+	if (!GetEffect("IntDig", this))
 		AddEffect("IntDig", this, 1, 1, this);
 }
 
-func StopDigging()
+public func StopDigging()
 {
-	if(GetAction() != "Dig") RemoveEffect("IntDig", this);
+	if (GetAction() != "Dig")
+		RemoveEffect("IntDig", this);
 }
 
-func FxIntDigStart(pTarget, effect, fTmp)
+public func GetDiggingAnimation()
 {
-	if(fTmp) return;
-	effect.var1 = PlayAnimation("Dig", CLONK_ANIM_SLOT_Movement, Anim_Linear(0, 0, GetAnimationLength("Dig"), 36, ANIM_Loop), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
+	var dig_effect = GetEffect("IntDig", this);
+	if (dig_effect)
+		return dig_effect.animation;
+	return;
+}
+
+public func FxIntDigStart(object target, effect fx, int temp)
+{
+	if (temp)
+		return FX_OK;
+	fx.animation = PlayAnimation("Dig", CLONK_ANIM_SLOT_Movement, Anim_Linear(0, 0, GetAnimationLength("Dig"), 36, ANIM_Loop), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
 
 	// Update carried items
 	UpdateAttach();
 
 	// Sound
-	Sound("Dig?");
+	Sound("Clonk::Action::Dig::Dig?");
 
 	// Set proper turn type
 	SetTurnType(0);
+	return FX_OK;
 }
 
-func FxIntDigTimer(pTarget, effect, iTime)
+public func FxIntDigTimer(object target, effect fx, int time)
 {
-	if(iTime % 36 == 0)
+	if (time % 36 == 0)
 	{
-		Sound("Dig?");
+		Sound("Clonk::Action::Dig::Dig?");
 	}
-	if( (iTime-18) % 36 == 0 ||  iTime > 35)
+	if (time == 18 || time >= 36)
 	{
-		var noDig = 1;
-		for(var pShovel in FindObjects(Find_ID(Shovel), Find_Container(this)))
-			if(pShovel->IsDigging()) noDig = 0;
-		if(noDig)
+		var no_dig = true;
+		for (var shovel in FindObjects(Find_ID(Shovel), Find_Container(this)))
+			if (shovel->IsDigging()) 
+				no_dig = false;
+		if (no_dig)
 		{
 			SetAction("Walk");
 			SetComDir(COMD_Stop);
-			return -1;
+			return FX_Execute_Kill;
 		}
 	}
+	return FX_OK;
 }
 
 /*--
@@ -1303,7 +1327,7 @@ func FxIntThrowStart(target, effect, tmp, targetobj, throwAngle)
 {
 	var iThrowTime = 16;
 	if(tmp) return;
-	PlayAnimation("ThrowArms", CLONK_ANIM_SLOT_Arms, Anim_Linear(0, 0, GetAnimationLength("ThrowArms"), iThrowTime), Anim_Const(1000));
+	PlayAnimation("ThrowArms", CLONK_ANIM_SLOT_Arms, Anim_Linear(0, 0, GetAnimationLength("ThrowArms"), iThrowTime));
 	effect.targetobj = targetobj;
 	effect.angle = throwAngle;
 }

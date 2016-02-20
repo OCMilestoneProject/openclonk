@@ -35,6 +35,16 @@ public func SetDir(new_dir, ...)
 	// Update position of child objects on direction change
 	if (case) case->SetPosition(GetX() -19 * GetCalcDir(), case->GetY());
 	if (rope) rope->SetPosition(GetX() -19 * GetCalcDir(), rope->GetY());
+	
+	// Set mesh transformation so that the rope on the mesh fits the rope from the elevator case.
+	if (new_dir == DIR_Left)
+	{
+		this.MeshTransformation = Trans_Rotate(-44,0,1,0);
+	}
+	else
+	{
+		this.MeshTransformation = Trans_Rotate(-47,0,1,0);
+	}
 	return r;
 }
 
@@ -60,7 +70,8 @@ public func GetCaseXOff() { return -19 * GetCalcDir(); }
 
 private func Construction()
 {
-	SetProperty("MeshTransformation", Trans_Rotate(-44,0,1,0));
+	// Set default mesh transformation.
+	SetDir(DIR_Left);
 	SetAction("Default");
 	wheel_anim = PlayAnimation("winchSpin", 1, Anim_Const(0), Anim_Const(1000));
 
@@ -90,6 +101,11 @@ private func CreateCase()
 {
 	case = CreateObjectAbove(ElevatorCase, GetCaseXOff(), 33, GetOwner());
 	if (case) case->Connect(this);
+}
+
+public func GetCase()
+{
+	return case;
 }
 
 private func CreateRope()
@@ -128,7 +144,7 @@ public func StartEngine(int direction, bool silent)
 
 	if (!silent)
 	{
-		Sound("ElevatorStart", nil, nil, nil, nil, 400);
+		Sound("Structures::Elevator::Start", nil, nil, nil, nil, 400);
 		ScheduleCall(this, "EngineLoop", 34);
 	}
 	if (wheel_anim == nil) // If for some reason the animation has stopped
@@ -153,16 +169,16 @@ public func StartEngine(int direction, bool silent)
 
 public func EngineLoop()
 {
-	Sound("ElevatorMoving", nil, nil, nil, 1, 400);
+	Sound("Structures::Elevator::Moving", nil, nil, nil, 1, 400);
 }
 
 public func StopEngine(bool silent)
 {
 	if (!silent)
 	{
-		Sound("ElevatorMoving", nil, nil, nil, -1);
+		Sound("Structures::Elevator::Moving", nil, nil, nil, -1);
 		ClearScheduleCall(this, "EngineLoop");
-		Sound("ElevatorStop", nil, nil, nil, nil, 400);
+		Sound("Structures::Elevator::Stop", nil, nil, nil, nil, 400);
 	}
 
 	if (wheel_anim == nil) return;
@@ -198,6 +214,16 @@ private func UpdateTurnSpeed()
 
 /* Construction preview */
 
+// Definition call by the construction previewer
+public func ConstructionPreview(object previewer, int overlay, int dir)
+{
+	if (GetType(this) != C4V_Def) return;
+
+	previewer->SetGraphics(nil, Elevator_Case_Front, overlay, GFXOV_MODE_Base);
+	previewer->SetObjDrawTransform(1000, 0, -19000 * (dir*2-1), 0, 1000, 17000, overlay);
+	return true;
+}
+
 // Sticking to other elevators
 public func ConstructionCombineWith() { return "IsElevator"; }
 public func ConstructionCombineDirection() { return CONSTRUCTION_STICK_Left | CONSTRUCTION_STICK_Right; }
@@ -224,6 +250,11 @@ public func CombineWith(object other)
 	// Save for use in Initialize
 	partner = other;
 }
+
+// Special requirements for the basement of the elevator.
+public func GetBasementWidth() { return 36; }
+public func GetBasementOffset() { return [11 * (2 * GetDir() - 1), 0]; }
+
 
 /* Combination */
 

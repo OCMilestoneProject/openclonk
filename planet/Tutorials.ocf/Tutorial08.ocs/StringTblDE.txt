@@ -1,0 +1,22 @@
+# Goal description
+MsgGoalName=Lorenbergung
+MsgGoalDescription=Finde die Lore mit Metall und bringe sie zur Oberfläche.
+
+# Dialogue options
+MsgNextTutorial=&Nächste Lernrunde
+MsgNextTutorialDesc=Die nächste Lernrunde starten.
+MsgRepeatRound=&Lernrunde wiederholen
+MsgRepeatRoundDesc=Diese Lernrunde wiederholen.
+
+# Tutorial messages
+MsgTutorialFloodedMines=Du befindest direkt vor dem Mineneingang. Sprich mit dem Vorarbeiter, der vor der Pumpe steht und finde heraus, wie du helfen kannst.
+MsgTutorialConnectPipe=Nimm ein Rohr aus der Kiste. Rohre können mit Pumpen verbunden werden, indem man sie benutzt, während man vor der Pumpe steht. Das erste angeschlossene Rohr ist der Zulauf, das zweite der Ablauf. Verbinde das Rohr jetzt mit der Pumpe. Weitere Optionen der Pumpe kannst du im Interaktionsmenü finden.
+MsgTutorialFindMetalLorry=Gut. Jetzt wird die Pumpe Wasser aus dem Zulauf pumpen und direkt vor sich herauspumpen, da noch kein Ablauf verbunden ist. Du kannst das Rohr im Inventar behalten und es benutzen, um Wasser aus der Mine zu pumpen. Tauche jetzt hinunter zur Mine, indem du dem Pfad des Fahrstuhls folgst. Mach die Lore mit dem Metall ausfindig. Denke auch daran, regelmäßig Luft zu holen!
+MsgTutorialMoveLorry=Gut, bringe die Lore jetzt aus der Mine in den gefluteten Fahrstuhlschacht. Schiebe die Lore ins Wasser, vielleicht rollt sie ja genau dorthin, wo der Fahrstuhlkorb den Schachtboden erreicht.
+MsgTutorialCallElevator=Hm, das hat nicht funktioniert. Schwimme zu dem Ort, wo der Fahrstuhlkorb den Schachtboden erreichen würde und rufe den Korb, indem du [%s] drückst. Der Korb wird einige Zeit brauchen, bis der Boden des Schachtes erreicht hat. Währenddessen könntest du mit dem Clonk vor dem Chemielabor reden, vielleicht hat der ja noch Ideen.
+MsgTutorialProduceWallKit=Das war nicht sehr hilfreich. Das Problem hier, dass die Lore in den Fahrstuhlkorb hinein muss. Wenn es nur irgendwie möglich wäre, den kleinen Bereich um den Fahrstuhlkorb zu versiegeln und das Wasser mit der Pumpe zu entfernen. Warte mal kurz...dafür wäre ein Wandbausatz genau das richtige. Du solltest davon einen in der Werkstatt herstellen.
+MsgTutorialCloseMineShaft=Nimm den Wandbausatz und die Dynamitkiste aus dem Chemielabor. Versichere dich, dass der Fahrstuhlkorb wirklich am Boden des gefluteten Schachtes ist. Benutze dann den Wandbausatz, um den Schacht zu verschließen. Wähle dazu den Wandbausatz in deinem Inventar aus und halte die linke Maustaste gedrückt. Positioniere die Wand, indem du den Mauszeiger bewegst und erstelle sie durch Loslassen der Taste.
+MsgTutorialWaitAndMoveLorry=Perfekt! Bring den Zulauf der Pumpe jetzt zum Fahrstuhlkorb und warte, bis der Schacht leergepumpt wurde. Danach kannst du die Lore auf den Fahrstuhlkorb schieben.
+MsgTutorialBlastWall=Gut, jetzt wo die Lore auf dem Korb steht, kannst du die Wand nach oben wieder aufsprengen, damit der Fahrstuhl an die Oberfläche zurückkehren kann. Nimm die Dynamitkiste (aus dem Chemielabor) und platziere die Dynamitstangen an der angezeigten Stelle. Gehe danach in Sicherheit und zünde das Dynamit!
+MsgTutorialSwimUp=Jetzt kannst du an die Oberfläche zurückschwimmen. Wenn du oben angelangt bist, rufe den Fahrstuhlkorb. Schiebe die Lore zum Vorarbeiter und sprich mit ihm.
+MsgTutorialCompleted=Sehr gut. Wie du siehst, braucht man manchmal ein paar geschickte Tricks, um Probleme in diesem Spiel zu lösen. Jetzt wo die Dorfbewohner genug Metall haben, bist du einen Schritt näher, um die Dunkelwipffraktion anzugreifen.

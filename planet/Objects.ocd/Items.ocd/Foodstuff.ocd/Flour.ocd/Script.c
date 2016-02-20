@@ -2,7 +2,7 @@
 
 protected func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 }
 
 public func IsWindmillProduct() { return true; }
@@ -10,4 +10,3 @@ public func IsWindmillProduct() { return true; }
 local Name = "$Name$";
 local Description = "$Description$";
 local Collectible = 1;
-local Rebuy = true;

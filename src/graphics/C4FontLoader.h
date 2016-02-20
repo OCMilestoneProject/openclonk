@@ -98,8 +98,7 @@ protected:
 	DWORD dwDefFontHeight; // configured font size (in points)
 	char szFontName[80+1]; // used font name (or surface file name)
 
-	C4Surface **psfcFontData; // font recource surfaces - additional surfaces created as needed
-	int iNumFontSfcs;       // number of created font surfaces
+	std::vector<std::unique_ptr<C4Surface>> psfcFontData; // font resource surfaces - additional surfaces created as needed
 	int iSfcSizes;          // size for font surfaces
 	int iFontZoom;          // zoom of font in texture
 
@@ -156,7 +155,7 @@ public:
 	int32_t GetTextWidth(const char *szText, bool fCheckMarkup = true) { int32_t x, y; GetTextExtent(szText, x, y, fCheckMarkup); return x; }
 	// insert line breaks into a message and return overall height - uses and regards '|' as line breaks
 	int BreakMessage(const char *szMsg, int iWdt, char *szOut, int iMaxOutLen, bool fCheckMarkup, float fZoom=1.0f);
-	int BreakMessage(const char *szMsg, int iWdt, class StdStrBuf *pOut, bool fCheckMarkup, float fZoom=1.0f);
+	int BreakMessage(const char *szMsg, int iWdt, StdStrBuf *pOut, bool fCheckMarkup, float fZoom=1.0f);
 	// get message break and pos after message break - does not regard any manual line breaks!
 	int GetMessageBreak(const char *szMsg, const char **ppNewPos, int iBreakWidth, float fZoom=1.0f);
 

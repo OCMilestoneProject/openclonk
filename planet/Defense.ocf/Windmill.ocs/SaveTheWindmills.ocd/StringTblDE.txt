@@ -1,0 +1,2 @@
+Name=Hüte die Windräder
+Description=Verteidige die Windräder gegen die Feinde!

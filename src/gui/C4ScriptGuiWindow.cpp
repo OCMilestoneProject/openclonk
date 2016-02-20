@@ -40,6 +40,7 @@
 #include <C4Player.h>
 #include <C4PlayerList.h>
 #include <C4Viewport.h>
+#include "lib/StdColors.h"
 
 #include <cmath>
 
@@ -1487,10 +1488,10 @@ bool C4ScriptGuiWindow::DrawChildren(C4TargetFacet &cgo, int32_t player, int32_t
 	int32_t clipX1(0), clipX2(0), clipY1(0), clipY2(0);
 	bool clipping = GetClippingRect(clipX1, clipY1, clipX2, clipY2);
 	
-	const int32_t targetClipX1 = cgo.TargetX + clipX1;
-	const int32_t targetClipY1 = cgo.TargetY + clipY1;
-	const int32_t targetClipX2 = cgo.TargetX + clipX2;
-	const int32_t targetClipY2 = cgo.TargetY + clipY2;
+	const int32_t targetClipX1 = cgo.X + cgo.TargetX + clipX1;
+	const int32_t targetClipY1 = cgo.Y + cgo.TargetY + clipY1;
+	const int32_t targetClipX2 = cgo.X + cgo.TargetX + clipX2;
+	const int32_t targetClipY2 = cgo.Y + cgo.TargetY + clipY2;
 
 	if (clipping)
 	{
@@ -1533,8 +1534,12 @@ bool C4ScriptGuiWindow::DrawChildren(C4TargetFacet &cgo, int32_t player, int32_t
 		if (oneDrawn && (withMultipleFlag == 0)) break;
 	}
 
-	// scrolling obviously does not affect the scroll bar
+	// Scrolling obviously does not affect the scroll bar.
 	cgo.TargetY += iScrollY;
+	// The scroll bar does not correct for the cgo offset (i.e. the upper board).
+	cgo.TargetX += cgo.X;
+	cgo.TargetY += cgo.Y;
+
 	if (pScrollBar->IsVisible())
 		pScrollBar->DrawElement(cgo);
 	
@@ -1694,13 +1699,28 @@ bool C4ScriptGuiWindow::UpdateLayout(C4TargetFacet &cgo, float parentWidth, floa
 	// If this window contains text, we auto-fit to the text height;
 	// but we only break text when the window /would/ crop it otherwise.
 	StdCopyStrBuf *strBuf = props[C4ScriptGuiWindowPropertyName::text].GetStrBuf();
+	int minRequiredTextHeight = 0;
 	if (strBuf && !(style & C4ScriptGuiWindowStyleFlag::NoCrop))
 	{
 		StdStrBuf sText;
-		int32_t textHgt = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), rcBounds.Wdt, &sText, true);
+		const int32_t rawTextHeight = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), rcBounds.Wdt, &sText, true);
 		// enable auto scroll
-		if (textHgt > rcBounds.Hgt)
-			rcBounds.Hgt = textHgt;
+		if (rawTextHeight - 1 > rcBounds.Hgt)
+		{
+			// If we need to scroll, we will also have to add a scrollbar that takes up some width.
+			// Recalculate the actual height, taking into account the scrollbar.
+			// This is not done in the calculation earlier, because then e.g. a 2x1em field could not contain two letters
+			// but would immediately add a linebreak.
+			// In the case that this window auto-resizes (FitChildren), the small additional margin to the bottom should not matter much.
+			const int32_t actualTextHeight = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), rcBounds.Wdt - pScrollBar->rcBounds.Wdt, &sText, true);
+			minRequiredTextHeight = actualTextHeight;
+		}
+		else
+		{
+			// Otherwise, still set the minimum size to the text height (without scrollbar).
+			// This is necessary so that e.g. Style::FitChildren works properly with pure text windows.
+			minRequiredTextHeight = rawTextHeight;
+		}
 	}
 
 	UpdateChildLayout(cgo, width, height);
@@ -1716,7 +1736,7 @@ bool C4ScriptGuiWindow::UpdateLayout(C4TargetFacet &cgo, float parentWidth, floa
 
 	// check if we need a scroll-bar
 	int32_t topMostChild = 0;
-	int32_t bottomMostChild = 0;
+	int32_t bottomMostChild = minRequiredTextHeight;
 	for (Element * element : *this)
 	{
 		C4ScriptGuiWindow *child = static_cast<C4ScriptGuiWindow*>(element);
@@ -1745,6 +1765,9 @@ bool C4ScriptGuiWindow::UpdateLayout(C4TargetFacet &cgo, float parentWidth, floa
 	// never show scrollbar on non-cropping windows
 	if ((style & C4ScriptGuiWindowStyleFlag::NoCrop) || !C4GUI::ScrollWindow::IsScrollingNecessary())
 		pScrollBar->SetVisibility(false);
+	// The "dirty" flag is unset here. Note that it's only used for non "multiple"-style windows after startup.
+	// The "multiple"-style windows are updated together when the root window does a full refresh.
+	mainWindowNeedsLayoutUpdate = false;
 	return true;
 }
 
@@ -1775,22 +1798,19 @@ bool C4ScriptGuiWindow::Draw(C4TargetFacet &cgo, int32_t player, C4Rect *current
 	assert(!IsRoot()); // not root, root needs to receive DrawAll
 
 	// message hidden?
-	const int32_t &myPlayer = props[C4ScriptGuiWindowPropertyName::player].GetInt();
-	if (!IsVisible() || (myPlayer != ANY_OWNER && player != myPlayer) || (target && !target->IsVisible(player, false)))
-	{
-		return false;
-	}
+	if (!IsVisibleTo(player)) return false;
 	
+	const int32_t &style = props[C4ScriptGuiWindowPropertyName::style].GetInt();
+
 	if (mainWindowNeedsLayoutUpdate)
 	{
 		assert(GetParent() && (static_cast<C4ScriptGuiWindow*>(GetParent())->IsRoot()));
 		assert(isMainWindow);
+		assert(!(style & C4ScriptGuiWindowStyleFlag::Multiple) && "\"Multiple\"-style window not updated by a full refresh of the root window.");
 		C4ScriptGuiWindow * parent = static_cast<C4ScriptGuiWindow*>(GetParent());
 		UpdateLayout(cgo, parent->rcBounds.Wdt, parent->rcBounds.Hgt);
-		mainWindowNeedsLayoutUpdate = false;
+		assert(!mainWindowNeedsLayoutUpdate);
 	}
-
-	const int32_t &style = props[C4ScriptGuiWindowPropertyName::style].GetInt();
 
 	const int32_t outDrawX = cgo.X + cgo.TargetX + rcBounds.x;
 	const int32_t outDrawY = cgo.Y + cgo.TargetY + rcBounds.y;
@@ -1839,12 +1859,18 @@ bool C4ScriptGuiWindow::Draw(C4TargetFacet &cgo, int32_t player, C4Rect *current
 	{
 		StdStrBuf sText;
 		int alignment = ALeft;
+		// If we are showing a scrollbar, we need to leave a bit of space for it so that it doesn't overlap the text.
+		const int scrollbarXOffset = pScrollBar->IsVisible() ? pScrollBar->rcBounds.Wdt : 0;
+		const int scrollbarScroll = pScrollBar->IsVisible() ? this->GetScrollY() : 0;
+		const int actualDrawingWidth = outDrawWdt - scrollbarXOffset;
+		
 		// If we are set to NoCrop, the message will be split by string-defined line breaks only.
-		int allowedTextWidth = outDrawWdt;
+		int allowedTextWidth = actualDrawingWidth;
+		
 		if (style & C4ScriptGuiWindowStyleFlag::NoCrop)
 			allowedTextWidth = std::numeric_limits<int>::max();
 		int32_t textHgt = ::GraphicsResource.FontRegular.BreakMessage(strBuf->getData(), allowedTextWidth, &sText, true);
-		float textYOffset = 0.0f, textXOffset = 0.0f;
+		float textYOffset = static_cast<float>(-scrollbarScroll), textXOffset = 0.0f;
 		if (style & C4ScriptGuiWindowStyleFlag::TextVCenter)
 			textYOffset = float(outDrawHgt) / 2.0f - float(textHgt) / 2.0f;
 		else if (style & C4ScriptGuiWindowStyleFlag::TextBottom)
@@ -1853,7 +1879,7 @@ bool C4ScriptGuiWindow::Draw(C4TargetFacet &cgo, int32_t player, C4Rect *current
 		{
 			int wdt, hgt;
 			::GraphicsResource.FontRegular.GetTextExtent(sText.getData(), wdt, hgt, true);
-			textXOffset = float(outDrawWdt) / 2.0f;
+			textXOffset = float(actualDrawingWidth) / 2.0f;
 			alignment = ACenter;
 		}
 		else if (style & C4ScriptGuiWindowStyleFlag::TextRight)
@@ -1861,7 +1887,7 @@ bool C4ScriptGuiWindow::Draw(C4TargetFacet &cgo, int32_t player, C4Rect *current
 			alignment = ARight;
 			int wdt, hgt;
 			::GraphicsResource.FontRegular.GetTextExtent(sText.getData(), wdt, hgt, true);
-			textXOffset = float(outDrawWdt);
+			textXOffset = float(actualDrawingWidth);
 		}
 		pDraw->TextOut(sText.getData(), ::GraphicsResource.FontRegular, 1.0, cgo.Surface, outDrawX + textXOffset, outDrawY + textYOffset, 0xffffffff, alignment);
 	}
@@ -1889,23 +1915,16 @@ bool C4ScriptGuiWindow::Draw(C4TargetFacet &cgo, int32_t player, C4Rect *current
 bool C4ScriptGuiWindow::GetClippingRect(int32_t &left, int32_t &top, int32_t &right, int32_t &bottom)
 {
 	const int32_t &style = props[C4ScriptGuiWindowPropertyName::style].GetInt();
-	if (IsRoot() || isMainWindow || (style & C4ScriptGuiWindowStyleFlag::NoCrop))
+	if (IsRoot() || (style & C4ScriptGuiWindowStyleFlag::NoCrop))
 		return false;
 
-	if (pScrollBar->IsVisible())
-	{
-		left = rcBounds.x;
-		top = rcBounds.y;
-		right = rcBounds.Wdt + left;
-		bottom = rcBounds.Hgt + top;
-		return true;
-	}
-
-	/*const int32_t &style = props[C4ScriptGuiWindowPropertyName::style].GetInt();
-	if (!isMainWindow && !(style & C4ScriptGuiWindowStyleFlag::NoCrop))
-		return static_cast<C4ScriptGuiWindow*>(GetParent())->GetClippingRect(left, top, right, bottom);
-		*/
-	return false;
+	// Other windows always clip their children.
+	// This implicitly clips childrens' text to the parent size, too.
+	left = rcBounds.x;
+	top = rcBounds.y;
+	right = rcBounds.Wdt + left;
+	bottom = rcBounds.Hgt + top;
+	return true;
 }
 
 void C4ScriptGuiWindow::SetTag(C4String *tag)
@@ -1988,6 +2007,9 @@ bool C4ScriptGuiWindow::MouseInput(int32_t button, int32_t mouseX, int32_t mouse
 {
 	// only called on root
 	assert(IsRoot());
+	// This is only called during a mouse move event, where the MouseControl's player is available.
+	const int32_t &player = ::MouseControl.GetPlayer();
+	assert(player != NO_OWNER);
 	// Only allow one window to catch the mouse input.
 	// Do not simply return, however, since other windows might need OnMouseOut().
 	bool oneActionAlreadyExecuted = false;
@@ -2003,6 +2025,9 @@ bool C4ScriptGuiWindow::MouseInput(int32_t button, int32_t mouseX, int32_t mouse
 			if ((withMultipleFlag == 0) && (style & C4ScriptGuiWindowStyleFlag::Multiple)) continue;
 			if ((withMultipleFlag == 1) && !(style & C4ScriptGuiWindowStyleFlag::Multiple)) continue;
 			
+			// Do the visibility check first. The child itself won't do it, because we are handling mouse in/out here, too.
+			if (!child->IsVisibleTo(player)) continue;
+
 			// we are root, we have to adjust the position for the "main" windows that are centered
 			int32_t adjustedMouseX = 0, adjustedMouseY = mouseY;
 			int32_t offsetX = 0, offsetY = 0;
@@ -2054,16 +2079,18 @@ bool C4ScriptGuiWindow::ProcessMouseInput(int32_t button, int32_t mouseX, int32_
 	const int32_t &style = props[C4ScriptGuiWindowPropertyName::style].GetInt();
 	if (style & C4ScriptGuiWindowStyleFlag::IgnoreMouse)
 		return false;
-
-	// if the window belongs to an invisible object, don't show
-	// the "normal" visibility will be handed by the parent callback
-	if (target)
-		if (!target->IsVisible(player, false))
-			return false;
-
+	
 	// we have mouse focus! Is this new?
 	if (!HasMouseFocus())
 		OnMouseIn(player, parentOffsetX, parentOffsetY);
+
+	// Make sure the UI does not catch release events without matching key-down events.
+	// Otherwise, you could e.g. open a menu on left-down and then the menu would block the left-up event, leading to issues.
+	if (button == C4MC_Button_LeftUp)
+	{
+		// Do not catch up-events without prior down-events!
+		if (!(currentMouseState & MouseState::MouseDown)) return false;
+	}
 
 	// do not simply break the loop since some OnMouseOut might go missing
 	bool oneActionAlreadyExecuted = false;
@@ -2076,6 +2103,10 @@ bool C4ScriptGuiWindow::ProcessMouseInput(int32_t button, int32_t mouseX, int32_
 	for (auto iter = rbegin(); iter != rend(); ++iter)
 	{
 		C4ScriptGuiWindow *child = static_cast<C4ScriptGuiWindow*>(*iter);
+
+		// Do the visibility check first. The child itself won't do it, because we are handling mouse in/out here, too.
+		if (!child->IsVisibleTo(player)) continue;
+
 		const int32_t childLeft = child->rcBounds.x;
 		const int32_t childRight = child->rcBounds.x + child->rcBounds.Wdt;
 		const int32_t childTop = child->rcBounds.y;
@@ -2111,8 +2142,9 @@ bool C4ScriptGuiWindow::ProcessMouseInput(int32_t button, int32_t mouseX, int32_
 	if (button == C4MC_Button_LeftDown || button == C4MC_Button_LeftDouble)
 		currentMouseState |= MouseState::MouseDown;
 	// trigger!
-	if (button == C4MC_Button_LeftUp && (currentMouseState & MouseState::MouseDown))
+	if (button == C4MC_Button_LeftUp)
 	{
+		currentMouseState = currentMouseState & ~MouseState::MouseDown;
 		C4ScriptGuiWindowAction *action = props[C4ScriptGuiWindowPropertyName::onClickAction].GetAction();
 		if (action)
 		{
@@ -2223,5 +2255,18 @@ bool C4ScriptGuiWindow::ExecuteCommand(int32_t actionID, int32_t player, int32_t
 
 bool C4ScriptGuiWindow::IsRoot()
 {
-	return this == Game.ScriptGuiRoot;
+	return this == Game.ScriptGuiRoot.get();
+}
+
+bool C4ScriptGuiWindow::IsVisibleTo(int32_t player)
+{
+	// Not visible at all?
+	if (!IsVisible()) return false;
+	// We have a player assigned and it's a different one?
+	const int32_t &myPlayer = props[C4ScriptGuiWindowPropertyName::player].GetInt();
+	if (myPlayer != ANY_OWNER && player != myPlayer) return false;
+	// We have a target object which is invisible to the player?
+	if (target && !target->IsVisible(player, false)) return false;
+	// Default to visible!
+	return true;
 }

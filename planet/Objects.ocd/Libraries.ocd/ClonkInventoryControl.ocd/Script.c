@@ -8,10 +8,9 @@
 /*
 	used properties:
 	this.inventory.last_slot: last inventory-slot that has been selected. Used for QuickSwitching
-
-	other used properties of "this.inventory" might have been declared in Inventory.ocd
+	this.inventory.is_picking_up: whether currently picking up
 	
-	this.control.hotkeypressed: declared in ClonkControl.ocd
+	other used properties of "this.inventory" might have been declared in Inventory.ocd
 */
 
 
@@ -21,6 +20,13 @@ func Construction()
 		this.inventory = {};
 	this.inventory.last_slot = 0;
 	return _inherited(...);
+}
+
+public func OnShiftCursor(object new_cursor)
+{
+	if (this.control.is_interacting)
+		AbortPickingUp();
+	return _inherited(new_cursor, ...);
 }
 
 // Called by other libraries and objects when the Clonk has forcefully dropped (not thrown) an object.
@@ -49,7 +55,7 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 	if (ctrl == CON_QuickSwitch)
 	{
 		// but ignore quickswitch if we have more than 1 hand-slot
-		if(this->HandObjects() > 1)
+		if(this.HandObjects > 1)
 			return inherited(plr, ctrl, x, y, strength, repeat, release, ...);;
 		
 		// select last slot
@@ -57,81 +63,88 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 		return true;
 	}
 	
-	// Quick-pickup item via click? Note that this relies on being executed after the normal Clonk controls
-	if (ctrl == CON_Use && !this->GetHandItem(0) && !release)
+	// Collection and dropping is only allowed when the Clonk is not contained.
+	if (!Contained())
 	{
-		var sort = Sort_Distance(x, y);
-		var items = FindAllPickupItems(sort);
-		for (var item in items)
+		// Quick-pickup item via click? Note that this relies on being executed after the normal Clonk controls
+		if (ctrl == CON_Use && !this->GetHandItem(0) && !release)
 		{
-			if (item && TryToCollect(item)) return true;
+			var sort = Sort_Distance(x, y);
+			var items = FindAllPickupItems(sort);
+			for (var item in items)
+			{
+				if (item && TryToCollect(item)) return true;
+			}
 		}
-	}
-	
-	// Begin picking up objects.
-	if (ctrl == CON_PickUp && !release)
-	{
-		this->CancelUse();
-		BeginPickingUp();
-		return true;
-	}
-	
-	// Drop the mouse item?
-	if (ctrl == CON_Drop && !release)
-	{
-		// Do not immediately collect another thing unless chosen with left/right.
+		
+		// Begin picking up objects.
+		if (ctrl == CON_PickUp && !release)
+		{
+			this->CancelUse();
+			BeginPickingUp();
+			return true;
+		}
+		
+		// Drop the mouse item?
+		if (ctrl == CON_Drop && !release)
+		{
+			// Do not immediately collect another thing unless chosen with left/right.
+			if (this.inventory.is_picking_up)
+			{
+				SetNextPickupItem(nil);
+			}
+			
+			var item = this->GetHandItem(0);
+			if (item)
+				this->DropInventoryItem(this->GetHandItemPos(0));
+			return true;
+		}
+		
+		
+		// Switching pickup object or finish pickup?
 		if (this.inventory.is_picking_up)
 		{
-			SetNextPickupItem(nil);
+			// Stop picking up.
+			if (ctrl == CON_PickUpNext_Stop)
+			{
+				AbortPickingUp();
+				return true;
+			}
+			
+			// Quickly pick up everything possible.
+			if (ctrl == CON_PickUpNext_All)
+			{
+				PickUpAll();
+				AbortPickingUp();
+				return true;
+			}
+			
+			// Finish picking up (aka "collect").
+			if (ctrl == CON_PickUp && release)
+			{
+				EndPickingUp();
+				return true;
+			}
+			
+			// Switch left/right through objects.
+			var dir = nil;
+			if (ctrl == CON_PickUpNext_Left) dir = -1;
+			else if (ctrl == CON_PickUpNext_Right) dir = 1;
+			
+			if (dir != nil)
+			{
+				var item = FindNextPickupObject(this.inventory.pickup_item, dir);
+				if (item)
+					SetNextPickupItem(item);
+				return true;
+			}
 		}
-		
-		var item = this->GetHandItem(0);
-		if (item)
-			this->DropInventoryItem(this->GetHandItemPos(0));
-		return true;
 	}
-	
-	// Switching pickup object or finish pickup?
-	if (this.inventory.is_picking_up)
+	else // Contained
 	{
-		// Stop picking up.
-		if (ctrl == CON_PickUpNext_Stop)
-		{
-			this.inventory.pickup_item = nil;
-			EndPickingUp();
-			return true;
-		}
-		
-		// Quickly pick up everything possible.
-		if (ctrl == CON_PickUpNext_All)
-		{
-			PickUpAll();
-			this.inventory.pickup_item = nil;
-			EndPickingUp();
-			return true;
-		}
-		
-		// Finish picking up (aka "collect").
-		if (ctrl == CON_PickUp && release)
-		{
-			EndPickingUp();
-			return true;
-		}
-		
-		// Switch left/right through objects.
-		var dir = nil;
-		if (ctrl == CON_PickUpNext_Left) dir = -1;
-		else if (ctrl == CON_PickUpNext_Right) dir = 1;
-		
-		if (dir != nil)
-		{
-			var item = FindNextPickupObject(this.inventory.pickup_item, dir);
-			if (item)
-				SetNextPickupItem(item);
-			return true;
-		}
+		// If we are contained, have a picking up process running, and issue another command we first stop the selection.
+		if (this.inventory.is_picking_up) AbortPickingUp();
 	}
-	
 	
 	// shift inventory
 	var inventory_shift = 0;
@@ -140,8 +153,8 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 	
 	if (inventory_shift)
 	{
-		var current = (this->GetHandItemPos(0) + inventory_shift) % this->MaxContentsCount();
-		if (current < 0) current = this->MaxContentsCount() + current;
+		var current = (this->GetHandItemPos(0) + inventory_shift) % this.MaxContentsCount;
+		if (current < 0) current = this.MaxContentsCount + current;
 		this->SetHandItemPos(0, current);
 		return true;
 	}
@@ -189,7 +202,7 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 	
 	// only the last-pressed key is taken into consideration.
 	// if 2 hotkeys are held, the earlier one is being treated as released
-	if (hot > 0 && hot <= this->MaxContentsCount())
+	if (hot > 0 && hot <= this.MaxContentsCount)
 	{
 		SetHandItemPos(0, hot-1);
 		return true;
@@ -315,6 +328,13 @@ private func BeginPickingUp()
 	var obj = FindNextPickupObject(this, 0);
 	if (obj)
 		SetNextPickupItem(obj);
+}
+
+// Ends the pickup process without actually doing anything.
+private func AbortPickingUp()
+{
+	this.inventory.pickup_item = nil;
+	EndPickingUp();
 }
 
 private func EndPickingUp()

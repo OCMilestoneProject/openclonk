@@ -225,9 +225,10 @@ private:
 // extra data associated with a key event
 struct C4KeyEventData
 {
+	enum { KeyPos_None = 0x7fffff }; // value used to denote invalid/none key positions
 	int32_t iStrength; // pressure between 0 and 100 (100 for nomal keypress)
 	int32_t game_x,game_y, vp_x,vp_y;       // position for mouse event, landscape+viewport coordinates
-	C4KeyEventData() : iStrength(0), game_x(0), game_y(0), vp_x(0), vp_y(0) {}
+	C4KeyEventData() : iStrength(0), game_x(KeyPos_None), game_y(KeyPos_None), vp_x(KeyPos_None), vp_y(KeyPos_None) {}
 	C4KeyEventData(int32_t iStrength, int32_t game_x, int32_t game_y, int32_t vp_x, int32_t vp_y) : iStrength(iStrength), game_x(game_x), game_y(game_y),vp_x(vp_x),vp_y(vp_y) {}
 	void CompileFunc(StdCompiler *pComp);
 	bool operator ==(const struct C4KeyEventData &cmp) const;
@@ -388,6 +389,7 @@ private:
 	StdStrBuf Name;                // custom key name; used for association in config files
 	typedef std::vector<C4KeyboardCallbackInterface *> CBVec;
 	unsigned int uiPriority;       // key priority: If multiple keys of same code are defined, high prio overwrites low prio keys
+	bool is_down;                  // down-callbacks have been executed but up-callbacks have not (not compiled)
 
 public:
 	CBVec vecCallbacks; // a list of all callbacks assigned to that key
@@ -407,11 +409,11 @@ public:
 
 protected:
 	int iRef;
-
-public:
 	C4CustomKey(const C4KeyCodeEx &DefCode, const char *szName, C4KeyScope Scope, C4KeyboardCallbackInterface *pCallback, unsigned int uiPriority = PRIO_Base); // ctor for default key
 	C4CustomKey(const CodeList &rDefCodes, const char *szName, C4KeyScope Scope, C4KeyboardCallbackInterface *pCallback, unsigned int uiPriority = PRIO_Base); // ctor for default key with multiple possible keys assigned
-	C4CustomKey(const C4KeyCodeEx &Code, const StdStrBuf &rName); // ctor for single custom key override
+	friend class C4Game;
+
+public:
 	C4CustomKey(const C4CustomKey &rCpy, bool fCopyCallbacks);
 	virtual ~C4CustomKey(); // dtor
 
@@ -426,6 +428,8 @@ public:
 
 	void Update(const C4CustomKey *pByKey); // merge given key into this
 	bool Execute(C4KeyEventType eEv, C4KeyCodeEx key);
+
+	bool IsDown() const { return is_down; }
 
 	void KillCallbacks(const C4CustomKey *pOfKey); // remove any callbacks that were created by given key
 

@@ -17,7 +17,7 @@ protected func Initialize()
 
 protected func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 	return;
 }
 
@@ -87,8 +87,8 @@ public func FxIntReloadTimer(object target, proplist effect, int time)
 	{
 		if (effect.sound)
 		{
-			Sound("WindCharge", false, nil, nil, -1);
-			Sound("WindChargeStop");
+			Sound("Objects::Windbag::Charge", false, nil, nil, -1);
+			Sound("Objects::Windbag::ChargeStop");
 			effect.sound = false;
 		}
 		return FX_OK;
@@ -104,7 +104,7 @@ public func FxIntReloadTimer(object target, proplist effect, int time)
 	{
 		if (!effect.sound)
 		{
-			Sound("WindCharge", false, nil, nil, 1);
+			Sound("Objects::Windbag::Charge", false, nil, nil, 1);
 			effect.sound = true;
 		}
 		
@@ -127,8 +127,8 @@ public func FxIntReloadStop(object target, proplist effect, int reason, bool tem
 		return FX_OK;
 	if (effect.sound)
 	{
-		Sound("WindCharge", false, nil, nil, -1);	
-		Sound("WindChargeStop");
+		Sound("Objects::Windbag::Charge", false, nil, nil, -1);	
+		Sound("Objects::Windbag::ChargeStop");
 	}
 	return FX_OK;
 }
@@ -159,7 +159,7 @@ public func FxIntBurstWindStart(object target, proplist effect, int temp, object
 	effect.y = clonk->GetY();
 	effect.angle = Angle(0, 0, x, y);
 	// Sound effect.
-	Sound("WindGust");
+	Sound("Objects::Windbag::Gust");
 	// Particle effect.
 	for (var dr = 12; dr < 32; dr++)
 	{
@@ -196,7 +196,7 @@ public func FxIntBurstWindTimer(object target, proplist effect, int time)
 	}
 	
 	// Move other objects in a cone around the burst direction.
-	var criteria = Find_And(Find_Not(Find_Category(C4D_Structure)), Find_Not(Find_Func("IsEnvironment")), Find_Not(Find_Func("NoWindbagForce")),
+	var criteria = Find_And(Find_Not(Find_Category(C4D_Structure)), Find_Not(Find_Func("IsEnvironment")), Find_Not(Find_Func("RejectWindbagForce")),
 	                        Find_Layer(GetObjectLayer()), Find_NoContainer(), Find_Exclude(effect.clonk), Find_PathFree(effect.clonk));
 	var dist = 14 + 9 * real_time / 2;
 	var rad = 8 + 8 * real_time / 3;
@@ -213,6 +213,7 @@ public func FxIntBurstWindTimer(object target, proplist effect, int time)
 		var vy_cone_reduced = vy_cone / 2 + vy_cone / (2 * Max(1, obj->GetMass() / 4)); 
 		obj->SetXDir(ox + vx_cone_reduced, 100);
 		obj->SetYDir(oy + vy_cone_reduced, 100);
+		obj->SetController(GetController());
 	}
 	return FX_OK;
 }
@@ -244,7 +245,5 @@ protected func Definition(def)
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = 1;
-local Rebuy = true;
 local MaxIntake = 30;

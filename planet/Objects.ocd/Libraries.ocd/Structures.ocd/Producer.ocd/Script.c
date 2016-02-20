@@ -91,7 +91,14 @@ public func GetProductionMenuEntries(object clonk)
 		if (info) // Currently in queue?
 		{
 			if (info.Infinite)
-				entry.image.Text = "$infinite$";
+			{
+				entry.image.infinity = 
+				{
+					Top = "1em", Left = "1em",
+					Symbol = Icon_Number,
+					GraphicsName = "Inf",
+				};
+			}
 			else // normal amount
 				entry.image.Text = Format("%dx", info.Amount);
 			entry.remove.OnClick = GuiAction_Call(this, "ModifyProduction", {Product = product, Amount = -1});
@@ -105,14 +112,28 @@ public func GetProductionMenuEntries(object clonk)
 		PushBack(menu_entries, {symbol = product, extra_data = nil, custom = entry});
 	}
 	
-	// At the bottom of the menu, we add some helpful information about the additional features.
+	// Below the symbols, we leave some space for a progress bar to indicate the current product progress.
 	var entry = 
 	{
-		Style = GUI_TextBottom,
-		Bottom = "2em", BackgroundColor = RGBa(0, 0, 0, 100),
+		Bottom = "1em", BackgroundColor = RGBa(0, 0, 0, 50),
+		Priority = 999998,
+		bar = 
+		{
+			BackgroundColor = RGBa(200, 200, 200, 100),
+			Right = "0%"
+		}
+	};
+	var updating_effect = AddEffect("IntUpgradeProductProgressBar", this, 1, 2, this);
+	PushBack(menu_entries, {symbol = nil, extra_data = nil, custom = entry, fx = updating_effect});
+	// At the bottom of the menu, we add some helpful information about the additional features.
+	entry = 
+	{
+		Style = GUI_TextBottom | GUI_FitChildren,
+		Bottom = "1em", BackgroundColor = RGBa(0, 0, 0, 100),
 		Priority = 999999,
 		Text = Format("<c 666666>%s + $Click$: $InfiniteProduction$</c>", GetPlayerControlAssignment(clonk->GetOwner(), CON_ModifierMenu1, true))
 	};
+
 	PushBack(menu_entries, {symbol = nil, extra_data = nil, custom = entry});
 	return menu_entries;
 }
@@ -171,6 +192,43 @@ private func GetCostString(int amount, bool available)
 	// Format amount to colored string; make it red if it's not available
 	if (available) return Format("%dx", amount);
 	return Format("<c ff0000>%dx</c>", amount);
+}
+
+public func FxIntUpgradeProductProgressBarOnMenuOpened(object target, effect fx, int main_ID, int entry_ID, proplist menu_target)
+{
+	fx.main_ID = main_ID;
+	fx.entry_ID = entry_ID;
+	fx.menu_target = menu_target;
+	// Force update on first 'Timer' call.
+	fx.is_showing = true;
+	EffectCall(target, fx, "Timer");
+}
+
+public func FxIntUpgradeProductProgressBarTimer(object target, effect fx, int time)
+{
+	if (fx.menu_target == nil) return FX_OK;
+	// Find (new?) production effect if not already given.
+	if (fx.production_effect == nil)
+	{
+		fx.production_effect = GetEffect("ProcessProduction", this);
+		if (fx.production_effect == nil)
+		{
+			if (fx.is_showing)
+			{
+				fx.is_showing = false;
+				GuiUpdate({Text = "<c 777777>$Producing$: -</c>", bar = {Right = "0%"}}, fx.main_ID, fx.entry_ID, fx.menu_target);
+			}
+			return FX_OK;
+		}
+	}
+	
+	fx.is_showing = true;
+	var max = ProductionTime(fx.production_effect.Product);
+	var current = Min(max, fx.production_effect.Duration);
+	var percent = 1000 * current / max;
+	var percent_string = Format("%d.%d%%", percent / 10, percent % 10);
+	GuiUpdate({Text = Format("<c aaaaaa>$Producing$: %s</c>", fx.production_effect.Product->GetName()), bar = {Right = percent_string}}, fx.main_ID, fx.entry_ID, fx.menu_target);
+	return FX_OK;
 }
 
 /*-- Production  properties --*/
@@ -612,8 +670,10 @@ protected func FxProcessProductionStart(object target, proplist effect, int temp
 	// But first hold the production until the power system gives it ok.
 	// Always register the power request even if power need is zero. The
 	// power network handles this correctly and a producer may decide to
-	// change its power need during production.
-	RegisterPowerRequest(this->PowerNeed());
+	// change its power need during production. Only do this for producers
+	// which are power consumers.
+	if (this->~IsPowerConsumer())
+		RegisterPowerRequest(this->PowerNeed());
 	
 	return FX_OK;
 }
@@ -652,8 +712,6 @@ protected func FxProcessProductionTimer(object target, proplist effect, int time
 	// Add effect interval to production duration.
 	effect.Duration += effect.Interval;
 	
-	//Log("Production in progress on %i, %d frames, %d time", effect.Product, effect.Duration, time);
-	
 	// Check if production time has been reached.
 	if (effect.Duration >= ProductionTime(effect.Product))
 		return FX_Execute_Kill;
@@ -666,21 +724,20 @@ protected func FxProcessProductionStop(object target, proplist effect, int reaso
 	if (temp) 
 		return FX_OK;
 	
-	// no need to consume power anymore
-	// always unregister even if there's a queue left to process, because OnNotEnoughPower relies on it
-	// and it gives other producers the chance to get some power
-	UnregisterPowerRequest();
+	// No need to consume power anymore. Always unregister even if there's a queue left to
+	// process, because OnNotEnoughPower relies on it and it gives other producers the chance
+	// to get some power. Do not unregister if this producer does not consumer power.
+	if (this->~IsPowerConsumer())
+		UnregisterPowerRequest();
 
 	if (reason != 0)
 		return FX_OK;
 
 	// Callback to the producer.
-	//Log("Production finished on %i after %d frames", effect.Product, effect.Duration);
 	this->~OnProductionFinish(effect.Product);
 	// Create product. 	
 	var product = CreateObject(effect.Product);
 	OnProductEjection(product);
-	
 	return FX_OK;
 }
 

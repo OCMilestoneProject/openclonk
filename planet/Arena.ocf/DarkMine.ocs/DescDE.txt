@@ -1,0 +1,10 @@
+Dunkle Mine
+
+Du befindest dich in einer verlassenen Mine, die noch immer Gold enthalten soll. Wenn du deine Widersacher ausschalten kannst, kannst du das Gold für dich beanspruchen. In der Mine sind noch einige Loren, gefüllt mit Sprengstoffen und anderem Werkzeug. Nutze dies, um deine Gegner zu täuschen und in die Falle zu locken.
+
+Ziel: Eliminiere deinen Gegner.
+
+- Drei Spielziele einstellbar.
+- Variable Anzahl Relaunches/Kills/Punkte einstellbar.
+- Nutze die Dunkelheit zu deinem Vorteil.
+- Die Loren enthalten nützliche Ausrüstung.

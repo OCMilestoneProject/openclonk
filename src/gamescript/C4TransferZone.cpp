@@ -23,28 +23,18 @@
 #include <C4FacetEx.h>
 #include <C4Landscape.h>
 #include <C4GameObjects.h>
+#include "lib/StdColors.h"
 
 C4TransferZone::C4TransferZone()
 {
-	Default();
+	Object = NULL;
+	X = Y = Wdt = Hgt = 0;
+	Next = NULL;
+	Used = false;
 }
 
 C4TransferZone::~C4TransferZone()
 {
-	Clear();
-}
-
-void C4TransferZone::Default()
-{
-	Object=NULL;
-	X=Y=Wdt=Hgt=0;
-	Next=NULL;
-	Used=false;
-}
-
-void C4TransferZone::Clear()
-{
-
 }
 
 C4TransferZones::C4TransferZones()

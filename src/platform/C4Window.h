@@ -21,7 +21,41 @@
 
 #include <StdBuf.h>
 
-#if defined(USE_WIN32_WINDOWS) || defined(USE_X11) || defined(USE_CONSOLE)
+#if defined(USE_GTK)
+#ifdef _WIN32
+#undef MK_CONTROL
+#undef MK_SHIFT
+#endif
+// from X.h:
+//#define ShiftMask   (1<<0)
+//#define ControlMask   (1<<2)
+#define MK_CONTROL (1<<2)
+#define MK_SHIFT (1<<0)
+#define MK_ALT (1<<3)
+#elif defined(USE_SDL_MAINLOOP)
+#include <SDL.h>
+#define MK_SHIFT (KMOD_LSHIFT | KMOD_RSHIFT)
+#define MK_CONTROL (KMOD_LCTRL | KMOD_RCTRL)
+#define MK_ALT (KMOD_LALT | KMOD_RALT)
+#elif defined(USE_CONSOLE)
+#ifndef _WIN32
+#define MK_SHIFT 0
+#define MK_CONTROL 0
+#endif
+#define MK_ALT 0
+#elif defined(USE_COCOA)
+// declare as extern variables and initialize them in StdMacWindow.mm so as to not include objc headers
+extern int MK_SHIFT;
+extern int MK_CONTROL;
+extern int MK_ALT;
+#elif defined(USE_WIN32_WINDOWS)
+#include <C4windowswrapper.h>
+#ifndef MK_ALT
+#define MK_ALT 0x20 // as defined in oleidl.h
+#endif
+#endif
+
+#if defined(USE_WIN32_WINDOWS) || defined(USE_GTK) || defined(USE_CONSOLE)
 #define K_ESCAPE 1
 #define K_1 2
 #define K_2 3
@@ -172,52 +206,111 @@
 
 #elif defined(USE_SDL_MAINLOOP)
 #include <SDL.h>
-// FIXME
-#define K_SHIFT_L SDLK_LSHIFT
-#define K_SHIFT_R SDLK_RSHIFT
-#define K_ALT_L SDLK_LALT
-#define K_ALT_R SDLK_RALT
-#define K_F1 SDLK_F1
-#define K_F2 SDLK_F2
-#define K_F3 SDLK_F3
-#define K_F4 SDLK_F4
-#define K_F5 SDLK_F5
-#define K_F6 SDLK_F6
-#define K_F7 SDLK_F7
-#define K_F8 SDLK_F8
-#define K_F9 SDLK_F9
-#define K_F10 SDLK_F10
-#define K_F11 SDLK_F11
-#define K_F12 SDLK_F12
-#define K_ADD SDLK_KP_PLUS
-#define K_SUBTRACT SDLK_KP_MINUS
-#define K_MULTIPLY SDLK_KP_MULTIPLY
-#define K_ESCAPE SDLK_ESCAPE
-#define K_PAUSE SDLK_PAUSE
-#define K_TAB SDLK_TAB
-#define K_RETURN SDLK_RETURN
-#define K_DELETE SDLK_DELETE
-#define K_INSERT SDLK_INSERT
-#define K_BACK SDLK_BACKSPACE
-#define K_SPACE SDLK_SPACE
-#define K_UP SDLK_UP
-#define K_DOWN SDLK_DOWN
-#define K_LEFT SDLK_LEFT
-#define K_RIGHT SDLK_RIGHT
-#define K_HOME SDLK_HOME
-#define K_END SDLK_END
-#define K_SCROLL SDLK_SCROLLOCK
-#define K_MENU SDLK_MENU
-#define K_PAGEUP SDLK_PAGEUP
-#define K_PAGEDOWN SDLK_PAGEDOWN
-#define K_M SDLK_m
-#define K_T SDLK_t
-#define K_W SDLK_w
-#define K_I SDLK_i
-#define K_C SDLK_c
-#define K_V SDLK_v
-#define K_X SDLK_x
-#define K_A SDLK_a
+#define K_SHIFT_L SDL_SCANCODE_LSHIFT
+#define K_SHIFT_R SDL_SCANCODE_RSHIFT
+#define K_CONTROL_L SDL_SCANCODE_LCTRL
+#define K_CONTROL_R SDL_SCANCODE_RCTRL
+#define K_ALT_L SDL_SCANCODE_LALT
+#define K_ALT_R SDL_SCANCODE_RALT
+#define K_F1 SDL_SCANCODE_F1
+#define K_F2 SDL_SCANCODE_F2
+#define K_F3 SDL_SCANCODE_F3
+#define K_F4 SDL_SCANCODE_F4
+#define K_F5 SDL_SCANCODE_F5
+#define K_F6 SDL_SCANCODE_F6
+#define K_F7 SDL_SCANCODE_F7
+#define K_F8 SDL_SCANCODE_F8
+#define K_F9 SDL_SCANCODE_F9
+#define K_F10 SDL_SCANCODE_F10
+#define K_F11 SDL_SCANCODE_F11
+#define K_F12 SDL_SCANCODE_F12
+#define K_ADD SDL_SCANCODE_KP_PLUS
+#define K_SUBTRACT SDL_SCANCODE_KP_MINUS
+#define K_MULTIPLY SDL_SCANCODE_KP_MULTIPLY
+#define K_ESCAPE SDL_SCANCODE_ESCAPE
+#define K_PAUSE SDL_SCANCODE_PAUSE
+#define K_TAB SDL_SCANCODE_TAB
+#define K_RETURN SDL_SCANCODE_RETURN
+#define K_DELETE SDL_SCANCODE_DELETE
+#define K_INSERT SDL_SCANCODE_INSERT
+#define K_BACK SDL_SCANCODE_BACKSPACE
+#define K_SPACE SDL_SCANCODE_SPACE
+#define K_UP SDL_SCANCODE_UP
+#define K_DOWN SDL_SCANCODE_DOWN
+#define K_LEFT SDL_SCANCODE_LEFT
+#define K_RIGHT SDL_SCANCODE_RIGHT
+#define K_HOME SDL_SCANCODE_HOME
+#define K_END SDL_SCANCODE_END
+#define K_SCROLL SDL_SCANCODE_SCROLLLOCK
+#define K_MENU SDL_SCANCODE_MENU
+#define K_PAGEUP SDL_SCANCODE_PAGEUP
+#define K_PAGEDOWN SDL_SCANCODE_PAGEDOWN
+#define K_1 SDL_SCANCODE_1
+#define K_2 SDL_SCANCODE_2
+#define K_3 SDL_SCANCODE_3
+#define K_4 SDL_SCANCODE_4
+#define K_5 SDL_SCANCODE_5
+#define K_6 SDL_SCANCODE_6
+#define K_7 SDL_SCANCODE_7
+#define K_8 SDL_SCANCODE_8
+#define K_9 SDL_SCANCODE_9
+#define K_0 SDL_SCANCODE_A
+#define K_A SDL_SCANCODE_A
+#define K_B SDL_SCANCODE_B
+#define K_C SDL_SCANCODE_C
+#define K_D SDL_SCANCODE_D
+#define K_E SDL_SCANCODE_E
+#define K_F SDL_SCANCODE_F
+#define K_G SDL_SCANCODE_G
+#define K_H SDL_SCANCODE_H
+#define K_I SDL_SCANCODE_I
+#define K_J SDL_SCANCODE_J
+#define K_K SDL_SCANCODE_K
+#define K_L SDL_SCANCODE_L
+#define K_M SDL_SCANCODE_M
+#define K_N SDL_SCANCODE_N
+#define K_O SDL_SCANCODE_O
+#define K_P SDL_SCANCODE_P
+#define K_Q SDL_SCANCODE_Q
+#define K_R SDL_SCANCODE_R
+#define K_S SDL_SCANCODE_S
+#define K_T SDL_SCANCODE_T
+#define K_U SDL_SCANCODE_U
+#define K_V SDL_SCANCODE_V
+#define K_W SDL_SCANCODE_W
+#define K_X SDL_SCANCODE_X
+#define K_Y SDL_SCANCODE_Y
+#define K_Z SDL_SCANCODE_Z
+#define K_MINUS SDL_SCANCODE_MINUS
+#define K_EQUAL SDL_SCANCODE_EQUALS
+#define K_LEFT_BRACKET SDL_SCANCODE_LEFTBRACKET
+#define K_RIGHT_BRACKET SDL_SCANCODE_RIGHTBRACKET
+#define K_SEMICOLON SDL_SCANCODE_SEMICOLON
+#define K_APOSTROPHE SDL_SCANCODE_APOSTROPHE
+#define K_GRAVE_ACCENT SDL_SCANCODE_GRAVE
+#define K_BACKSLASH SDL_SCANCODE_BACKSLASH
+#define K_COMMA SDL_SCANCODE_COMMA
+#define K_PERIOD SDL_SCANCODE_PERIOD
+#define K_SLASH SDL_SCANCODE_SLASH
+#define K_CAPS SDL_SCANCODE_CAPSLOCK
+#define K_NUM SDL_SCANCODE_NUMLOCKCLEAR
+#define K_NUM7 SDL_SCANCODE_KP_7
+#define K_NUM8 SDL_SCANCODE_KP_8
+#define K_NUM9 SDL_SCANCODE_KP_9
+#define K_NUM4 SDL_SCANCODE_KP_4
+#define K_NUM5 SDL_SCANCODE_KP_5
+#define K_NUM6 SDL_SCANCODE_KP_6
+#define K_NUM1 SDL_SCANCODE_KP_1
+#define K_NUM2 SDL_SCANCODE_KP_2
+#define K_NUM3 SDL_SCANCODE_KP_3
+#define K_NUM0 SDL_SCANCODE_KP_0
+#define K_DECIMAL SDL_SCANCODE_KP_PERIOD
+#define K_86 SDL_SCANCODE_NONUSBACKSLASH
+#define K_NUM_RETURN SDL_SCANCODE_KP_ENTER
+#define K_DIVIDE SDL_SCANCODE_KP_DIVIDE
+#define K_WIN_L SDL_SCANCODE_LGUI
+#define K_WIN_R SDL_SCANCODE_RGUI
+#define K_PRINT SDL_SCANCODE_PRINTSCREEN
 #elif defined(USE_COCOA)
 #import "ObjectiveCAssociated.h"
 // FIXME
@@ -229,6 +322,8 @@ extern C4KeyCode K_CONTROL_L;
 extern C4KeyCode K_CONTROL_R;
 extern C4KeyCode K_ALT_L;
 extern C4KeyCode K_ALT_R;
+extern C4KeyCode K_COMMAND_L;
+extern C4KeyCode K_COMMAND_R;
 extern C4KeyCode K_F1;
 extern C4KeyCode K_F2;
 extern C4KeyCode K_F3;
@@ -272,10 +367,8 @@ extern C4KeyCode K_X;
 extern C4KeyCode K_A;
 #endif
 
-#ifdef USE_X11
-// Forward declarations because xlib.h is evil
-typedef union _XEvent XEvent;
-typedef struct _XDisplay Display;
+#ifdef USE_GTK
+// Forward declaration because xlib.h is evil
 typedef struct __GLXFBConfigRec *GLXFBConfig;
 #endif
 
@@ -322,34 +415,37 @@ public:
 	void SetSize(unsigned int cx, unsigned int cy); // resize
 	void SetTitle(const char * Title);
 	void FlashWindow();
+	void GrabMouse(bool grab);
 	// request that this window be redrawn in the near future (including immediately)
 	virtual void RequestUpdate();
 	// Invokes actual drawing code - should not be called directly
 	virtual void PerformUpdate();
 
-#ifdef USE_WIN32_WINDOWS
 public:
+#if defined(USE_WIN32_WINDOWS)
 	HWND hWindow;
-	HWND hRenderWindow;
 	virtual bool Win32DialogMessageHandling(MSG * msg) { return false; };
-#elif defined(WITH_GLIB)
-public:
+#elif defined(USE_GTK)
 	/*GtkWidget*/void * window;
 	// Set by Init to the widget which is used as a
 	// render target, which can be the whole window.
 	/*GtkWidget*/void * render_widget;
+#elif defined(USE_SDL_MAINLOOP)
+	SDL_Window * window;
+#endif
+#ifdef USE_WGL
+	HWND renderwnd;
+#elif defined(USE_GTK)
+	unsigned long renderwnd;
+#endif
 protected:
+#if defined(USE_GTK)
 	bool FindFBConfig(int samples, GLXFBConfig *info);
 
-	unsigned long wnd;
-	unsigned long renderwnd;
 	// The GLXFBConfig the window was created with
 	GLXFBConfig Info;
 	unsigned long handlerDestroy;
-
-	friend class C4X11AppImpl;
 #endif
-protected:
 	virtual C4Window * Init(WindowKind windowKind, C4AbstractApp * pApp, const char * Title, const C4Rect * size);
 	friend class C4Draw;
 	friend class CStdGL;

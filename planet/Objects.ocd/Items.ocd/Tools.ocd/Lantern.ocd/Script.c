@@ -28,7 +28,7 @@ public func TurnOff()
 
 private func Hit()
 {
-	Sound("GlassHit?");
+	Sound("Hits::Materials::Glass::GlassHit?");
 }
 
 private func Hit2()
@@ -39,8 +39,8 @@ private func Hit2()
 	// Cast some particles.
 		// TODO?
 	// Sound effects.
-	Sound("GlassBreak");
-	Sound("Inflame");
+	Sound("Hits::Materials::Glass::GlassBreak");
+	Sound("Fire::Inflame");
 	Explode(10, true);
 }
 
@@ -74,5 +74,4 @@ public func IsToolProduct() { return true; }
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = true;

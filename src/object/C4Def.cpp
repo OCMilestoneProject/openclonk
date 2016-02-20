@@ -31,6 +31,7 @@
 #include <C4SoundSystem.h>
 #include <C4SolidMask.h>
 #include <CSurface8.h>
+#include "lib/StdColors.h"
 
 // Helper class to load additional resources required for meshes from
 // a C4Group.
@@ -61,18 +62,18 @@ public:
 	{
 #ifndef USE_CONSOLE
 		// Add mesh-independent slices
-		shader.AddFragmentSlice(-1, "#define OPENCLONK\n#define OC_MESH");
-		shader.AddVertexSlice(-1, "#define OPENCLONK\n#define OC_MESH");
+		shader.AddDefine("OPENCLONK");
+		shader.AddDefine("OC_MESH");
 
-		if (ssc & C4SSC_MOD2) shader.AddFragmentSlice(-1, "#define OC_CLRMOD_MOD2");
-		if (ssc & C4SSC_LIGHT) shader.AddFragmentSlice(-1, "#define OC_DYNAMIC_LIGHT");
+		if (ssc & C4SSC_MOD2) shader.AddDefine("OC_CLRMOD_MOD2");
+		if (ssc & C4SSC_LIGHT) shader.AddDefine("OC_DYNAMIC_LIGHT");
 
 		// Note these are never set for meshes at the moment:
-		if (ssc & C4SSC_BASE) shader.AddFragmentSlice(-1, "#define OC_HAVE_BASE");
-		if (ssc & C4SSC_OVERLAY) shader.AddFragmentSlice(-1, "#define OC_HAVE_OVERLAY");
+		if (ssc & C4SSC_BASE) shader.AddDefine("OC_HAVE_BASE");
+		if (ssc & C4SSC_OVERLAY) shader.AddDefine("OC_HAVE_OVERLAY");
 
-		shader.LoadSlices(&::GraphicsResource.Files, "CommonShader.glsl");
-		shader.LoadSlices(&::GraphicsResource.Files, "ObjectShader.glsl");
+		shader.LoadFragmentSlices(&::GraphicsResource.Files, "CommonShader.glsl");
+		shader.LoadFragmentSlices(&::GraphicsResource.Files, "ObjectShader.glsl");
 #endif
 	}
 
@@ -107,11 +108,9 @@ void C4Def::DefaultDefCore()
 	Float=0;
 	ColorByOwner=0;
 	NoHorizontalMove=0;
-	BorderBound=0;
 	LiftTop=0;
 	GrabPutGet=0;
 	UprightAttach=0;
-	ContactFunctionCalls=0;
 	Line=0;
 	LineIntersect=0;
 	IncompleteActivity=0;
@@ -209,7 +208,6 @@ void C4Def::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(mkBitfieldAdapt<int32_t>(Category, Categories),
 	                           "Category",           0             ));
 
-	pComp->Value(mkNamingAdapt(ContactFunctionCalls,          "ContactCalls",       0                 ));
 	pComp->Value(mkParAdapt(Shape, static_cast<C4Shape*>(NULL)));
 	pComp->Value(mkNamingAdapt(Value,                         "Value",              0                 ));
 	pComp->Value(mkNamingAdapt(Mass,                          "Mass",               0                 ));
@@ -244,7 +242,6 @@ void C4Def::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(Float,                         "Float",              0                 ));
 	pComp->Value(mkNamingAdapt(ColorByOwner,                  "ColorByOwner",       0                 ));
 	pComp->Value(mkNamingAdapt(NoHorizontalMove,              "HorizontalFix",      0                 ));
-	pComp->Value(mkNamingAdapt(BorderBound,                   "BorderBound",        0                 ));
 	pComp->Value(mkNamingAdapt(LiftTop,                       "LiftTop",            0                 ));
 	pComp->Value(mkNamingAdapt(UprightAttach,                 "UprightAttach",      0                 ));
 	pComp->Value(mkNamingAdapt(GrowthType,                    "StretchGrowth",      0                 ));
@@ -582,7 +579,7 @@ void C4Def::LoadRankFaces(C4Group &hGroup)
 void C4Def::LoadSounds(C4Group &hGroup, C4SoundSystem* pSoundSystem)
 {
 	if (pSoundSystem)
-		pSoundSystem->LoadEffects(hGroup);
+		pSoundSystem->LoadEffects(hGroup, (id == C4ID::None) ? NULL : id.ToString(), true);
 }
 
 void C4Def::Draw(C4Facet &cgo, bool fSelected, DWORD iColor, C4Object *pObj, int32_t iPhaseX, int32_t iPhaseY, C4DrawTransform* trans, const char *graphicsName)
@@ -601,14 +598,14 @@ void C4Def::Draw(C4Facet &cgo, bool fSelected, DWORD iColor, C4Object *pObj, int
 
 int32_t C4Def::GetValue(C4Object *pInBase, int32_t iBuyPlayer)
 {
-	C4Value r = Call(PSF_CalcDefValue, &C4AulParSet(C4VObj(pInBase), C4VInt(iBuyPlayer)));
+	C4Value r = Call(PSF_CalcDefValue, &C4AulParSet(pInBase, iBuyPlayer));
 	int32_t iValue = Value;
 	if (r != C4VNull)
 		iValue = r.getInt();
 	// do any adjustments based on where the item is bought
 	if (pInBase)
 	{
-		r = pInBase->Call(PSF_CalcBuyValue, &C4AulParSet(C4VPropList(this), C4VInt(iValue)));
+		r = pInBase->Call(PSF_CalcBuyValue, &C4AulParSet(this, iValue));
 		if (r != C4VNull)
 			iValue = r.getInt();
 	}

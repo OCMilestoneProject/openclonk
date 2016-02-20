@@ -18,6 +18,7 @@ public func Construction()
 	}
 	FadeIn(5, true);
 	AddEffect("Move", this, 1, 2, this);
+	Sound("Liquids::Bubble*");
 	return;
 }
 

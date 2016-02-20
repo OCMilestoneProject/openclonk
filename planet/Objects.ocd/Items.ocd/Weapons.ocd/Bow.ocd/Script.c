@@ -9,9 +9,12 @@
 // has extra slot
 #include Library_HasExtraSlot
 
+// Initial velocity of the arrow
+local shooting_strength = 100;
+
 private func Hit()
 {
-	Sound("WoodHit?");
+	Sound("Hits::Materials::Wood::WoodHit?");
 }
 
 local fAiming;
@@ -57,7 +60,7 @@ public func GetAnimationSet() { return animation_set; }
 public func RejectUse(object clonk)
 {
 	// if the clonk doesn't have an action where he can use it's hands do nothing
-	return !clonk->HasHandAction();
+	return !clonk->HasHandAction(false, false, true);
 }
 
 public func ControlUseStart(object clonk, int x, int y)
@@ -83,7 +86,7 @@ public func ControlUseStart(object clonk, int x, int y)
 	// Start aiming
 	fAiming = 1;
 	
-	PlayAnimation("Draw", 6, Anim_Linear(0, 0, GetAnimationLength("Draw"), animation_set["LoadTime"], ANIM_Hold), Anim_Const(1000));
+	PlayAnimation("Draw", 6, Anim_Linear(0, 0, GetAnimationLength("Draw"), animation_set["LoadTime"], ANIM_Hold));
 
 	clonk->StartLoad(this);
 
@@ -98,7 +101,7 @@ public func DuringLoad(object clonk) { return AddArrow(clonk); }
 // Called during loading then the arrow is added to the animation
 public func AddArrow(object clonk)
 {
-	Sound("BowLoad?");
+	Sound("Objects::Weapons::Bow::Load?");
 	iArrowMesh = clonk->AttachMesh(HelpArrow, "pos_hand1", "main", nil);
 }
 
@@ -143,13 +146,13 @@ public func FinishedAiming(object clonk, int angle)
 		if(Contents(0)->~IsArrow())
 		{
 			var arrow = Contents(0)->TakeObject();
-			arrow->Launch(angle,100,clonk);
-			Sound("BowShoot?");
+			arrow->Launch(angle,shooting_strength,clonk);
+			Sound("Objects::Weapons::Bow::Shoot?");
 		}
 	}
 
 	// Open the hand to let the string go and play the fire animation
-	PlayAnimation("Fire", 6, Anim_Linear(0, 0, GetAnimationLength("Fire"), animation_set["ShootTime"], ANIM_Hold), Anim_Const(1000));
+	PlayAnimation("Fire", 6, Anim_Linear(0, 0, GetAnimationLength("Fire"), animation_set["ShootTime"], ANIM_Hold));
 	clonk->PlayAnimation("Close1Hand", 11, Anim_Const(0), Anim_Const(1000));
 	clonk->StartShoot(this);
 	return true;
@@ -208,26 +211,26 @@ func RejectCollect(id arrowid, object arrows)
 /*
 func Selection()
 {
-	Sound("DrawBow");
+	Sound("Objects::Weapons::Bow::Draw");
 }
 
 func Deselection()
 {
-	Sound("PutAwayBow");
+	Sound("Objects::Weapons::Bow::PutAwayBow");
 }
 */
 
 public func IsWeapon() { return true; }
 public func IsArmoryProduct() { return true; }
 
-func Definition(def) {
-	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(-2000,-3000,-2000),Trans_Rotate(180,0,1,0),Trans_Rotate(-25,1,0,1)),def);
+func Definition(def)
+{
+	def.PictureTransformation = Trans_Mul(Trans_Translate(-4000,-2000,4000),Trans_Rotate(180,0,1,0),Trans_Rotate(-45,0,0,1));
 }
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = 1;
-local Rebuy = true;
 local BlastIncinerate = 30;
 local ContactIncinerate = 5;
+local ForceFreeHands = true;

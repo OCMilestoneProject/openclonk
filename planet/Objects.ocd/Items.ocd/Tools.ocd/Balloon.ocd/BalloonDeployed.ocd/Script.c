@@ -4,7 +4,9 @@
 */
 
 local rider;
+local cargo, has_cargo=false, old_cargo_action;
 local parent;
+local deployment_yoffset=50;
 
 protected func Initialize()
 {
@@ -24,6 +26,64 @@ public func SetRider(object clonk)
 	rider = clonk;
 }
 
+public func SetInflated()
+{
+	// Skip inflating animation
+	if (GetAction() == "Inflate") SetAction("Float");
+}
+
+// Sets a cargo object that is held by the balloon
+// (only works with objects that do not themselves have an action)
+// attach_vertex: Vertex in attached object to stick to the balloon
+// xoff, yoff: Move attachment vertex on balloon by this
+// deploy_yoff: Move deployment vertices vertically by this (for e.g. firestones to not drop and explode)
+public func SetCargo(object new_cargo, int attach_vertex, int xoff, int yoff, int deploy_yoff)
+{
+	DropCargo(); // drop any previous
+	cargo = new_cargo;
+	has_cargo = !!cargo;
+	if (has_cargo)
+	{
+		old_cargo_action = cargo->GetAction();
+		if (new_cargo.ActMap)
+		{
+			if (new_cargo.ActMap == new_cargo.Prototype.ActMap) new_cargo.ActMap = new new_cargo.ActMap {};
+		}
+		else
+		{
+			new_cargo.ActMap = { };
+		}
+		new_cargo.ActMap.BalloonDeployedAttach = new Action {
+			Prototype = Action,
+			Name = "BalloonDeployedAttach",
+			Procedure = DFA_ATTACH,
+			Delay = 9999999,
+			Length = 1,
+			FacetBase = 1,
+			};
+		cargo->SetAction("BalloonDeployedAttach", this);
+		cargo->SetActionData(attach_vertex<<8);
+		SetVertex(0, VTX_X, xoff);
+		SetVertex(0, VTX_Y, yoff + 30);
+		deployment_yoffset = deploy_yoff + 50;
+		SetVertex(8, VTX_Y, deploy_yoff + 35);
+		SetVertex(9, VTX_Y, deploy_yoff + 30);
+		SetVertex(10, VTX_Y, deploy_yoff + 30);
+	}
+	return true;
+}
+
+public func DropCargo()
+{
+	if (has_cargo && cargo)
+	{
+		cargo->SetAction(old_cargo_action);
+		cargo = nil;
+		has_cargo = false;
+		return true;
+	}
+}
+
 public func SetParent(object balloon)
 {
 	parent = balloon;
@@ -36,6 +96,7 @@ public func GetParent()
 
 private func Deflate()
 {
+	DropCargo();
 	if (GetAction() != "Deflate")
 	{
 		SetAction("Deflate");
@@ -47,15 +108,24 @@ private func DeflateEffect()
 {
 	var act_time = GetActTime();
 	CreateParticle("Air", PV_Random(-1, 1), PV_Random(-1, 5), PV_Random(-act_time, act_time), PV_Random(-act_time, act_time), 18, Particles_Air(), act_time);
+	// Release rider before being fully deflated, so the he/she can start scaling/walking right away.
+	if (act_time >= 4 && rider)
+	{
+		rider->SetAction("Jump");
+		rider->SetSpeed(GetXDir(), GetYDir());
+		rider->SetComDir(COMD_Stop);
+	}
+	return;
 }
 
 private func Pack()
 {
+	// Ensure the rider is released from the balloon.
 	if (rider)
 	{
 		rider->SetAction("Jump");
 		rider->SetSpeed(GetXDir(), GetYDir());
-		rider->SetComDir(COMD_Down);
+		rider->SetComDir(COMD_Stop);
 	}
 	RemoveObject();
 }
@@ -115,14 +185,14 @@ public func FxControlFloatTimer(object target, proplist effect, int time)
 			xdir_dev = 1;	
 	}
 	SetXDir(xdir + xdir_dev);
-
-	// Has a bottom vertex hit? Is the balloon stuck in material? Then deflate.
-	if (GetContact(-1) & CNAT_Bottom || Stuck()) 
+	
+	// Has a bottom vertex hit? Is the balloon stuck in material? Is the cargo gone? Then deflate.
+	if (GetContact(-1) & CNAT_Bottom || Stuck() || (has_cargo && (!cargo || cargo->Contained()))) 
 	{
 		Deflate();
 		return FX_Execute_Kill;
 	}
-	if (GBackSolid(0, 50) || GBackLiquid(0, 50))
+	if (GBackSolid(0, deployment_yoffset) || GBackLiquid(0, deployment_yoffset))
 	{
 		Deflate();
 		return FX_OK;
@@ -136,9 +206,9 @@ public func FxControlFloatTimer(object target, proplist effect, int time)
 protected func OnUnmount(object clonk)
 {
 	// Assume that if the clonk is now tumbling he could not have held on to the balloon.
-	// Therefore we drop the balloon.
 	if (clonk == rider && clonk->GetAction() == "Tumble")
 	{
+		// Therefore we drop the balloon.
 		if (parent)
 			parent->Exit(0, 0, 0, clonk->GetXDir(), clonk->GetYDir());
 		rider = nil;
@@ -147,23 +217,32 @@ protected func OnUnmount(object clonk)
 	return;
 }
 
-public func IsProjectileTarget()
+public func IsProjectileTarget(object projectile, object shooter)
 {
-	return true;
+	// Exclude the bottom triangle edges from the hitbox such that projectiles can be shot while hanging on the balloon.
+	var dx = GetX() - projectile->GetX();
+	var dy = GetY() - projectile->GetY() + GetBottom();
+	return dy > Abs(dx);
 }
 
-public func OnProjectileHit()
+public func OnProjectileHit(object projectile)
 {
 	// Pop the balloon and tumble the rider.
 	CreateParticle("Air", 0, -10, PV_Random(-10, 10), PV_Random(-10, 10), 10, Particles_Air(), 30);
-	Sound("BalloonPop");
-	if (rider)
-	{
-		rider->SetAction("Tumble");
-		rider->SetSpeed(GetXDir(), GetYDir());
-	}
+	Sound("Objects::Balloon::Pop");
+	// Remove the parent balloon object as it is destroyed. 
 	if (parent)
 		parent->RemoveObject();
+	// Drop the rider and set its killer in case it tumbles out of the map.
+	if (rider)
+	{
+		rider->SetSpeed(GetXDir(), GetYDir());
+		rider->SetKiller(projectile->GetController());
+		rider->SetAction("Tumble");
+	}
+	// Drop anything being transported
+	DropCargo();
+	// We're done.
 	RemoveObject();
 }
 
@@ -211,3 +290,5 @@ local ActMap = {
 	},
 };
 local Name = "$Name$";
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;

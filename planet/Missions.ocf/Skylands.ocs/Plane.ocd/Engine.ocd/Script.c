@@ -9,7 +9,7 @@
 
 private func Hit()
 {
-	Sound("WoodHit");
+	Sound("Hits::Materials::Wood::WoodHit*");
 }
 
 func IsToolProduct() { return true; }
@@ -23,5 +23,4 @@ public func IsPlanePart() { return true; }
 local Collectible = true;
 local Name = "$Name$";
 local Description = "$Description$";
-local Rebuy = true;
 local HitPoints = 20;

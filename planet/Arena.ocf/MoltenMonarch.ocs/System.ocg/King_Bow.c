@@ -18,19 +18,19 @@ public func FinishedAiming(object clonk, int angle)
 		if(Contents(0)->~IsArrow())
 		{
 			var arrow = Contents(0)->TakeObject();
-			arrow->Launch(angle,100,clonk);
+			arrow->Launch(angle,this.shooting_strength,clonk);
 			if(king_size)
 			{
 				AddEffect("ExplosiveArrow",arrow,100,1,this);
 				arrow->SetClrModulation(RGB(255,128,0));
 			}
-			Sound("BowShoot?");
+			Sound("Objects::Weapons::Bow::Shoot?");
 		}
 	}
 
 	// Open the hand to let the string go and play the fire animation
-	PlayAnimation("Fire", CLONK_ANIM_SLOT_Hands, Anim_Linear(0, 0, GetAnimationLength("Fire"), animation_set["ShootTime"], ANIM_Hold), Anim_Const(1000));
-	clonk->PlayAnimation("Close1Hand", 11, Anim_Const(0), Anim_Const(1000));
+	PlayAnimation("Fire", CLONK_ANIM_SLOT_Hands, Anim_Linear(0, 0, GetAnimationLength("Fire"), animation_set["ShootTime"], ANIM_Hold));
+	clonk->PlayAnimation("Close1Hand", 11, Anim_Const(0));
 	clonk->StartShoot(this);
 	return true;
 }

@@ -277,7 +277,7 @@ global func DoShockwave(int x, int y, int level, int cause_plr, object layer)
 
 	// Hurl objects in explosion radius.
 	var shockwave_objs = FindObjects(Find_Distance(level, l_x, l_y), Find_NoContainer(), Find_Layer(layer),
-		Find_Or(Find_Category(C4D_Object|C4D_Living|C4D_Vehicle), Find_Func("CanBeHitByShockwaves")), Find_Func("DoShockwaveCheck", x, y));
+		Find_Or(Find_Category(C4D_Object|C4D_Living|C4D_Vehicle), Find_Func("CanBeHitByShockwaves", cause_plr)), Find_Func("DoShockwaveCheck", x, y, cause_plr));
 	var cnt = GetLength(shockwave_objs);
 	if (cnt)
 	{
@@ -323,13 +323,14 @@ global func DoShockwave(int x, int y, int level, int cause_plr, object layer)
 	}
 }
 
-global func DoShockwaveCheck(int x, int y)
+global func DoShockwaveCheck(int x, int y, int cause_plr)
 {
 	var def = GetID();
 	// Some special cases, which won't go into FindObjects.
 	if (def->GetDefHorizontalFix())
 		return false;
-	if (def->GetDefGrab() != 1)
+	// Only move vehicles and floating objects which can be grabbed and pushed (Touchable = 1).	
+	if (this.Touchable != 1)
 	{
 		if (GetCategory() & C4D_Vehicle)
 			return false;
@@ -358,16 +359,17 @@ strength falls off linearly by distance from 100% to 0% when the player is 700 p
              as the explosion level.
 @param x_off x offset in relative coordinates from the calling object
 @param y_off y offset in relative coordinates from the calling object
+@param range range of clonk to explosion at which shaking falls off to 0%
 */
-global func ShakeViewport(int level, int x_off, int y_off)
+global func ShakeViewport(int level, int x_off, int y_off, range)
 {
 	if (level <= 0)
 		return false;
 		
 	x_off += GetX();
 	y_off += GetY();
-
-	AddEffect("ShakeViewport", nil, 300, 1, nil, nil, level, x_off, y_off);
+	
+	AddEffect("ShakeViewport", nil, 300, 1, nil, nil, level, x_off, y_off, range ?? 700);
 }
 
 global func FxShakeViewportEffect(string new_name)
@@ -378,17 +380,17 @@ global func FxShakeViewportEffect(string new_name)
 	return;
 }
 
-global func FxShakeViewportStart(object target, effect e, int temporary, level, xpos, ypos)
+global func FxShakeViewportStart(object target, effect e, int temporary, level, xpos, ypos, range)
 {
 	if(temporary != 0) return;
 	
 	e.shakers = CreateArray();
-	e.shakers[0] = { x = xpos, y = ypos, strength = level, time = 0 };
+	e.shakers[0] = { x = xpos, y = ypos, strength = level, time = 0, range = range };
 }
 
-global func FxShakeViewportAdd(object target, effect e, string new_name, int new_timer, level, xpos, ypos)
+global func FxShakeViewportAdd(object target, effect e, string new_name, int new_timer, level, xpos, ypos, range)
 {
-	e.shakers[GetLength(e.shakers)] = { x = xpos, y = ypos, strength = level, time = e.Time};
+	e.shakers[GetLength(e.shakers)] = { x = xpos, y = ypos, strength = level, time = e.Time, range = range };
 }
 
 global func FxShakeViewportTimer(object target, effect e, int time)
@@ -409,7 +411,7 @@ global func FxShakeViewportTimer(object target, effect e, int time)
 
 			// shake strength lowers as a function of the distance
 			var distance = Distance(cursor->GetX(), cursor->GetY(), shaker.x, shaker.y);
-			var maxDistance = 700;
+			var maxDistance = shaker.range;
 			var level = shaker.strength * BoundBy(100-100*distance/maxDistance,0,100)/100;
 
 			// calculate total shake strength by adding up all shake positions in the player's vicinity

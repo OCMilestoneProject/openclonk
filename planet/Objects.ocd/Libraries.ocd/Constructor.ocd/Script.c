@@ -13,18 +13,10 @@ func RejectUse(object clonk)
 	return !clonk->IsWalking();
 }
 
-public func ControlUseStart(object clonk, int x, int y)
+public func ControlUse(object clonk, int x, int y)
 {
 	// Otherwise create a menu with possible structures to build.
 	OpenConstructionMenu(clonk);
-	clonk->CancelUse();
-	return true;
-}
-
-public func HoldingEnabled() { return true; }
-
-public func ControlUseHolding(object clonk, int x, int y)
-{
 	return true;
 }
 
@@ -83,7 +75,11 @@ public func FxControlConstructionPreviewControl(object clonk, effect, int ctrl, 
 		// CON_Use is accept, but don't remove the preview, this is done on releasing the button.
 		if (ctrl == CON_Use && !release)
 		{
-			CreateConstructionSite(clonk, effect.structure, AbsX(effect.preview->GetX()), AbsY(effect.preview->GetY() + effect.preview.dimension_y/2), effect.preview.blocked, effect.preview.direction, effect.preview.stick_to);
+			var ok = CreateConstructionSite(clonk, effect.structure, AbsX(effect.preview->GetX()), AbsY(effect.preview->GetY() + effect.preview.dimension_y/2), effect.preview.blocked, effect.preview.direction, effect.preview.stick_to);
+			if (ok)
+				clonk->~PlaySoundConfirm();
+			else
+				clonk->~PlaySoundDecline();
 			return true;	
 		}
 		// movement is allowed

@@ -136,6 +136,9 @@ class C4Draw
 public:
 	enum DrawOperation { OP_POINTS, OP_TRIANGLES };
 
+	static constexpr int COLOR_DEPTH = 32;
+	static constexpr int COLOR_DEPTH_BYTES = COLOR_DEPTH / 8;
+
 	C4Draw(): MaxTexSize(0) { }
 	virtual ~C4Draw() { pDraw=NULL; }
 public:
@@ -145,7 +148,6 @@ public:
 	float gammaOut[3]; // combined gamma
 	int MaxTexSize;
 protected:
-	BYTE                byByteCnt;    // bytes per pixel (2 or 4)
 	float fClipX1,fClipY1,fClipX2,fClipY2; // clipper in unzoomed coordinates
 	float fStClipX1,fStClipY1,fStClipX2,fStClipY2; // stored clipper in unzoomed coordinates
 	int32_t iClipX1,iClipY1,iClipX2,iClipY2; // clipper in pixel coordinates
@@ -162,16 +164,11 @@ protected:
 public:
 	float Zoom;
 	// General
-	bool Init(C4AbstractApp * pApp, unsigned int iXRes, unsigned int iYRes, int iBitDepth, unsigned int iMonitor);
+	bool Init(C4AbstractApp * pApp, unsigned int iXRes, unsigned int iYRes, unsigned int iMonitor);
 	virtual void Clear();
 	virtual void Default();
 	virtual CStdGLCtx *CreateContext(C4Window *, C4AbstractApp *) { return NULL; }
-#ifdef _WIN32
-	virtual CStdGLCtx *CreateContext(HWND, C4AbstractApp *) { return NULL; }
-#endif
 	virtual bool OnResolutionChanged(unsigned int iXRes, unsigned int iYRes) = 0; // reinit clipper for new resolution
-	virtual bool IsOpenGL() { return false; }
-	virtual bool IsShaderific() { return false; }
 	// Clipper
 	bool GetPrimaryClipper(int &rX1, int &rY1, int &rX2, int &rY2);
 	bool SetPrimaryClipper(int iX1, int iY1, int iX2, int iY2);
@@ -258,7 +255,6 @@ public:
 protected:
 	bool StringOut(const char *szText, C4Surface * sfcDest, float iTx, float iTy, DWORD dwFCol, BYTE byForm, bool fDoMarkup, C4Markup &Markup, CStdFont *pFont, float fZoom);
 	bool CreatePrimaryClipper(unsigned int iXRes, unsigned int iYRes);
-	virtual bool CreatePrimarySurfaces(unsigned int iXRes, unsigned int iYRes, int iColorDepth, unsigned int iMonitor) = 0;
 	virtual bool Error(const char *szMsg);
 
 	friend class C4Surface;
@@ -273,5 +269,5 @@ struct ZoomDataStackItem: public ZoomData
 	~ZoomDataStackItem() { pDraw->SetZoom(*this); }
 };
 
-bool DDrawInit(C4AbstractApp * pApp, unsigned int iXRes, unsigned int iYRes, int iBitDepth, unsigned int iMonitor);
+bool DDrawInit(C4AbstractApp * pApp, unsigned int iXRes, unsigned int iYRes, unsigned int iMonitor);
 #endif // INC_STDDDRAW2

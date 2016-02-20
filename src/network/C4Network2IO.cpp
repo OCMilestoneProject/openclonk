@@ -56,7 +56,6 @@ C4Network2IO::C4Network2IO()
 		iTCPIRate(0), iTCPORate(0), iTCPBCRate(0),
 		iUDPIRate(0), iUDPORate(0), iUDPBCRate(0)
 {
-	ZeroMem(&PuncherAddr, sizeof(PuncherAddr));
 }
 
 C4Network2IO::~C4Network2IO()
@@ -64,7 +63,7 @@ C4Network2IO::~C4Network2IO()
 	Clear();
 }
 
-bool C4Network2IO::Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscover, int16_t iPortRefServer, bool fBroadcast) // by main thread
+bool C4Network2IO::Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscover, int16_t iPortRefServer, bool fBroadcast, bool enable_upnp) // by main thread
 {
 	// Already initialized? Clear first
 	if (pNetIO_TCP || pNetIO_UDP) Clear();
@@ -81,7 +80,7 @@ bool C4Network2IO::Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscove
 	Thread.SetCallback(Ev_Net_Packet, this);
 
 	// initialize UPnP manager
-	if (iPortTCP > 0 || iPortUDP > 0)
+	if (enable_upnp && (iPortTCP > 0 || iPortUDP > 0))
 	{
 		assert(!UPnPMgr);
 		UPnPMgr = new C4Network2UPnP;
@@ -106,7 +105,7 @@ bool C4Network2IO::Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscove
 		{
 			Thread.AddProc(pNetIO_TCP);
 			pNetIO_TCP->SetCallback(this);
-			UPnPMgr->AddMapping(P_TCP, iPortTCP, iPortTCP);
+			if (UPnPMgr) UPnPMgr->AddMapping(P_TCP, iPortTCP, iPortTCP);
 		}
 
 	}
@@ -129,7 +128,7 @@ bool C4Network2IO::Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscove
 		{
 			Thread.AddProc(pNetIO_UDP);
 			pNetIO_UDP->SetCallback(this);
-			UPnPMgr->AddMapping(P_UDP, iPortUDP, iPortUDP);
+			if (UPnPMgr) UPnPMgr->AddMapping(P_UDP, iPortUDP, iPortUDP);
 		}
 	}
 
@@ -215,7 +214,7 @@ void C4Network2IO::Clear() // by main thread
 	if (pNetIO_TCP) { Thread.RemoveProc(pNetIO_TCP); delete pNetIO_TCP; pNetIO_TCP = NULL; }
 	if (pNetIO_UDP) { Thread.RemoveProc(pNetIO_UDP); delete pNetIO_UDP; pNetIO_UDP = NULL; }
 	if (pRefServer) { Thread.RemoveProc(pRefServer); delete pRefServer; pRefServer = NULL; }
-	delete UPnPMgr; UPnPMgr = NULL;
+	if (UPnPMgr) { delete UPnPMgr; UPnPMgr = NULL; }
 	// remove auto-accepts
 	ClearAutoAccept();
 	// reset flags
@@ -455,30 +454,9 @@ bool C4Network2IO::BroadcastMsg(const C4NetIOPacket &rPkt) // by both
 	return fSuccess;
 }
 
-bool C4Network2IO::Punch(C4NetIO::addr_t nPuncherAddr)
-{
-	// UDP must be initialized
-	if (!pNetIO_UDP)
-		return false;
-	// save address
-	PuncherAddr = nPuncherAddr;
-	// let's punch
-	return pNetIO_UDP->Connect(PuncherAddr);
-}
-
 // C4NetIO interface
 bool C4Network2IO::OnConn(const C4NetIO::addr_t &PeerAddr, const C4NetIO::addr_t &ConnectAddr, const C4NetIO::addr_t *pOwnAddr, C4NetIO *pNetIO)
 {
-	// puncher answer? We just make sure here a connection /can/ be established, so close it instantly.
-	if (pNetIO == pNetIO_UDP)
-		if (PuncherAddr.sin_addr.s_addr && AddrEqual(PuncherAddr, ConnectAddr))
-		{
-			// got an address?
-			if (pOwnAddr)
-				OnPunch(*pOwnAddr);
-			// this is only a test connection - close it instantly
-			return false;
-		}
 #if(C4NET2IO_DUMP_LEVEL > 1)
 	Application.InteractiveThread.ThreadLogS("OnConn: %s %s",
 	           C4TimeMilliseconds::Now().AsString().getData(),
@@ -526,13 +504,6 @@ bool C4Network2IO::OnConn(const C4NetIO::addr_t &PeerAddr, const C4NetIO::addr_t
 
 void C4Network2IO::OnDisconn(const C4NetIO::addr_t &addr, C4NetIO *pNetIO, const char *szReason)
 {
-	// punch?
-	if (pNetIO == pNetIO_UDP)
-		if (PuncherAddr.sin_addr.s_addr && AddrEqual(PuncherAddr, addr))
-		{
-			ZeroMem(&PuncherAddr, sizeof(PuncherAddr));
-			return;
-		}
 #if(C4NET2IO_DUMP_LEVEL > 1)
 	Application.InteractiveThread.ThreadLogS("OnDisconn: %s %s",
 	           C4TimeMilliseconds::Now().AsString().getData(),
@@ -1235,20 +1206,6 @@ void C4Network2IO::SendConnPackets()
 			}
 		}
 
-}
-
-void C4Network2IO::OnPunch(C4NetIO::addr_t addr)
-{
-	// Sanity check
-	assert (addr.sin_family == AF_INET);
-	if (addr.sin_family != AF_INET)
-		return;
-	ZeroMem(addr.sin_zero, sizeof(addr.sin_zero));
-	// Add for local client
-	C4Network2Client *pLocal = ::Network.Clients.GetLocal();
-	if (pLocal)
-		if (pLocal->AddAddr(C4Network2Address(addr, P_UDP), true))
-			::Network.InvalidateReference();
 }
 
 // *** C4Network2IOConnection

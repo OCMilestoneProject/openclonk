@@ -26,6 +26,7 @@
 #include <C4Def.h>
 #include <C4GraphicsResource.h>
 #include <C4Application.h>
+#include <C4GameScript.h>
 
 #include <C4DrawGL.h>
 #include <StdRegistry.h>
@@ -357,7 +358,7 @@ namespace C4GUI
 				pTitle->SetRightIndent(20); // for close button
 				if (!pCloseBtn)
 				{
-					AddElement(pCloseBtn = new CallbackButton<Dialog, IconButton>(Ico_Close, pTitle->GetToprightCornerRect(16,16,4,4,0), 0, &Dialog::OnUserClose));
+					AddElement(pCloseBtn = new CallbackButton<Dialog, IconButton>(Ico_Close, pTitle->GetToprightCornerRect(16,16,4,4,0), '\0', &Dialog::OnUserClose));
 					pCloseBtn->SetToolTip(LoadResStr("IDS_MNU_CLOSE"));
 				}
 				else

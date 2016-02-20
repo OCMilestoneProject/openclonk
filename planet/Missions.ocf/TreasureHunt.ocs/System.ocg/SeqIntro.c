@@ -21,13 +21,13 @@ func Intro_Init(object flagpole)
 	// Pyrit the pilot
 	this.pilot = npc_pyrit = CreateObjectAbove(Clonk, 100, 100, NO_OWNER);
 	this.pilot->MakeInvincible();
-	this.pilot->SetSkin(2);
 	this.pilot->Enter(this.plane);
 	this.pilot->SetAction("Walk");
 	this.pilot->SetName("Pyrit");
 	this.pilot->SetColor(0xff0000);
 	this.pilot->SetDir(DIR_Left);
 	this.pilot->SetObjectLayer(this.pilot);
+	this.pilot->SetAlternativeSkin("MaleBrownHair");
 	
 	// Pyit has a red hat!
 	this.pilot->AttachMesh(Hat, "skeleton_head", "main", Trans_Translate(5500, 0, 0));
@@ -78,7 +78,7 @@ func Intro_2()
 {
 	// Plane drop sound when it enters view range
 	if (this.plane->GetY() > 900)
-		Sound("PlaneDrop", true);
+		Sound("Goal_TreasureHunt::PlaneDrop", true);
 	else
 		ScheduleSame(2);
 	return true;
@@ -87,7 +87,7 @@ func Intro_2()
 func Intro_PlaneHit()
 {
 	// Plane hit ground! Continue sequence.
-	Sound("PlaneCrash", true);
+	Sound("Objects::Plane::PlaneCrash", true);
 	SetR(-90);
 	var particles = Particles_Smoke(true);
 	particles.Size = PV_Linear(PV_Random(20, 60), PV_Random(50, 100));

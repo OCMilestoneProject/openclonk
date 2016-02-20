@@ -30,7 +30,7 @@ protected func Initialize()
 	wheel = CreateObject(WindGenerator_Wheel, 0, 0, NO_OWNER);
 	wheel->SetParent(this, 150);
 	// Start the animation for the wheel.
-	PlayAnimation(TurnAnimation(), 5, wheel->Anim_R(GetAnimationLength(TurnAnimation()), 0), Anim_Const(1000));
+	PlayAnimation(TurnAnimation(), 5, wheel->Anim_R(GetAnimationLength(TurnAnimation()), 0));
 	// Initialize a regular check of the wheel's position and speed, also handles power updates.
 	last_power = 0;
 	AddTimer("Wind2Turn", 4);
@@ -52,7 +52,7 @@ public func CollectionZone()
 
 protected func Collection()
 {
-	Sound("Clonk");
+	Sound("Objects::Clonk");
 	return;
 }
 
@@ -76,6 +76,7 @@ public func Wind2Turn()
 	// Only produce power if fully constructed.
 	if (GetCon() < 100) 
 		return;
+	var current_wind = GetWeightedWind();
 	// Determine the current power production.	
 	var power = 0;
 	if (!wheel->Stuck() && !wheel->HasStopped())
@@ -83,6 +84,10 @@ public func Wind2Turn()
 		// Produced power ranges from 0 to 80 in steps of 10.
 		power = Abs(wheel->GetRDir(MinRevolutionTime() / 90));
 		power = BoundBy((10 * power + 60) / 125 * 10, 0, 80);	
+
+		// Make some sounds.
+		if (Random(10 + Abs(current_wind)) < 5 && !Random(5))
+			Sound(["Hits::Materials::Wood::WoodCreak?","Structures::HingeCreak?"][Random(2)], false, nil, nil, nil, 75);
 	}
 	// Update the power consumption if the produced power has changed.
 	if (last_power != power)
@@ -93,11 +98,7 @@ public func Wind2Turn()
 			RegisterPowerRequest(this->PowerNeed());
 	}
 	// Adjust the wheel speed.
-	var current_wind = GetWeightedWind();
 	wheel->SetRDir(current_wind * 90, MinRevolutionTime());
-	// Make some sounds.
-	if (Abs(current_wind) >= 10 && Random(15 - Abs(current_wind / 10)) < 5)
-		Sound(["WoodCreak?","HingeCreak?"][Random(2)], false, nil, nil, nil, 75);
 	return;
 }
 

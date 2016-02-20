@@ -36,11 +36,6 @@
           <col>Category of the object. Also see <emlink href="definition/category.html">object categories</emlink>.</col>
         </row>
         <row>
-          <literal_col>ContactCalls</literal_col>
-          <col>Integer</col>
-          <col>0 or 1. If 1, Contactcalls are called in the object script.</col>
-        </row>
-        <row>
           <literal_col>Width</literal_col>
           <col>Integer</col>
           <col>Width of the object.</col>
@@ -128,7 +123,7 @@
         <row>
           <literal_col>Exclusive</literal_col>
           <col>Integer</col>
-          <col>0 or 1. Determines whether the object blocks objects behind it.</col>
+          <col>0 or 1. Determines whether the object blocks objects behind it. Exclusive objects also block the placement of a construction site at an overlapping location.</col>
         </row>
         <row>
           <literal_col>Line</literal_col>
@@ -169,11 +164,6 @@
           <literal_col>HorizontalFix</literal_col>
           <col>Integer</col>
           <col>0 or 1. If 1, the object can only move vertically.</col>
-        </row>
-        <row>
-          <literal_col>BorderBound</literal_col>
-          <col>Integer</col>
-          <col>Bit mask: bit 0 (value 1) stop at the sides, bit 1 (value 2) stop at the top, bit 2 (value 4) stop at the bottom.</col>
         </row>
         <row>
           <literal_col>UprightAttach</literal_col>

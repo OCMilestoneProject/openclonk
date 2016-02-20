@@ -1,5 +1,0 @@
-Weapons=Weapons
-Items=Items
-Technology=Technology
-Upgrades=Upgrades
-Artifacts=Artifacts

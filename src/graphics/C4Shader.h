@@ -19,10 +19,17 @@
 #define INC_C4Shader
 
 #include "StdBuf.h"
+#include "StdMeshMath.h"
 #include "C4Surface.h"
 
+#ifdef _WIN32
+#include <C4windowswrapper.h>
+#endif
+
+#include <GL/glew.h>
+
 // Shader version
-const int C4Shader_Version = 130; // GLSL 1.30 / OpenGL 3.0
+const int C4Shader_Version = 150; // GLSL 1.50 / OpenGL 3.2
 
 // Maximum number of texture coordinates
 const int C4Shader_MaxTexCoords = 8;
@@ -44,6 +51,7 @@ const int C4Shader_LastPosition = 256;
 // Positions in vertex shader
 const int C4Shader_Vertex_TexCoordPos = 50;
 const int C4Shader_Vertex_NormalPos = 60;
+const int C4Shader_Vertex_ColorPos = 70;
 const int C4Shader_Vertex_PositionPos = 80;
 
 class C4Shader
@@ -75,36 +83,18 @@ private:
 
 #ifndef USE_CONSOLE
 	// shaders
-	GLhandleARB hVert, hFrag, hProg;
+	GLuint hProg;
 	// shader variables
-	int iUniformCount;
-	GLint *pUniforms;
-	const char **pUniformNames;
+	struct Variable { int address; const char* name; };
+	std::vector<Variable> Uniforms;
+	std::vector<Variable> Attributes;
 #endif
 
 public:
-	enum VertexAttribIndex
-	{
-		// These correspond to the locations nVidia uses for the
-		// respective gl_* attributes, so make sure whatever you
-		// use for custom ones doesn't conflict with these UNLESS
-		// you're not using the pre-defined ones in your shader
-		VAI_Vertex = 0,
-		VAI_Normal = 2,
-		VAI_Color = 3,
-		VAI_TexCoord0 = 8, // and upwards through TexCoord7 = 15
-
-		// Make sure you move these if we implement multitexturing
-		VAI_BoneWeights,
-		VAI_BoneWeightsMax = VAI_BoneWeights + 1,
-		VAI_BoneIndices,
-		VAI_BoneIndicesMax = VAI_BoneIndices + VAI_BoneWeightsMax - VAI_BoneWeights
-	};
-
 	bool Initialised() const
 	{
 #ifndef USE_CONSOLE
-		return hVert != 0;
+		return hProg != 0;
 #else
 		return true;
 #endif
@@ -114,12 +104,19 @@ public:
 #ifndef USE_CONSOLE
 	GLint GetUniform(int iUniform) const
 	{
-		return iUniform >= 0 && iUniform < iUniformCount ? pUniforms[iUniform] : -1;
+		return iUniform >= 0 && static_cast<unsigned int>(iUniform) < Uniforms.size() ? Uniforms[iUniform].address : -1;
 	}
+
 	bool HaveUniform(int iUniform) const
 	{
 		return GetUniform(iUniform) != GLint(-1);
 	}
+
+	GLint GetAttribute(int iAttribute) const
+	{
+		return iAttribute >= 0 && static_cast<unsigned int>(iAttribute) < Attributes.size() ? Attributes[iAttribute].address : -1;
+	}
+
 #else
 	int GetUniform(int iUniform) const
 	{
@@ -129,27 +126,23 @@ public:
 	{
 		return false;
 	}
+	int GetAttribute(int iAttribute) const
+	{
+		return -1;
+	}
 #endif
 
 	// Shader is composed from various slices
+	void AddDefine(const char* name);
 	void AddVertexSlice(int iPos, const char *szText);
 	void AddFragmentSlice(int iPos, const char *szText, const char *szSource = "", int iFileTime = 0);
 	void AddVertexSlices(const char *szWhat, const char *szText, const char *szSource = "", int iFileTime = 0);
 	void AddFragmentSlices(const char *szWhat, const char *szText, const char *szSource = "", int iFileTime = 0);
-	bool LoadSlices(C4GroupSet *pGroupSet, const char *szFile);
-
-	// Add default vertex code (2D - no transformation)
-	void AddVertexDefaults();
-
-#ifndef USE_CONSOLE
-	// Allocate a texture coordinate, returning its ID to be used with glMultiTexCoord.
-	// The texture coordinate will be visible to both shaders under the given name.
-	// Note that in contrast to uniforms, these will not disappear if not used!
-	GLenum AddTexCoord(const char *szName);
-#endif
+	bool LoadFragmentSlices(C4GroupSet *pGroupSet, const char *szFile);
+	bool LoadVertexSlices(C4GroupSet *pGroupSet, const char *szFile);
 
 	// Assemble and link the shader. Should be called again after new slices are added.
-	bool Init(const char *szWhat, const char **szUniforms);
+	bool Init(const char *szWhat, const char **szUniforms, const char **szAttributes);
 	bool Refresh();
 
 	void ClearSlices();
@@ -158,14 +151,14 @@ public:
 private:
 	void AddSlice(ShaderSliceList& slices, int iPos, const char *szText, const char *szSource, int iFileTime);
 	void AddSlices(ShaderSliceList& slices, const char *szWhat, const char *szText, const char *szSource, int iFileTime);
+	bool LoadSlices(ShaderSliceList& slices, C4GroupSet *pGroupSet, const char *szFile);
 	int ParsePosition(const char *szWhat, const char **ppPos);
 
 	StdStrBuf Build(const ShaderSliceList &Slices, bool fDebug = false);
 
 #ifndef USE_CONSOLE
-	GLhandleARB Create(GLenum iShaderType, const char *szWhat, const char *szShader);
-	void DumpInfoLog(const char *szWhat, GLhandleARB hShader);
-	int GetObjectStatus(GLhandleARB hObj, GLenum type);
+	GLuint Create(GLenum iShaderType, const char *szWhat, const char *szShader);
+	void DumpInfoLog(const char *szWhat, GLuint hShader, bool forProgram);
 #endif
 
 public:
@@ -181,6 +174,11 @@ public:
 	{ }
 	~C4ShaderCall() { Finish(); }
 
+	GLint GetAttribute(int iAttribute) const
+	{
+		return pShader->GetAttribute(iAttribute);
+	}
+
 private:
 	bool fStarted;
 	const C4Shader *pShader;
@@ -193,41 +191,46 @@ public:
 	// something could be done about it.
 	void SetUniform1i(int iUniform, int iX) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform1iARB(pShader->GetUniform(iUniform), iX);
+			glUniform1i(pShader->GetUniform(iUniform), iX);
 	}
 	void SetUniform1f(int iUniform, float gX) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform1fARB(pShader->GetUniform(iUniform), gX);
+			glUniform1f(pShader->GetUniform(iUniform), gX);
 	}
 	void SetUniform2f(int iUniform, float gX, float gY) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform2fARB(pShader->GetUniform(iUniform), gX, gY);
+			glUniform2f(pShader->GetUniform(iUniform), gX, gY);
 	}
 	void SetUniform1iv(int iUniform, int iLength, const int *pVals) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform1ivARB(pShader->GetUniform(iUniform), iLength, pVals);
+			glUniform1iv(pShader->GetUniform(iUniform), iLength, pVals);
 	}
 	void SetUniform1fv(int iUniform, int iLength, const float *pVals) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform1fvARB(pShader->GetUniform(iUniform), iLength, pVals);
+			glUniform1fv(pShader->GetUniform(iUniform), iLength, pVals);
 	}
 	void SetUniform2fv(int iUniform, int iLength, const float *pVals) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform2fvARB(pShader->GetUniform(iUniform), iLength, pVals);
+			glUniform2fv(pShader->GetUniform(iUniform), iLength, pVals);
 	}
 	void SetUniform3fv(int iUniform, int iLength, const float *pVals) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform3fvARB(pShader->GetUniform(iUniform), iLength, pVals);
+			glUniform3fv(pShader->GetUniform(iUniform), iLength, pVals);
 	}
 	void SetUniform4fv(int iUniform, int iLength, const float *pVals) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniform4fvARB(pShader->GetUniform(iUniform), iLength, pVals);
+			glUniform4fv(pShader->GetUniform(iUniform), iLength, pVals);
 	}
 
 	// Matrices are in row-major order
 	void SetUniformMatrix2x3fv(int iUniform, int iLength, const float* pVals) const {
 		if (pShader->HaveUniform(iUniform))
 			glUniformMatrix3x2fv(pShader->GetUniform(iUniform), iLength, GL_TRUE, pVals);
+	}
+
+	void SetUniformMatrix3x3fv(int iUniform, int iLength, const float *pVals) const {
+		if (pShader->HaveUniform(iUniform))
+			glUniformMatrix3fv(pShader->GetUniform(iUniform), iLength, GL_TRUE, pVals);
 	}
 
 	void SetUniformMatrix3x4fv(int iUniform, int iLength, const float *pVals) const {
@@ -237,7 +240,46 @@ public:
 
 	void SetUniformMatrix4x4fv(int iUniform, int iLength, const float* pVals) const {
 		if (pShader->HaveUniform(iUniform))
-			glUniformMatrix4fvARB(pShader->GetUniform(iUniform), iLength, GL_TRUE, pVals);
+			glUniformMatrix4fv(pShader->GetUniform(iUniform), iLength, GL_TRUE, pVals);
+	}
+
+	void SetUniformMatrix3x3(int iUniform, const StdMeshMatrix& matrix)
+	{
+		if (pShader->HaveUniform(iUniform))
+		{
+			const float mat[9] = { matrix(0, 0), matrix(1, 0), matrix(2, 0), matrix(0, 1), matrix(1, 1), matrix(2, 1), matrix(0, 2), matrix(1, 2), matrix(2, 2) };
+			glUniformMatrix3fv(pShader->GetUniform(iUniform), 1, GL_FALSE, mat);
+		}
+	}
+
+	void SetUniformMatrix3x3Transpose(int iUniform, const StdMeshMatrix& matrix)
+	{
+		if (pShader->HaveUniform(iUniform))
+		{
+			const float mat[9] = { matrix(0, 0), matrix(0, 1), matrix(0, 2), matrix(1, 0), matrix(1, 1), matrix(1, 2), matrix(2, 0), matrix(2, 1), matrix(2, 2) };
+			glUniformMatrix3fv(pShader->GetUniform(iUniform), 1, GL_FALSE, mat);
+		}
+	}
+
+	void SetUniformMatrix3x4(int iUniform, const StdMeshMatrix& matrix)
+	{
+		if (pShader->HaveUniform(iUniform))
+			glUniformMatrix4x3fv(pShader->GetUniform(iUniform), 1, GL_TRUE, matrix.data());
+	}
+
+	void SetUniformMatrix4x4(int iUniform, const StdMeshMatrix& matrix)
+	{
+		if (pShader->HaveUniform(iUniform))
+		{
+			const float mat[16] = { matrix(0, 0), matrix(1, 0), matrix(2, 0), 0.0f, matrix(0, 1), matrix(1, 1), matrix(2, 1), 0.0f, matrix(0, 2), matrix(1, 2), matrix(2, 2), 0.0f, matrix(0, 3), matrix(1, 3), matrix(2, 3), 1.0f };
+			glUniformMatrix4fv(pShader->GetUniform(iUniform), 1, GL_FALSE, mat);
+		}
+	}
+
+	void SetUniformMatrix4x4(int iUniform, const StdProjectionMatrix& matrix)
+	{
+		if (pShader->HaveUniform(iUniform))
+			glUniformMatrix4fv(pShader->GetUniform(iUniform), 1, GL_TRUE, matrix.data());
 	}
 
 	void Start();

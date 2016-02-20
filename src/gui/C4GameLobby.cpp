@@ -22,7 +22,6 @@
 #include <C4Components.h>
 #include "C4Network2Dialogs.h"
 #include "C4GameOptions.h"
-#include "C4RTF.h"
 #include "C4ChatDlg.h"
 #include "C4PlayerInfoListBox.h"
 #include <C4MessageInput.h>
@@ -90,17 +89,10 @@ namespace C4GameLobby
 			}
 			else
 			{
-				StdStrBuf sDesc;
 				// load desc
 				C4ComponentHost DefDesc;
 				if (C4Language::LoadComponentHost(&DefDesc, ScenarioFile, C4CFN_ScenarioDesc, Config.General.LanguageEx))
-				{
-					C4RTFFile rtf;
-					rtf.Load(StdBuf(DefDesc.GetData(), SLen(DefDesc.GetData())));
-					sDesc.Take(rtf.GetPlainText());
-				}
-				if (!!sDesc)
-					pDescBox->AddTextLine(sDesc.getData(), &rTextFont, C4GUI_MessageFontClr, false, true, &rTitleFont);
+					pDescBox->AddTextLine(DefDesc.GetData(), &rTextFont, C4GUI_MessageFontClr, false, true, &rTitleFont);
 				else
 					pDescBox->AddTextLine(Game.ScenarioTitle.getData(), &rTitleFont, C4GUI_CaptionFontClr, false, true);
 			}
@@ -233,13 +225,15 @@ namespace C4GameLobby
 		bool fHasChat = C4ChatDlg::IsChatActive();
 		int32_t iBtnNum = 4+fHasTeams+fHasChat;
 		if (fHasTeams)
-			btnTeams = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Team, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), pPlayerSheet->GetHotkey(), &MainDlg::OnTabTeams);
-		btnPlayers = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Player, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), pPlayerSheet->GetHotkey(), &MainDlg::OnTabPlayers);
-		btnResources = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Resource, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), pResSheet->GetHotkey(), &MainDlg::OnTabRes);
-		btnOptions = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Options, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), pOptionsSheet->GetHotkey(), &MainDlg::OnTabOptions);
-		btnScenario = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Gfx, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), pOptionsSheet->GetHotkey(), &MainDlg::OnTabScenario);
+		{
+			btnTeams = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Team, pRightTabLbl->GetToprightCornerRect(16, 16, 4, 4, --iBtnNum), LoadResStr("IDS_DLG_PLAYERSBYTEAM"), &MainDlg::OnTabTeams);
+		}
+		btnPlayers = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Player, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), LoadResStr("IDS_DLG_PLAYERS"), &MainDlg::OnTabPlayers);
+		btnResources = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Resource, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), LoadResStr("IDS_DLG_RESOURCES"), &MainDlg::OnTabRes);
+		btnOptions = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Options, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), LoadResStr("IDS_DLG_OPTIONS"), &MainDlg::OnTabOptions);
+		btnScenario = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Gfx, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), LoadResStr("IDS_DLG_SCENARIO"), &MainDlg::OnTabScenario);
 		if (fHasChat)
-			btnChat = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Ex_Chat, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), 0 /* 2do*/, &MainDlg::OnBtnChat);
+			btnChat = new C4GUI::CallbackButton<MainDlg, C4GUI::IconButton>(C4GUI::Ico_Ex_Chat, pRightTabLbl->GetToprightCornerRect(16,16,4,4,--iBtnNum), LoadResStr("IDS_CTL_CHAT"), &MainDlg::OnBtnChat);
 
 		// update labels and tooltips for player list
 		UpdateRightTab();
@@ -316,19 +310,18 @@ namespace C4GameLobby
 		// changing away from countdown?
 		if (eCountdownState == CDS_Countdown)
 		{
-			StopSoundEffect("Elevator", NULL);
-			if (eToState != CDS_Start) StartSoundEffect("Pshshsh");
+			StopSoundEffect("Structures::Elevator::Moving", NULL);
+			if (eToState != CDS_Start) StartSoundEffect("Liquids::Pshshsh");
 		}
 		// change to game start?
 		if (eToState == CDS_Start)
 		{
 			// announce it!
-			StartSoundEffect("Blast3");
+			StartSoundEffect("Fire::Blast3");
 		}
 		else if (eToState == CDS_Countdown)
 		{
-			StartSoundEffect("Fuse");
-			StartSoundEffect("Elevator", true);
+			StartSoundEffect("Fire::Fuse");
 		}
 		if (eToState == CDS_Countdown || eToState == CDS_LongCountdown)
 		{
@@ -379,7 +372,7 @@ namespace C4GameLobby
 		{
 			// first countdown message
 			OnLog(Pkt.GetCountdownMsg(!fWasCountdown).getData(), C4GUI_LogFontClr2);
-			StartSoundEffect("Command");
+			StartSoundEffect("UI::Tick");
 		}
 	}
 
@@ -439,7 +432,7 @@ namespace C4GameLobby
 		if (!szInputText || !*szInputText)
 		{
 			// do some error sound then
-			C4GUI::GUISound("Error");
+			C4GUI::GUISound("UI::Error");
 		}
 		else
 		{
@@ -540,7 +533,7 @@ namespace C4GameLobby
 	{
 		if (pChatBox)
 		{
-			StartSoundEffect("Error");
+			StartSoundEffect("UI::Error");
 			pChatBox->AddTextLine(szErrMsg, &::GraphicsResource.TextFont, C4GUI_ErrorFontClr, true, true);
 			pChatBox->ScrollToBottom();
 		}
@@ -596,7 +589,7 @@ namespace C4GameLobby
 			return;
 		}
 		// join!
-		::Network.Players.JoinLocalPlayer(Config.AtRelativePath(szFilename), true);
+		::Network.Players.JoinLocalPlayer(Config.AtRelativePath(szFilename));
 	}
 
 	void MainDlg::OnTabPlayers(C4GUI::Control *btn)

@@ -13,6 +13,12 @@ global func SetSpeed(int x_dir, int y_dir, int prec)
 	return;
 }
 
+// Returns the speed of an object.
+global func GetSpeed(int prec)
+{
+	return Sqrt(GetXDir(prec)**2 + GetYDir(prec)**2);
+}
+
 // Sets an objects's speed and its direction, doesn't it?
 // Can set either speed or angle of velocity, or both
 global func SetVelocity(int angle, int speed, int precAng, int precSpd)
@@ -63,6 +69,12 @@ global func MakeInvincible(bool allow_fire)
 	if (!fx) return false;
 	fx.allow_fire = allow_fire;
 	if (!allow_fire && this->OnFire()) this->Extinguish();
+	fx.OnShockwaveHit = this.OnShockwaveHit;
+	fx.RejectWindbagForce = this.RejectWindbagForce;
+	fx.QueryCatchBlow = this.QueryCatchBlow;
+	this.OnShockwaveHit = Global.Invincibility_OnShockwaveHit;
+	this.RejectWindbagForce = Global.Invincibility_RejectWindbagForce;
+	this.QueryCatchBlow = Global.Invincibility_QueryCatchBlow;
 	return true;
 }
 
@@ -92,7 +104,33 @@ global func FxIntInvincibleSaveScen(object obj, proplist fx, proplist props)
 global func ClearInvincible()
 {
 	if (!this) return nil;
+	var fx = GetEffect("IntInvincible", this);
+	if (fx)
+	{
+		this.OnShockwaveHit = fx.OnShockwaveHit;
+		this.RejectWindbagForce = fx.RejectWindbagForce;
+		this.QueryCatchBlow = fx.QueryCatchBlow;
+	} else { // just to be sure
+		this.OnShockwaveHit = this->GetID().OnShockwaveHit;
+		this.RejectWindbagForce = this->GetID().RejectWindbagForce;
+		this.QueryCatchBlow = this->GetID().QueryCatchBlow;
+	}
 	return RemoveEffect("IntInvincible", this);
+}
+
+global func Invincibility_OnShockwaveHit()
+{
+	return true;
+}
+
+global func Invincibility_RejectWindbagForce()
+{
+	return true;
+}
+
+global func Invincibility_QueryCatchBlow()
+{
+	return true;
 }
 
 // Move an object by the given parameters relative to its position.
@@ -236,12 +274,12 @@ global func StonyObjectHit(int x, int y)
 		while(!GBackSolid(x*i, y*i) && i < average_obj_size) i++;
 	// Check if digfree
 	if (!GetMaterialVal("DigFree", "Material", GetMaterial(x*i, y*i)) && GBackSolid(x*i, y*i))
-		return Sound("RockHit?");
+		return Sound("Hits::Materials::Rock::RockHit?");
 	// Else play standard sound
 	if (Distance(0,0,xdir,ydir) > 10)
-			return Sound("SoftTouch?");
+			return Sound("Hits::SoftTouch?");
 		else
-			return Sound("SoftHit?");
+			return Sound("Hits::SoftHit?");
 }
 
 // Removes all objects of the given type.
@@ -308,26 +346,26 @@ global func RootSurface()
 	}
 }
 
-// Buys an object.
-global func Buy (id idBuyObj, int iForPlr, int iPayPlr, object pToBase, bool fShowErrors)
+// Buys an object. Returns the object if it could be bought.
+global func Buy (id idBuyObj, int iForPlr, int iPayPlr, object pFromVendor, bool fShowErrors)
 {
-	// if no base is given try this
-	if(!pToBase) pToBase = this;
-	// not a base?
-	if( !pToBase->~IsBase() )
-		return 0;
-	return pToBase->DoBuy(idBuyObj, iForPlr, iPayPlr, 0, 0, fShowErrors);
+	// if no vendor is given try this
+	if (!pFromVendor) pFromVendor = this;
+	// not a vendor?
+	if (!pFromVendor->~IsVendor())
+		return nil;
+	return pFromVendor->DoBuy(idBuyObj, iForPlr, iPayPlr, 0, 0, fShowErrors);
 }
 
-// Sells an object.
-global func Sell (int iPlr, object pObj, object pToBase)
+// Sells an object. Returns true if it could be sold.
+global func Sell (int iPlr, object pObj, object pToVendor)
 {
-	// if no base is given try this
-	if(!pToBase) pToBase = this;
-	// not a base?
-	if( !pToBase->~IsBase() )
-		return 0;
-	return pToBase->DoSell(pObj, iPlr);
+	// if no vendor is given try this
+	if(!pToVendor) pToVendor = this;
+	// not a vendor?
+	if (!pToVendor->~IsVendor())
+		return false;
+	return pToVendor->DoSell(pObj, iPlr);
 }
 
 // Returns the owner if this is a base.

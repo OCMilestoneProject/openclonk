@@ -35,8 +35,9 @@ C4ShaderPosName C4SH_PosNames[] = {
 	{ C4Shader_PositionColor,		 "color" },
 	{ C4Shader_PositionFinish,		 "finish" },
 
-	{ C4Shader_Vertex_TexCoordPos,		"texcoord" },
+	{ C4Shader_Vertex_TexCoordPos,	        "texcoord" },
 	{ C4Shader_Vertex_NormalPos,            "normal" },
+	{ C4Shader_Vertex_ColorPos,             "color" },
 	{ C4Shader_Vertex_PositionPos,          "position" }
 };
 
@@ -44,9 +45,7 @@ C4Shader::C4Shader()
 	: iTexCoords(0)
 	, LastRefresh()
 #ifndef USE_CONSOLE
-	, hVert(0), hFrag(0), hProg(0)
-	, pUniforms(NULL)
-	, pUniformNames(NULL)
+	, hProg(0)
 #endif
 {
 
@@ -55,6 +54,13 @@ C4Shader::C4Shader()
 C4Shader::~C4Shader()
 {
 	Clear();
+}
+
+void C4Shader::AddDefine(const char* name)
+{
+	StdStrBuf define = FormatString("#define %s", name);
+	AddVertexSlice(-1, define.getData());
+	AddFragmentSlice(-1, define.getData());
 }
 
 void C4Shader::AddVertexSlice(int iPos, const char *szText)
@@ -75,6 +81,16 @@ void C4Shader::AddVertexSlices(const char *szWhat, const char *szText, const cha
 void C4Shader::AddFragmentSlices(const char *szWhat, const char *szText, const char *szSource, int iSourceTime)
 {
 	AddSlices(FragmentSlices, szWhat, szText, szSource, iSourceTime);
+}
+
+bool C4Shader::LoadFragmentSlices(C4GroupSet *pGroups, const char *szFile)
+{
+	return LoadSlices(FragmentSlices, pGroups, szFile);
+}
+
+bool C4Shader::LoadVertexSlices(C4GroupSet *pGroups, const char *szFile)
+{
+	return LoadSlices(VertexSlices, pGroups, szFile);
 }
 
 void C4Shader::AddSlice(ShaderSliceList& slices, int iPos, const char *szText, const char *szSource, int iSourceTime)
@@ -240,7 +256,7 @@ int C4Shader::ParsePosition(const char *szWhat, const char **ppPos)
 	return iPosition;
 }
 
-bool C4Shader::LoadSlices(C4GroupSet *pGroups, const char *szFile)
+bool C4Shader::LoadSlices(ShaderSliceList& slices, C4GroupSet *pGroups, const char *szFile)
 {
 	// Search for our shaders
 	C4Group *pGroup = pGroups->FindEntry(szFile);
@@ -257,32 +273,9 @@ bool C4Shader::LoadSlices(C4GroupSet *pGroups, const char *szFile)
 		iSourceTime = FileTime(Source.getData());
 	// Load
 	StdStrBuf What = FormatString("file %s", Config.AtRelativePath(Source.getData()));
-	AddFragmentSlices(What.getData(), Shader.getData(), Source.getData(), iSourceTime);
+	AddSlices(slices, What.getData(), Shader.getData(), Source.getData(), iSourceTime);
 	return true;
 }
-
-void C4Shader::AddVertexDefaults()
-{
-	AddVertexSlice(C4Shader_Vertex_PositionPos, "gl_Position = ftransform();\n");
-}
-
-#ifndef USE_CONSOLE
-GLenum C4Shader::AddTexCoord(const char *szName)
-{
-	// Make sure we have enough space
-	assert(iTexCoords < C4Shader_MaxTexCoords);
-	if(iTexCoords >= C4Shader_MaxTexCoords)
-		return -1;
-
-	// Add slices
-	StdStrBuf Code = FormatString("gl_TexCoord[%d] = gl_MultiTexCoord%d;\n", iTexCoords, iTexCoords);
-	AddVertexSlice(C4Shader_Vertex_TexCoordPos, Code.getData());
-	Code.Format("#define %s gl_TexCoord[%d]\n", szName, iTexCoords);
-	AddFragmentSlice(-1, Code.getData());
-
-	return GL_TEXTURE0 + iTexCoords++;
-}
-#endif
 
 void C4Shader::ClearSlices()
 {
@@ -296,34 +289,16 @@ void C4Shader::Clear()
 #ifndef USE_CONSOLE
 	if (!hProg) return;
 	// Need to be detached, then deleted
-	glDetachObjectARB(hProg, hFrag);
-	glDetachObjectARB(hProg, hVert);
-	glDeleteObjectARB(hFrag);
-	glDeleteObjectARB(hVert);
-	glDeleteObjectARB(hProg);
-	hFrag = hVert = hProg = 0;
+	glDeleteProgram(hProg);
+	hProg = 0;
 	// Clear uniform data
-	delete[] pUniforms; pUniforms = NULL;
-	delete[] pUniformNames; pUniformNames = NULL;
-	iUniformCount = 0;
+	Uniforms.clear();
+	Attributes.clear();
 #endif
 }
 
-bool C4Shader::Init(const char *szWhat, const char **szUniforms)
+bool C4Shader::Init(const char *szWhat, const char **szUniforms, const char **szAttributes)
 {
-#ifndef USE_CONSOLE
-	// No support?
-	if(!GLEW_ARB_fragment_program)
-	{
-		Log("  gl: no shader support!");
-		return false;
-	}
-
-	// Clear old shader first
-	const char **pOldUniformNames = pUniformNames;
-	if (hProg) { pUniformNames = NULL; Clear(); }
-#endif
-
 	StdStrBuf VertexShader = Build(VertexSlices, true),
 		FragmentShader = Build(FragmentSlices, true);
 
@@ -338,56 +313,72 @@ bool C4Shader::Init(const char *szWhat, const char **szUniforms)
 
 #ifndef USE_CONSOLE
 	// Attempt to create shaders
-	hVert = Create(GL_VERTEX_SHADER_ARB,
-				   FormatString("%s vertex shader", szWhat).getData(),
-				   VertexShader.getData());
-	hFrag = Create(GL_FRAGMENT_SHADER_ARB,
-				   FormatString("%s fragment shader", szWhat).getData(),
-				   FragmentShader.getData());
+	const GLuint hVert = Create(GL_VERTEX_SHADER,
+	                            FormatString("%s vertex shader", szWhat).getData(),
+	                            VertexShader.getData());
+	const GLuint hFrag = Create(GL_FRAGMENT_SHADER,
+	                            FormatString("%s fragment shader", szWhat).getData(),
+	                            FragmentShader.getData());
+
 	if(!hFrag || !hVert)
+	{
+		if (hFrag) glDeleteShader(hFrag);
+		if (hVert) glDeleteShader(hVert);
 		return false;
+	}
 
 	// Link program
-	hProg = glCreateProgramObjectARB();
-#ifdef GL_KHR_debug
-	if (glObjectLabel)
-		glObjectLabel(GL_PROGRAM, hProg, -1, szWhat);
-#endif
-	glAttachObjectARB(hProg, hVert);
-	glAttachObjectARB(hProg, hFrag);
-	// Bind all input variables
-	for (int i = 0; i <= VAI_BoneWeightsMax - VAI_BoneWeights; ++i)
-	{
-		glBindAttribLocation(hProg, VAI_BoneWeights + i, FormatString("oc_BoneWeights%d", i).getData());
-		glBindAttribLocation(hProg, VAI_BoneIndices + i, FormatString("oc_BoneIndices%d", i).getData());
-	}
-	glLinkProgramARB(hProg);
+	const GLuint hNewProg = glCreateProgram();
+	pGL->ObjectLabel(GL_PROGRAM, hNewProg, -1, szWhat);
+	glAttachShader(hNewProg, hVert);
+	glAttachShader(hNewProg, hFrag);
+	glLinkProgram(hNewProg);
+	// Delete vertex and fragment shader after we linked the program
+	glDeleteShader(hFrag);
+	glDeleteShader(hVert);
 
 	// Link successful?
-	DumpInfoLog(FormatString("%s shader program", szWhat).getData(), hProg);
-	if(GetObjectStatus(hProg, GL_OBJECT_LINK_STATUS_ARB) != 1) {
-		Clear();
+	DumpInfoLog(FormatString("%s shader program", szWhat).getData(), hNewProg, true);
+	GLint status;
+	glGetProgramiv(hNewProg, GL_LINK_STATUS, &status);
+	if(status != GL_TRUE) {
+		glDeleteProgram(hNewProg);
 		ShaderLogF("  gl: Failed to link %s shader!", szWhat);
 		return false;
 	}
 	ShaderLogF("  gl: %s shader linked successfully", szWhat);
 
-	// Okay, allocate uniform array
-	iUniformCount = 0;
-	while (szUniforms[iUniformCount])
-		iUniformCount++;
-	pUniforms = new GLint[iUniformCount];
-	pUniformNames = new const char *[iUniformCount+1];
+	// Everything successful, delete old shader
+	if (hProg != 0) glDeleteProgram(hProg);
+	hProg = hNewProg;
 
-	// Get uniform locations. Note this is expected to fail for a few of them
+	// Allocate uniform and attribute arrays
+	int iUniformCount = 0;
+	if (szUniforms != NULL)
+		while (szUniforms[iUniformCount])
+			iUniformCount++;
+	Uniforms.resize(iUniformCount);
+
+	int iAttributeCount = 0;
+	if (szAttributes != NULL)
+		while (szAttributes[iAttributeCount])
+			iAttributeCount++;
+	Attributes.resize(iAttributeCount);
+
+	// Get uniform and attribute locations. Note this is expected to fail for a few of them
 	// because the respective uniforms got optimized out!
 	for (int i = 0; i < iUniformCount; i++) {
-		pUniforms[i] = glGetUniformLocationARB(hProg, szUniforms[i]);
-		ShaderLogF("Uniform %s = %d", szUniforms[i], pUniforms[i]);
-		pUniformNames[i] = szUniforms[i];
+		Uniforms[i].address = glGetUniformLocation(hProg, szUniforms[i]);
+		Uniforms[i].name = szUniforms[i];
+		ShaderLogF("Uniform %s = %d", szUniforms[i], Uniforms[i].address);
 	}
-	delete[] pOldUniformNames;
-	pUniformNames[iUniformCount] = NULL;
+
+	for (int i = 0; i < iAttributeCount; i++) {
+		Attributes[i].address = glGetAttribLocation(hProg, szAttributes[i]);
+		Attributes[i].name = szAttributes[i];
+		ShaderLogF("Attribute %s = %d", szAttributes[i], Attributes[i].address);
+	}
+
 #endif
 
 	Name.Copy(szWhat);
@@ -437,9 +428,29 @@ bool C4Shader::Refresh()
 	StdStrBuf WhatSrc = FormatString("file %s", Config.AtRelativePath(Source.getData()));
 	AddFragmentSlices(WhatSrc.getData(), Shader.getData(), Source.getData(), iSourceTime);
 
+#ifndef USE_CONSOLE
+	std::vector<const char*> UniformNames(Uniforms.size() + 1);
+	for (std::size_t i = 0; i < Uniforms.size(); ++i)
+		UniformNames[i] = Uniforms[i].name;
+	UniformNames[Uniforms.size()] = NULL;
+
+	std::vector<const char*> AttributeNames(Attributes.size() + 1);
+	for (std::size_t i = 0; i < Attributes.size(); ++i)
+		AttributeNames[i] = Attributes[i].name;
+	AttributeNames[Attributes.size()] = NULL;
+#endif
+
 	// Reinitialise
 	StdCopyStrBuf What(Name);
-	if (!Init(What.getData(), pUniformNames))
+	if (!Init(What.getData(), 
+#ifndef USE_CONSOLE
+		&UniformNames[0],
+		&AttributeNames[0]
+#else
+		0,
+		0
+#endif
+		))
 		return false;
 
 	// Retry in case there have been more changes
@@ -454,15 +465,15 @@ StdStrBuf C4Shader::Build(const ShaderSliceList &Slices, bool fDebug)
 	StdStrBuf Buf;
 #ifndef USE_CONSOLE
 	GLint iMaxFrags = 0, iMaxVerts = 0;
-	glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS_ARB, &iMaxFrags);
-	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS_ARB, &iMaxVerts);
+	glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &iMaxFrags);
+	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &iMaxVerts);
 #else
 	int iMaxFrags = INT_MAX, iMaxVerts = INT_MAX;
 #endif
 	Buf.Format("#version %d\n"
-			   "#define MAX_FRAGMENT_UNIFORM_COMPONENTS %d\n"
-			   "#define MAX_VERTEX_UNIFORM_COMPONENTS %d\n",
-			   C4Shader_Version, iMaxFrags, iMaxVerts);
+	           "#define MAX_FRAGMENT_UNIFORM_COMPONENTS %d\n"
+	           "#define MAX_VERTEX_UNIFORM_COMPONENTS %d\n",
+	           C4Shader_Version, iMaxFrags, iMaxVerts);
 
 	// Put slices
 	int iPos = -1, iNextPos = -1;
@@ -505,56 +516,53 @@ StdStrBuf C4Shader::Build(const ShaderSliceList &Slices, bool fDebug)
 }
 
 #ifndef USE_CONSOLE
-GLhandleARB C4Shader::Create(GLenum iShaderType, const char *szWhat, const char *szShader)
+GLuint C4Shader::Create(GLenum iShaderType, const char *szWhat, const char *szShader)
 {
 	// Create shader
-	GLhandleARB hShader = glCreateShaderObjectARB(iShaderType);
-#ifdef GL_KHR_debug
-	if (glObjectLabel)
-		glObjectLabel(GL_SHADER, hShader, -1, szWhat);
-#endif
+	GLuint hShader = glCreateShader(iShaderType);
+	pGL->ObjectLabel(GL_SHADER, hShader, -1, szWhat);
 
 	// Compile
-	glShaderSourceARB(hShader, 1, &szShader, 0);
-	glCompileShaderARB(hShader);
+	glShaderSource(hShader, 1, &szShader, 0);
+	glCompileShader(hShader);
 
 	// Dump any information to log
-	DumpInfoLog(szWhat, hShader);
+	DumpInfoLog(szWhat, hShader, false);
 
 	// Success?
-	if(GetObjectStatus(hShader, GL_OBJECT_COMPILE_STATUS_ARB) == 1)
+	int status;
+	glGetShaderiv(hShader, GL_COMPILE_STATUS, &status);
+	if (status == GL_TRUE)
 		return hShader;
 
 	// Did not work :/
-	glDeleteObjectARB(hShader);
+	glDeleteShader(hShader);
 	return 0;
 }
 
-void C4Shader::DumpInfoLog(const char *szWhat, GLhandleARB hShader)
+void C4Shader::DumpInfoLog(const char *szWhat, GLuint hShader, bool forProgram)
 {
 	// Get length of info line
-	int iLength = 0;
-	glGetObjectParameterivARB(hShader, GL_OBJECT_INFO_LOG_LENGTH_ARB, &iLength);
+	GLint iLength = 0;
+	if (forProgram)
+		glGetProgramiv(hShader, GL_INFO_LOG_LENGTH, &iLength);
+	else
+		glGetShaderiv(hShader, GL_INFO_LOG_LENGTH, &iLength);
 	if(iLength <= 1) return;
 
 	// Allocate buffer, get data
-	char *pBuf = new char [iLength + 1];
+	std::vector<char> buf(iLength + 1);
 	int iActualLength = 0;
-	glGetInfoLogARB(hShader, iLength, &iActualLength, pBuf);
+	if (forProgram)
+		glGetProgramInfoLog(hShader, iLength, &iActualLength, &buf[0]);
+	else
+		glGetShaderInfoLog(hShader, iLength, &iActualLength, &buf[0]);
 	if(iActualLength > iLength || iActualLength <= 0) return;
 
 	// Terminate, log
-	pBuf[iActualLength] = '\0';
+	buf[iActualLength] = '\0';
 	ShaderLogF("  gl: Compiling %s:", szWhat);
-	ShaderLog(pBuf);
-	delete[] pBuf;
-}
-
-int C4Shader::GetObjectStatus(GLhandleARB hObj, GLenum type)
-{
-	int iStatus = 0;
-	glGetObjectParameterivARB(hObj, type, &iStatus);
-	return iStatus;
+	ShaderLog(&buf[0]);
 }
 #endif
 
@@ -594,7 +602,7 @@ void C4ShaderCall::Start()
 		const_cast<C4Shader *>(pShader)->Refresh();
 
 	// Activate shader
-	glUseProgramObjectARB(pShader->hProg);
+	glUseProgram(pShader->hProg);
 	fStarted = true;
 }
 
@@ -602,7 +610,7 @@ void C4ShaderCall::Finish()
 {
 	// Remove shader
 	if (fStarted) {
-		glUseProgramObjectARB(0);
+		glUseProgram(0);
 	}
 
 	iUnits = 0;

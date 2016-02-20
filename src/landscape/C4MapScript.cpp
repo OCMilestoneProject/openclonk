@@ -23,6 +23,7 @@
 #include <C4Landscape.h>
 #include <C4Texture.h>
 #include <C4Random.h>
+#include <C4GameScript.h>
 
 C4MapScriptAlgo *FnParAlgo(C4PropList *algo_par);
 
@@ -193,7 +194,7 @@ void C4MapScriptMatTexMask::Init(const C4Value &spec)
 		for (int32_t i=0; i<arr->GetSize(); ++i)
 		{
 			C4String *smask = arr->GetItem(i).getStr();
-			if (!smask) throw new C4AulExecError(FormatString("MatTexMask expected string as %dth element in array.", (int)i).getData());
+			if (!smask) throw C4AulExecError(FormatString("MatTexMask expected string as %dth element in array.", (int)i).getData());
 			UnmaskSpec(smask);
 		}
 	}
@@ -205,7 +206,7 @@ void C4MapScriptMatTexMask::Init(const C4Value &spec)
 			UnmaskSpec(smask);
 		else
 		{
-			if (spec) throw new C4AulExecError("MatTexMask expected string or array of strings.");
+			if (spec) throw C4AulExecError("MatTexMask expected string or array of strings.");
 			// nil defaults to everything except index zero unmasked
 			sky_mask = std::vector<bool>(256, true);
 			tunnel_mask = std::vector<bool>(256, true);
@@ -259,7 +260,7 @@ static C4PropList *FnCreateLayer(C4PropList * _this, C4String *mattex_fill, int3
 	uint8_t fg = 0, bg = 0;
 	if (mattex_fill && mattex_fill->GetCStr())
 		if (!FnParTexCol(mattex_fill, fg, bg))
-			throw new C4AulExecError(FormatString("CreateLayer: Invalid fill material.").getData());
+			throw C4AulExecError(FormatString("CreateLayer: Invalid fill material.").getData());
 
 	C4MapScriptLayer *layer = _this->GetMapScriptLayer();
 	if (!layer) return NULL;
@@ -268,7 +269,7 @@ static C4PropList *FnCreateLayer(C4PropList * _this, C4String *mattex_fill, int3
 		width = layer->GetWdt();
 		height = layer->GetHgt();
 	}
-	if (width<=0 || height<=0) throw new C4AulExecError(FormatString("CreateLayer: Invalid size (%d*%d).", (int)width, (int)height).getData());
+	if (width<=0 || height<=0) throw C4AulExecError(FormatString("CreateLayer: Invalid size (%d*%d).", (int)width, (int)height).getData());
 	C4MapScriptMap *map = layer->GetMap();
 	if (!map) return NULL;
 	layer = map->CreateLayer(width, height);
@@ -357,12 +358,12 @@ static bool FnLayerSetPixel(C4PropList * _this, int32_t x, int32_t y, const C4Va
 		if (str != NULL)
 		{
 			if (!TexColSingle(str->GetCStr(), fg))
-				throw new C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
+				throw C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
 		}
 		else
 		{
 			if (!Inside(val.getInt(), 0, 255))
-				throw new C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
+				throw C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
 			fg = val.getInt();
 		}
 	}
@@ -378,12 +379,12 @@ static bool FnLayerSetPixel(C4PropList * _this, int32_t x, int32_t y, const C4Va
 		if (str != NULL)
 		{
 			if (!TexColSingle(str->GetCStr(), bg))
-				throw new C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
+				throw C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
 		}
 		else
 		{
 			if (!Inside(val.getInt(), 0, 255))
-				throw new C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
+				throw C4AulExecError("MapLayer::SetPixel: Trying to set invalid pixel value.");
 			bg = val.getInt();
 		}
 	}
@@ -676,19 +677,20 @@ void C4MapScriptHost::InitFunctionMap(C4AulScriptEngine *pEngine)
 void C4MapScriptHost::AddEngineFunctions()
 {
 	// adds all engine functions to the MapLayer context
-	::AddFunc(this, "Draw", FnLayerDraw);
-	::AddFunc(this, "Blit", FnLayerBlit);
-	::AddFunc(this, "CreateLayer", FnCreateLayer);
-	::AddFunc(this, "Duplicate", FnLayerDuplicate);
-	::AddFunc(this, "GetMaterialTextureIndex", FnLayerGetMaterialTextureIndex);
-	::AddFunc(this, "GetDefaultBackgroundIndex", FnLayerGetDefaultBackgroundIndex);
-	::AddFunc(this, "GetPixel", FnLayerGetPixel);
-	::AddFunc(this, "GetBackPixel", FnLayerGetBackPixel);
-	::AddFunc(this, "SetPixel", FnLayerSetPixel);
-	::AddFunc(this, "GetPixelCount", FnLayerGetPixelCount);
-	::AddFunc(this, "Resize", FnLayerResize);
-	::AddFunc(this, "FindPosition", FnLayerFindPosition);
-	::AddFunc(this, "CreateMatTexMask", FnLayerCreateMatTexMask);
+	C4PropListStatic * p = GetPropList();
+	::AddFunc(p, "Draw", FnLayerDraw);
+	::AddFunc(p, "Blit", FnLayerBlit);
+	::AddFunc(p, "CreateLayer", FnCreateLayer);
+	::AddFunc(p, "Duplicate", FnLayerDuplicate);
+	::AddFunc(p, "GetMaterialTextureIndex", FnLayerGetMaterialTextureIndex);
+	::AddFunc(p, "GetDefaultBackgroundIndex", FnLayerGetDefaultBackgroundIndex);
+	::AddFunc(p, "GetPixel", FnLayerGetPixel);
+	::AddFunc(p, "GetBackPixel", FnLayerGetBackPixel);
+	::AddFunc(p, "SetPixel", FnLayerSetPixel);
+	::AddFunc(p, "GetPixelCount", FnLayerGetPixelCount);
+	::AddFunc(p, "Resize", FnLayerResize);
+	::AddFunc(p, "FindPosition", FnLayerFindPosition);
+	::AddFunc(p, "CreateMatTexMask", FnLayerCreateMatTexMask);
 }
 
 bool C4MapScriptHost::Load(C4Group & g, const char * f, const char * l, C4LangStringTable * t)

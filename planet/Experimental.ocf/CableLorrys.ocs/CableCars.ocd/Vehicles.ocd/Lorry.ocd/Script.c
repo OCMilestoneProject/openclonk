@@ -7,7 +7,7 @@ local content_menu;
 
 protected func Construction()
 {
-	PlayAnimation("Open", 1, Anim_Linear(0, 0, 1, 20, ANIM_Hold), Anim_Const(1000));
+	PlayAnimation("Open", 1, Anim_Linear(0, 0, 1, 20, ANIM_Hold));
 	SetProperty("MeshTransformation",Trans_Rotate(13,0,1,0));
 }
 
@@ -51,16 +51,13 @@ protected func ContactRight()
 
 /*-- Contents --*/
 
-private func MaxContentsCount()
-{
-	return 50;
-}
+local MaxContentsCount = 50;
 
 protected func RejectCollect(id object_id, object obj)
 {
-	if (ContentsCount() < this->MaxContentsCount())
+	if (ContentsCount() < MaxContentsCount)
 	{
-		Sound("Clonk");
+		Sound("Objects::Clonk");
 		return false;
 	}
 	if (obj->Contained())
@@ -141,4 +138,5 @@ func Definition(def)
 local Name = "$Name$";
 local Description = "$Description$";
 local Touchable = 1;
-local Rebuy = true;
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;

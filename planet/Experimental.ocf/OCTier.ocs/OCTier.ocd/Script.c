@@ -21,7 +21,7 @@ func StopWalk()
 func Footstep()
 {
 	if (GetMaterialVal("DigFree", "Material", GetMaterial(0,10)) == 0)
-		Sound("StepHard?");
+		Sound("Clonk::Movement::StepHard?");
 	else
 	{
 		var dir = Sign(GetXDir());
@@ -34,14 +34,14 @@ func Footstep()
 			B = clr & 0xff,
 		};
 		CreateParticle("Dust", PV_Random(dir * -5, dir * -3), 8, PV_Random(dir * 2, dir * 1), PV_Random(-2, -3), PV_Random(36, 2 * 36), particles, 5);
-		Sound("StepSoft?");
+		Sound("Clonk::Movement::StepSoft?");
 	}
 }
 
 func TestAnimation(anim) // run dig poke walk
 {
 	if (this.test_anim) StopAnimation(this.test_anim);
-	this.test_anim = PlayAnimation(anim, 1, Anim_Linear(0, 0, GetAnimationLength(anim), 40, ANIM_Loop), Anim_Const(1000));
+	this.test_anim = PlayAnimation(anim, 1, Anim_Linear(0, 0, GetAnimationLength(anim), 40, ANIM_Loop));
 	Message("@%s", anim);
 	return true;
 }

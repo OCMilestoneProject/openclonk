@@ -47,12 +47,47 @@
 
 C4Player::C4Player() : C4PlayerInfoCore()
 {
-	Default();
+	Filename[0] = 0;
+	Number = C4P_Number_None;
+	ID = 0;
+	Team = 0;
+	DefaultRuntimeData();
+	Menu.Default();
+	Crew.Default();
+	CrewInfoList.Default();
+	LocalControl = false;
+	BigIcon.Default();
+	Next = NULL;
+	fFogOfWar = true;
+	LeagueEvaluated = false;
+	GameJoinTime = 0; // overwritten in Init
+	pstatControls = pstatActions = NULL;
+	ControlCount = ActionCount = 0;
+	LastControlType = PCID_None;
+	LastControlID = 0;
+	pMsgBoardQuery = NULL;
+	pGamepad = NULL;
+	NoEliminationCheck = false;
+	Evaluated = false;
+	ZoomLimitMinWdt = ZoomLimitMinHgt = ZoomLimitMaxWdt = ZoomLimitMaxHgt = ZoomWdt = ZoomHgt = 0;
+	ZoomLimitMinVal = ZoomLimitMaxVal = ZoomVal = Fix0;
+	ViewLock = true;
+	SoundModifier.Set0();
 }
 
 C4Player::~C4Player()
 {
-	Clear();
+	ClearGraphs();
+	Menu.Clear();
+	SetSoundModifier(NULL);
+	while (pMsgBoardQuery)
+	{
+		C4MessageBoardQuery *pNext = pMsgBoardQuery->pNext;
+		delete pMsgBoardQuery;
+		pMsgBoardQuery = pNext;
+	}
+	delete pGamepad; pGamepad = NULL;
+	ClearControl();
 }
 
 bool C4Player::ObjectInCrew(C4Object *tobj)
@@ -150,7 +185,7 @@ void C4Player::Execute()
 			C4MenuItem *pSelectedTeamItem;
 			if ((pSelectedTeamItem = Menu.GetSelectedItem()))
 			{
-				int32_t idSelectedTeam = pSelectedTeamItem->GetValue();
+				int32_t idSelectedTeam = atoi(pSelectedTeamItem->GetCommand()+8);
 				if (idSelectedTeam)
 				{
 					C4Team *pSelectedTeam;
@@ -286,14 +321,14 @@ bool C4Player::Init(int32_t iNumber, int32_t iAtClient, const char *szAtClientNa
 			C4Def *pDefCallback;
 			if (idCallback && (pDefCallback = C4Id2Def(idCallback)))
 			{
-				pDefCallback->Call(PSF_InitializeScriptPlayer, &C4AulParSet(C4VInt(Number), C4VInt(Team)));
+				pDefCallback->Call(PSF_InitializeScriptPlayer, &C4AulParSet(Number, Team));
 			}
 		}
 		else
 		{
 			// player preinit: In case a team needs to be chosen first, no InitializePlayer-broadcast is done
 			// this callback shall give scripters a chance to do stuff like starting an intro or enabling FoW, which might need to be done
-			::GameScript.GRBroadcast(PSF_PreInitializePlayer, &C4AulParSet(C4VInt(Number)));
+			::Game.GRBroadcast(PSF_PreInitializePlayer, &C4AulParSet(Number));
 			// direct init
 			if (Status != PS_TeamSelection) if (!ScenarioInit()) return false;
 		}
@@ -361,7 +396,7 @@ bool C4Player::Save()
 	if (GetType() == C4PT_Script) return false;
 	// Log
 	LogF(LoadResStr("IDS_PRC_SAVEPLR"), Config.AtRelativePath(Filename));
-	::GraphicsSystem.MessageBoard.EnsureLastMessage();
+	::GraphicsSystem.MessageBoard->EnsureLastMessage();
 	// copy player to save somewhere else
 	char szPath[_MAX_PATH + 1];
 	SCopy(Config.AtTempPath(C4CFN_TempPlayer), szPath, _MAX_PATH);
@@ -459,7 +494,7 @@ void C4Player::PlaceReadyCrew(int32_t tx1, int32_t tx2, int32_t ty, C4Object *Fi
 #if !defined(DEBUGREC_RECRUITMENT)
 					C4DebugRecOff DbgRecOff;
 #endif
-					C4AulParSet parset(C4VInt(Number));
+					C4AulParSet parset(Number);
 					nobj->Call(PSF_OnJoinCrew, &parset);
 				}
 			}
@@ -482,7 +517,7 @@ void C4Player::PlaceReadyBase(int32_t &tx, int32_t &ty, C4Object **pFirstBase)
 			{
 				ctx=tx; cty=ty;
 				if (Game.C4S.PlrStart[PlrStartIndex].EnforcePosition
-				    || FindConSiteSpot(ctx,cty,def->Shape.Wdt,def->Shape.Hgt,def->GetPlane(),20))
+				    || FindConSiteSpot(ctx,cty,def->Shape.Wdt,def->Shape.Hgt,20))
 					if ((cbase=Game.CreateObjectConstruction(C4Id2Def(cid),NULL,Number,ctx,cty,FullCon,true)))
 					{
 						// FirstBase
@@ -609,7 +644,7 @@ bool C4Player::ScenarioInit()
 		// Use nearest above-ground...
 		FindSolidGround(ptx,pty,30);
 		// Might have hit a small lake, or similar: Seach a real site spot from here
-		FindConSiteSpot(ptx, pty, 30,50,C4Plane_Structure, 400);
+		FindConSiteSpot(ptx, pty, 30, 50, 400);
 	}
 
 	// Place Readies
@@ -623,12 +658,12 @@ bool C4Player::ScenarioInit()
 	if (Team) SetTeamHostility();
 
 	// Scenario script initialization
-	::GameScript.GRBroadcast(PSF_InitializePlayer, &C4AulParSet(C4VInt(Number),
-	                        C4VInt(ptx),
-	                        C4VInt(pty),
-	                        C4VObj(FirstBase),
-	                        C4VInt(Team),
-	                        C4VPropList(C4Id2Def(GetInfo()->GetScriptPlayerExtraID()))));
+	::Game.GRBroadcast(PSF_InitializePlayer, &C4AulParSet(Number,
+	                        ptx,
+	                        pty,
+	                        FirstBase,
+	                        Team,
+	                        C4Id2Def(GetInfo()->GetScriptPlayerExtraID())));
 	return true;
 }
 
@@ -666,8 +701,8 @@ bool C4Player::DoWealth(int32_t iChange)
 {
 	if (LocalControl)
 	{
-		if (iChange>0) StartSoundEffect("Cash");
-		if (iChange<0) StartSoundEffect("UnCash");
+		if (iChange>0) StartSoundEffect("UI::Cash");
+		if (iChange<0) StartSoundEffect("UI::UnCash");
 	}
 	SetWealth(Wealth+iChange);
 
@@ -678,11 +713,26 @@ bool C4Player::SetWealth(int32_t iVal)
 {
 	if (iVal == Wealth) return true;
 
-	Wealth=Clamp<int32_t>(iVal,0,10000);
+	Wealth=Clamp<int32_t>(iVal,0,1000000000);
 
-	::GameScript.GRBroadcast(PSF_OnWealthChanged,&C4AulParSet(C4VInt(Number)));
+	::Game.GRBroadcast(PSF_OnWealthChanged,&C4AulParSet(Number));
 
 	return true;
+}
+
+bool C4Player::SetKnowledge(C4ID id, bool fRemove)
+{
+	if (fRemove)
+	{
+		long iIndex = Knowledge.GetIndex(id);
+		if (iIndex<0) return false;
+		return Knowledge.DeleteItem(iIndex);
+	}
+	else
+	{
+		if (!C4Id2Def(id)) return false;
+		return Knowledge.SetIDCount(id, 1, true);
+	}
 }
 
 void C4Player::SetViewMode(int32_t iMode, C4Object *pTarget, bool immediate_position)
@@ -752,7 +802,7 @@ void C4Player::Surrender()
 	Surrendered=true;
 	Eliminated=true;
 	RetireDelay=C4RetireDelay;
-	StartSoundEffect("Eliminated");
+	StartSoundEffect("UI::Eliminated");
 	Log(FormatString(LoadResStr("IDS_PRC_PLRSURRENDERED"),GetName()).getData());
 }
 
@@ -771,7 +821,7 @@ bool C4Player::SetHostility(int32_t iOpponent, int32_t hostile, bool fSilent)
 	// no announce in first frame, or if specified
 	if (!Game.FrameCounter || fSilent) return true;
 	// Announce
-	StartSoundEffect("Trumpet");
+	StartSoundEffect("UI::Trumpet");
 	Log(FormatString(LoadResStr(hostile ? "IDS_PLR_HOSTILITY" : "IDS_PLR_NOHOSTILITY"),
 	                 GetName(),opponent->GetName()).getData());
 	// Success
@@ -853,57 +903,6 @@ bool C4Player::Message(const char *szMsg)
 	SCopy(szMsg,MessageBuf,256);
 	MessageStatus=SLen(szMsg)*2;
 	return true;
-}
-
-void C4Player::Clear()
-{
-	ClearGraphs();
-	Crew.Clear();
-	CrewInfoList.Clear();
-	Menu.Clear();
-	BigIcon.Clear();
-	SetSoundModifier(NULL);
-	fFogOfWar=true;
-	while (pMsgBoardQuery)
-	{
-		C4MessageBoardQuery *pNext = pMsgBoardQuery->pNext;
-		delete pMsgBoardQuery;
-		pMsgBoardQuery = pNext;
-	}
-	if (pGamepad) delete pGamepad;
-	pGamepad = NULL;
-	Status = 0;
-	ClearControl();
-}
-
-void C4Player::Default()
-{
-	Filename[0]=0;
-	Number=C4P_Number_None;
-	ID=0;
-	Team = 0;
-	DefaultRuntimeData();
-	Menu.Default();
-	Crew.Default();
-	CrewInfoList.Default();
-	LocalControl=false;
-	BigIcon.Default();
-	Next=NULL;
-	fFogOfWar=true;
-	LeagueEvaluated=false;
-	GameJoinTime=0; // overwritten in Init
-	pstatControls = pstatActions = NULL;
-	ControlCount = ActionCount = 0;
-	LastControlType = PCID_None;
-	LastControlID = 0;
-	pMsgBoardQuery = NULL;
-	pGamepad = NULL;
-	NoEliminationCheck = false;
-	Evaluated = false;
-	ZoomLimitMinWdt=ZoomLimitMinHgt=ZoomLimitMaxWdt=ZoomLimitMaxHgt=ZoomWdt=ZoomHgt=0;
-	ZoomLimitMinVal=ZoomLimitMaxVal=ZoomVal=Fix0;
-	ViewLock = true;
-	SoundModifier.Set0();
 }
 
 bool C4Player::Load(const char *szFilename, bool fSavegame)
@@ -1016,7 +1015,7 @@ bool C4Player::MakeCrewMember(C4Object *pObj, bool fForceInfo, bool fDoCalls)
 	// OnJoinCrew callback
 	if (fDoCalls)
 	{
-		C4AulParSet parset(C4VInt(Number));
+		C4AulParSet parset(Number);
 		pObj->Call(PSF_OnJoinCrew, &parset);
 	}
 
@@ -1041,28 +1040,6 @@ void C4Player::AdjustCursorCommand()
 		SetCursor(pHiRank,true);
 		UpdateView();
 	}
-}
-
-bool C4Player::ObjectCommand(int32_t iCommand, C4Object *pTarget, int32_t iX, int32_t iY, C4Object *pTarget2, C4Value iData, int32_t iMode)
-{
-	// Eliminated
-	if (Eliminated) return false;
-	// Hide startup
-	if (ShowStartup) ShowStartup=false;
-	// Always apply to cursor, even if it's not in the crew
-	if (Cursor && Cursor->Status && Cursor != pTarget)
-		ObjectCommand2Obj(Cursor, iCommand, pTarget, iX, iY, pTarget2, iData, iMode);
-
-	// Success
-	return true;
-}
-
-void C4Player::ObjectCommand2Obj(C4Object *cObj, int32_t iCommand, C4Object *pTarget, int32_t iX, int32_t iY, C4Object *pTarget2, C4Value iData, int32_t iMode)
-{
-	// forward to object
-	if (iMode & C4P_Command_Append) cObj->AddCommand(iCommand,pTarget,iX,iY,0,pTarget2,true,iData,true,0,NULL,C4CMD_Mode_Base); // append: by Shift-click and for dragging of multiple objects (all independant; thus C4CMD_Mode_Base)
-	else if (iMode & C4P_Command_Add) cObj->AddCommand(iCommand,pTarget,iX,iY,0,pTarget2,true,iData,false,0,NULL,C4CMD_Mode_Base); // append: by context menu and keyboard throw command (all independant; thus C4CMD_Mode_Base)
-	else if (iMode & C4P_Command_Set) cObj->SetCommand(iCommand,pTarget,iX,iY,pTarget2,true,iData);
 }
 
 void C4Player::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
@@ -1315,7 +1292,7 @@ void C4Player::NotifyOwnedObjects()
 				C4AulFunc *pFn = cobj->GetFunc(PSF_OnOwnerRemoved);
 				if (pFn)
 				{
-					C4AulParSet pars(C4VInt(iNewOwner));
+					C4AulParSet pars(iNewOwner);
 					pFn->Exec(cobj, &pars);
 				}
 				else
@@ -1448,7 +1425,7 @@ void C4Player::Eliminate()
 	if (Eliminated) return;
 	Eliminated=true;
 	RetireDelay=C4RetireDelay;
-	StartSoundEffect("Eliminated");
+	StartSoundEffect("UI::Eliminated");
 	Log(FormatString(LoadResStr("IDS_PRC_PLRELIMINATED"),GetName()).getData());
 
 	// Early client deactivation check
@@ -1542,7 +1519,7 @@ bool C4Player::SetObjectCrewStatus(C4Object *pCrew, bool fNewStatus)
 		if (!Crew.IsContained(pCrew)) return true;
 		// ...or remove
 		Crew.Remove(pCrew);
-		C4AulParSet parset(C4VInt(Number));
+		C4AulParSet parset(Number);
 		pCrew->Call(PSF_OnRemoveCrew, &parset);
 		// remove info, if assigned to this player
 		// theoretically, info objects could remain when the player is deleted

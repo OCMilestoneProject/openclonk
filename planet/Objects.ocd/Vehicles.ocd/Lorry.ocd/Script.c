@@ -7,7 +7,6 @@
 
 #include Library_ElevatorControl
 
-local content_menu;
 local drive_anim;
 local tremble_anim;
 local wheel_sound;
@@ -16,7 +15,7 @@ local tremble;
 
 protected func Construction()
 {
-	PlayAnimation("Open", 1, Anim_Linear(0, 0, 1, 20, ANIM_Hold), Anim_Const(1000));
+	PlayAnimation("Open", 1, Anim_Linear(0, 0, 1, 20, ANIM_Hold));
 	SetProperty("MeshTransformation", Trans_Rotate(13, 0, 1, 0));
 }
 
@@ -37,22 +36,124 @@ public func IsToolProduct() { return true; }
 
 protected func Hit3()
 {
-	Sound("DullMetalHit?");
+	Sound("Hits::Materials::Metal::DullMetalHit?");
 }
+
+
+/*-- Content Dumping --*/
+
+public func HoldingEnabled() { return true; }
+
+public func ControlUseStart(object clonk, int x, int y)
+{
+	var direction = DIR_Left;
+	if (x > 0)
+		direction = DIR_Right;
+	if (!GetEffect("DumpContents", this))
+		AddEffect("DumpContents", this, 100, 1, this, nil, direction);
+	return true;
+}
+
+public func ControlUseHolding(object clonk, int x, int y)
+{
+	var direction = DIR_Left;
+	if (x > 0)
+		direction = DIR_Right;
+	var effect = GetEffect("DumpContents", this);
+	if (effect)
+		effect.dump_dir = direction;
+	return true;
+}
+
+public func ControlUseStop(object clonk, int x, int y)
+{
+	RemoveEffect("DumpContents", this);
+	return true;
+}
+
+public func ControlUseCancel(object clonk, int x, int y)
+{
+	RemoveEffect("DumpContents", this);
+	return true;
+}
+
+public func FxDumpContentsStart(object target, proplist effect, int temp, int direction)
+{
+	if (temp)
+		return FX_OK;
+	// The time it takes to dump the contents depends on the mass of the lorry.
+	effect.dump_strength = BoundBy(1000 / GetMass(), 3, 8);
+	effect.dump_dir = direction;
+	// Rotate the lorry into the requested direction.
+	var rdir = -effect.dump_strength;
+	if (effect.dump_dir == DIR_Right)
+		rdir = effect.dump_strength;
+	SetRDir(rdir);
+	// Start dump sounds together.
+	Sound("Objects::Lorry::Dump1", false, 100, nil, +1);
+	Sound("Objects::Lorry::Dump2", false, 100, nil, +1);
+	return FX_OK;
+}
+
+public func FxDumpContentsTimer(object target, proplist effect, int time)
+{
+	// Rotate the lorry into the requested direction.
+	var rdir = -effect.dump_strength;
+	if (effect.dump_dir == DIR_Right)
+		rdir = effect.dump_strength;	
+	SetRDir(rdir);
+	// Dump one item every some frames if the angle is above 45 degrees. Only do this if the effect is at least active 
+	// for 10 frames to prevent an accidental click while holding the lorry to dump some of its contents.
+	if (time >= 10 && ((effect.dump_dir == DIR_Left && GetR() < -45) || (effect.dump_dir == DIR_Right && GetR() > 45)))
+	{
+		if (!Random(3))
+		{
+			var x = RandomX(6, 8) * Sign(GetR());
+			var xdir = RandomX(70, 90) * Sign(GetR());
+			var random_content = FindObjects(Find_Container(this), Sort_Random());
+			if (GetLength(random_content) >= 1)
+			{
+				random_content = random_content[0];
+				random_content->Exit(x, RandomX(2, 3), Random(360), 0, 0, RandomX(-5, 5));
+				random_content->SetXDir(xdir, 100);
+				// Assume the controller of the lorry is also the one dumping the contents.
+				random_content->SetController(GetController());
+				AddEffect("BlockCollectionByLorry", random_content, 100, 8, this);
+			}		
+		}
+	}
+	return FX_OK;
+}
+
+public func FxDumpContentsStop(object target, proplist effect, int reason, bool temp)
+{
+	if (temp)
+		return FX_OK;
+	// Stop rotating the lorry.
+	SetRDir(0);
+	// Stop dump sounds.
+	Sound("Objects::Lorry::Dump1", false, 100, nil, -1);
+	Sound("Objects::Lorry::Dump2", false, 100, nil, -1);
+	return FX_OK;
+}
+
+public func FxBlockCollectionByLorryTimer() { return FX_Execute_Kill; }
+
 
 /*-- Contents --*/
 
-private func MaxContentsCount()
-{
-	return 50;
-}
+local MaxContentsCount = 50;
 
 protected func RejectCollect(id object_id, object obj)
 {
+	// Collection maybe blocked if this object was just dumped.
+	if (!obj->Contained() && GetEffect("BlockCollectionByLorry", obj))
+		return true;
+	
 	// Objects can still be collected.
-	if (ContentsCount() < this->MaxContentsCount())
+	if (ContentsCount() < MaxContentsCount)
 	{
-		Sound("Clonk");
+		Sound("Objects::Clonk");
 		return false;
 	}
 	
@@ -66,7 +167,7 @@ protected func RejectCollect(id object_id, object obj)
 		{
 			obj->SetYDir(-2);
 			obj->SetRDir(0);
-			Sound("SoftHit*");
+			Sound("Hits::SoftHit*");
 		}
 	}
 	// Reject collection.
@@ -119,12 +220,12 @@ public func TurnWheels()
 	if (Abs(GetXDir()) > 1 && !wheel_sound)
 	{
 		if (!wheel_sound) 
-			Sound("WheelsTurn", false, nil, nil, 1);
+			Sound("Structures::WheelsTurn", false, nil, nil, 1);
 		wheel_sound = true;
 	}
 	else if (wheel_sound && !GetXDir())
 	{
-		Sound("WheelsTurn", false, nil, nil, -1);
+		Sound("Structures::WheelsTurn", false, nil, nil, -1);
 		wheel_sound = false;
 	}
 }
@@ -166,7 +267,7 @@ protected func Damage(int change, int cause, int by_player)
 				// Set the controller of the fragments to the one causing the blast for kill tracing.
 				fragment->SetController(by_player);
 				// Incinerate the fragments.
-				fragment->Incinerate();
+				fragment->Incinerate(100, by_player);
 			}		
 		}
 		// Remove the lorry itself, eject possible contents as they might have entered again.
@@ -205,4 +306,5 @@ public func Definition(proplist def)
 local Name = "$Name$";
 local Description = "$Description$";
 local Touchable = 1;
-local Rebuy = true;
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;

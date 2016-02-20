@@ -18,7 +18,7 @@
 /* Functions mapped by C4Script */
 
 #include <C4Include.h>
-#include <C4Script.h>
+#include <C4GameScript.h>
 
 #include <C4Application.h>
 #include <C4AulDefFunc.h>
@@ -50,31 +50,14 @@ static bool FnIncinerateLandscape(C4PropList * _this, long iX, long iY, long cau
 	return !!::Landscape.Incinerate(iX, iY, caused_by_plr);
 }
 
-static C4Void FnSetGravity(C4PropList * _this, long iGravity)
+static void FnSetGravity(C4PropList * _this, long iGravity)
 {
 	::Landscape.Gravity = C4REAL100(Clamp<long>(iGravity,-1000,1000));
-	return C4Void();
 }
 
 static long FnGetGravity(C4PropList * _this)
 {
 	return fixtoi(::Landscape.Gravity * 100);
-}
-
-// undocumented!
-static bool FnPlayerObjectCommand(C4PropList * _this, int iPlr, C4String * szCommand,
-                                  C4Object * pTarget, int iTx, int iTy,
-                                  C4Object * pTarget2, const C4Value & Data)
-{
-	// Player
-	if (!ValidPlr(iPlr) || !szCommand) return false;
-	C4Player *pPlr = ::Players.Get(iPlr);
-	// Command
-	long iCommand = CommandByName(FnStringPar(szCommand)); if (!iCommand) return false;
-	// Set
-	pPlr->ObjectCommand(iCommand, pTarget, iTx, iTy, pTarget2, Data, C4P_Command_Set);
-	// Success
-	return true;
 }
 
 static C4String *FnGetPlayerName(C4PropList * _this, long iPlayer)
@@ -219,10 +202,7 @@ static C4ValueArray *FnFindConstructionSite(C4PropList * _this, C4PropList * Pro
 	if (ConstructionCheck(PropList,v1,v2))
 		return NULL;
 	// Search for real
-	bool result = !!FindConSiteSpot(v1, v2,
-	                                pDef->Shape.Wdt,pDef->Shape.Hgt,
-	                                pDef->GetPlane(),
-	                                20);
+	bool result = !!FindConSiteSpot(v1, v2, pDef->Shape.Wdt,pDef->Shape.Hgt, 20);
 	if(!result) return 0;
 	C4ValueArray *pArray = new C4ValueArray(2);
 	pArray->SetItem(0, C4VInt(v1));
@@ -308,7 +288,7 @@ static C4Value FnObjectCount(C4PropList * _this, C4Value *pPars)
 	C4FindObject *pFO = CreateCriterionsFromPars(pPars, pFOs, NULL, Object(_this));
 	// Error?
 	if (!pFO)
-		throw new C4AulExecError("ObjectCount: No valid search criterions supplied");
+		throw C4AulExecError("ObjectCount: No valid search criterions supplied");
 	// Search
 	int32_t iCnt = pFO->Count(::Objects, ::Objects.Sectors);
 	// Free
@@ -325,7 +305,7 @@ static C4Value FnFindObject(C4PropList * _this, C4Value *pPars)
 	C4FindObject *pFO = CreateCriterionsFromPars(pPars, pFOs, pSOs, Object(_this));
 	// Error?
 	if (!pFO)
-		throw new C4AulExecError("FindObject: No valid search criterions supplied");
+		throw C4AulExecError("FindObject: No valid search criterions supplied");
 	// Search
 	C4Object *pObj = pFO->Find(::Objects, ::Objects.Sectors);
 	// Free
@@ -342,7 +322,7 @@ static C4Value FnFindObjects(C4PropList * _this, C4Value *pPars)
 	C4FindObject *pFO = CreateCriterionsFromPars(pPars, pFOs, pSOs, Object(_this));
 	// Error?
 	if (!pFO)
-		throw new C4AulExecError("FindObjects: No valid search criterions supplied");
+		throw C4AulExecError("FindObjects: No valid search criterions supplied");
 	// Search
 	C4ValueArray *pResult = pFO->FindMany(::Objects, ::Objects.Sectors);
 	// Free
@@ -356,7 +336,7 @@ static bool FnInsertMaterial(C4PropList * _this, long mat, long x, long y, long 
 	if (Object(_this)) { x+=Object(_this)->GetX(); y+=Object(_this)->GetY(); }
 	int32_t insert_x=x, insert_y=y;
 	if (!::Landscape.InsertMaterial(mat,&insert_x,&insert_y,vx,vy)) return false;
-	// output insertion position if desired
+	// output insertion position if desired (may be out of landscape range)
 	if (insert_position && !insert_position->IsFrozen())
 	{
 		insert_position->SetProperty(P_X, C4VInt(insert_x));
@@ -483,13 +463,12 @@ static long FnExtractMaterialAmount(C4PropList * _this, long x, long y, long mat
 	return extracted;
 }
 
-static C4Void FnBlastFree(C4PropList * _this, long iX, long iY, long iLevel, Nillable<long> iCausedBy, Nillable<long> iMaxDensity)
+static void FnBlastFree(C4PropList * _this, long iX, long iY, long iLevel, Nillable<long> iCausedBy, Nillable<long> iMaxDensity)
 {
 	if (iCausedBy.IsNil() && Object(_this)) iCausedBy = Object(_this)->Controller;
 	if (iMaxDensity.IsNil()) iMaxDensity = C4M_Vehicle;
 
 	::Landscape.BlastFree(iX, iY, iLevel, iCausedBy, Object(_this), iMaxDensity);
-	return C4Void();
 }
 
 static bool FnSoundAt(C4PropList * _this, C4String *szSound, long iX, long iY, Nillable<long> iLevel, Nillable<long> iAtPlayer, long iCustomFalloffDistance, long iPitch, C4PropList *modifier_props)
@@ -683,7 +662,7 @@ static bool FnGainMissionAccess(C4PropList * _this, C4String *szPassword)
 
 static C4Value FnPlayerMessage(C4PropList * _this, C4Value * Pars)
 {
-	if (!Object(_this)) throw new NeedObjectContext("PlayerMessage");
+	if (!Object(_this)) throw NeedObjectContext("PlayerMessage");
 	int iPlayer = Pars[0].getInt();
 	C4String * szMessage = Pars[1].getStr();
 	if (!szMessage) return C4VBool(false);
@@ -709,7 +688,7 @@ static C4Value FnPlayerMessage(C4PropList * _this, C4Value * Pars)
 
 static C4Value FnMessage(C4PropList * _this, C4Value * Pars)
 {
-	if (!Object(_this)) throw new NeedObjectContext("Message");
+	if (!Object(_this)) throw NeedObjectContext("Message");
 	C4String * szMessage = Pars[0].getStr();
 	if (!szMessage) return C4VBool(false);
 	StdStrBuf buf;
@@ -735,7 +714,7 @@ static C4Value FnMessage(C4PropList * _this, C4Value * Pars)
 // undocumented!
 static C4Value FnAddMessage(C4PropList * _this, C4Value * Pars)
 {
-	if (!Object(_this)) throw new NeedObjectContext("AddMessage");
+	if (!Object(_this)) throw NeedObjectContext("AddMessage");
 	C4String * szMessage = Pars[0].getStr();
 	if (!szMessage) return C4VBool(false);
 
@@ -790,14 +769,14 @@ static bool FnSetHostility(C4PropList * _this, long iPlr, long iPlr2, bool fHost
 	// do rejection test first
 	if (!fNoCalls)
 	{
-		if (!!::GameScript.GRBroadcast(PSF_RejectHostilityChange, &C4AulParSet(C4VInt(iPlr), C4VInt(iPlr2), C4VBool(fHostile)), true, true))
+		if (!!::Game.GRBroadcast(PSF_RejectHostilityChange, &C4AulParSet(iPlr, iPlr2, fHostile), true, true))
 			return false;
 	}
 	// OK; set hostility
 	bool fOldHostility = ::Players.HostilityDeclared(iPlr, iPlr2);
 	if (!pPlr->SetHostility(iPlr2,fHostile, fSilent)) return false;
 	// calls afterwards
-	::GameScript.GRBroadcast(PSF_OnHostilityChange, &C4AulParSet(C4VInt(iPlr), C4VInt(iPlr2), C4VBool(fHostile), C4VBool(fOldHostility)), true);
+	::Game.GRBroadcast(PSF_OnHostilityChange, &C4AulParSet(C4VInt(iPlr), C4VInt(iPlr2), C4VBool(fHostile), C4VBool(fOldHostility)), true);
 	return true;
 }
 
@@ -815,11 +794,10 @@ static long FnGetPlrViewMode(C4PropList * _this, long iPlr)
 	return ::Players.Get(iPlr)->ViewMode;
 }
 
-static C4Void FnResetCursorView(C4PropList * _this, long plr, bool immediate_position)
+static void FnResetCursorView(C4PropList * _this, long plr, bool immediate_position)
 {
 	C4Player *pplr = ::Players.Get(plr);
 	if (pplr) pplr->ResetCursorView(immediate_position);
-	return C4Void();
 }
 
 static C4Object *FnGetPlrView(C4PropList * _this, long iPlr)
@@ -955,21 +933,6 @@ static bool FnDoBaseProduction(C4PropList * _this, long iPlr, C4ID id, long iCha
 	return ::Players.Get(iPlr)->BaseProduction.SetIDCount(id,iLastcount+iChange,true);
 }
 
-bool FnSetPlrKnowledge(C4Player *player, C4ID id, bool fRemove)
-{
-	if (fRemove)
-	{
-		long iIndex = player->Knowledge.GetIndex(id);
-		if (iIndex<0) return false;
-		return player->Knowledge.DeleteItem(iIndex);
-	}
-	else
-	{
-		if (!C4Id2Def(id)) return false;
-		return player->Knowledge.SetIDCount(id, 1, true);
-	}
-}
-
 static bool FnSetPlrKnowledge(C4PropList * _this, Nillable<long> iPlr, C4ID id, bool fRemove)
 {
 	
@@ -978,14 +941,14 @@ static bool FnSetPlrKnowledge(C4PropList * _this, Nillable<long> iPlr, C4ID id, 
 	if (iPlr.IsNil())
 	{
 		for (C4Player *player = ::Players.First; player; player = player->Next)
-			if (FnSetPlrKnowledge(player, id, fRemove))
+			if (player->SetKnowledge(id, fRemove))
 				success = true;
 	}
 	else
 	{
 		// Otherwise call for requested player
 		C4Player *player = ::Players.Get(iPlr);
-		if (player) success = FnSetPlrKnowledge(player, id, fRemove);
+		if (player) success = player->SetKnowledge(id, fRemove);
 	}
 	return success;
 }
@@ -1230,16 +1193,14 @@ static long FnGetWind(C4PropList * _this, long x, long y, bool fGlobal)
 	return ::Weather.GetWind(x,y);
 }
 
-static C4Void FnSetWind(C4PropList * _this, long iWind)
+static void FnSetWind(C4PropList * _this, long iWind)
 {
 	::Weather.SetWind(iWind);
-	return C4Void();
 }
 
-static C4Void FnSetTemperature(C4PropList * _this, long iTemperature)
+static void FnSetTemperature(C4PropList * _this, long iTemperature)
 {
 	::Weather.SetTemperature(iTemperature);
-	return C4Void();
 }
 
 static long FnGetTemperature(C4PropList * _this)
@@ -1247,11 +1208,10 @@ static long FnGetTemperature(C4PropList * _this)
 	return ::Weather.GetTemperature();
 }
 
-static C4Void FnSetAmbientBrightness(C4PropList * _this, long iBrightness)
+static void FnSetAmbientBrightness(C4PropList * _this, long iBrightness)
 {
 	if (::Landscape.pFoW)
 		::Landscape.pFoW->Ambient.SetBrightness(iBrightness / 100.);
-	return C4Void();
 }
 
 static long FnGetAmbientBrightness(C4PropList * _this)
@@ -1261,10 +1221,9 @@ static long FnGetAmbientBrightness(C4PropList * _this)
 	return static_cast<long>(::Landscape.pFoW->Ambient.GetBrightness() * 100. + 0.5);
 }
 
-static C4Void FnSetSeason(C4PropList * _this, long iSeason)
+static void FnSetSeason(C4PropList * _this, long iSeason)
 {
 	::Weather.SetSeason(iSeason);
-	return C4Void();
 }
 
 static long FnGetSeason(C4PropList * _this)
@@ -1272,10 +1231,9 @@ static long FnGetSeason(C4PropList * _this)
 	return ::Weather.GetSeason();
 }
 
-static C4Void FnSetClimate(C4PropList * _this, long iClimate)
+static void FnSetClimate(C4PropList * _this, long iClimate)
 {
 	::Weather.SetClimate(iClimate);
-	return C4Void();
 }
 
 static long FnGetClimate(C4PropList * _this)
@@ -1293,10 +1251,9 @@ static long FnLandscapeHeight(C4PropList * _this)
 	return GBackHgt;
 }
 
-static C4Void FnShakeFree(C4PropList * _this, long x, long y, long rad)
+static void FnShakeFree(C4PropList * _this, long x, long y, long rad)
 {
 	::Landscape.ShakeFree(x,y,rad);
-	return C4Void();
 }
 
 static long FnDigFree(C4PropList * _this, long x, long y, long rad, bool no_dig2objects, bool no_instability_check)
@@ -1309,10 +1266,9 @@ static long FnDigFreeRect(C4PropList * _this, long iX, long iY, long iWdt, long 
 	return ::Landscape.DigFreeRect(iX,iY,iWdt,iHgt,Object(_this),no_dig2objects,no_instability_check);
 }
 
-static C4Void FnClearFreeRect(C4PropList * _this, long iX, long iY, long iWdt, long iHgt)
+static void FnClearFreeRect(C4PropList * _this, long iX, long iY, long iWdt, long iHgt)
 {
 	::Landscape.ClearFreeRect(iX,iY,iWdt,iHgt);
-	return C4Void();
 }
 
 static bool FnPathFree(C4PropList * _this, long X1, long Y1, long X2, long Y2)
@@ -1346,9 +1302,10 @@ static C4Value FnGameCallEx(C4PropList * _this, C4Value * Pars)
 	if (!fn) return C4Value();
 
 	// copy parameters
-	C4AulParSet ParSet(&Pars[1], 9);
+	C4AulParSet ParSet;
+	ParSet.Copy(&Pars[1], 9);
 	// Call
-	return ::GameScript.GRBroadcast(fn->GetCStr(), &ParSet, true);
+	return ::Game.GRBroadcast(fn->GetCStr(), &ParSet, true);
 }
 
 static C4Object * FnEditCursor(C4PropList * _this)
@@ -1434,14 +1391,12 @@ static bool FnAbortMessageBoard(C4PropList * _this, C4Object *pObj, long iForPlr
 	return pPlr->RemoveMessageBoardQuery(pObj);
 }
 
-static C4Void FnSetFoW(C4PropList * _this, bool fEnabled, long iPlr)
+static void FnSetFoW(C4PropList * _this, bool fEnabled, long iPlr)
 {
 	// safety
-	if (!ValidPlr(iPlr)) return C4Void();
+	if (!ValidPlr(iPlr)) return;
 	// set enabled
 	::Players.Get(iPlr)->SetFoW(!!fEnabled);
-	// success
-	return C4Void();
 }
 
 static long FnSetMaxPlayer(C4PropList * _this, long iTo)
@@ -1615,7 +1570,7 @@ C4Value GetValByStdCompiler(const char *strEntry, const char *strSection, int iE
 static C4Value FnGetDefCoreVal(C4PropList * _this, C4String * strEntry, C4String * strSection, int iEntryNr)
 {
 	if (!_this || !_this->GetDef())
-		throw new NeedNonGlobalContext("GetDefCoreVal");
+		throw NeedNonGlobalContext("GetDefCoreVal");
 
 	return GetValByStdCompiler(FnStringPar(strEntry), strSection ? strSection->GetCStr() : NULL,
 			iEntryNr, mkNamingAdapt(*_this->GetDef(), "DefCore"));
@@ -2340,7 +2295,7 @@ static bool FnSetPlayerTeam(C4PropList * _this, long iPlayer, long idNewTeam, bo
 	// ask script if it's allowed
 	if (!fNoCalls)
 	{
-		if (!!::GameScript.GRBroadcast(PSF_RejectTeamSwitch, &C4AulParSet(C4VInt(iPlayer), C4VInt(idNewTeam)), true, true))
+		if (!!::Game.GRBroadcast(PSF_RejectTeamSwitch, &C4AulParSet(iPlayer, idNewTeam), true, true))
 			return false;
 	}
 	// exit previous team
@@ -2373,7 +2328,7 @@ static bool FnSetPlayerTeam(C4PropList * _this, long iPlayer, long idNewTeam, bo
 	}
 	// do callback to reflect change in scenario
 	if (!fNoCalls)
-		::GameScript.GRBroadcast(PSF_OnTeamSwitch, &C4AulParSet(C4VInt(iPlayer), C4VInt(idNewTeam), C4VInt(idOldTeam)), true);
+		::Game.GRBroadcast(PSF_OnTeamSwitch, &C4AulParSet(iPlayer, idNewTeam, idOldTeam), true);
 	return true;
 }
 
@@ -2478,10 +2433,9 @@ static bool FnAddEvaluationData(C4PropList * _this, C4String *pText, long idPlay
 }
 
 // undocumented!
-static C4Void FnHideSettlementScoreInEvaluation(C4PropList * _this, bool fHide)
+static void FnHideSettlementScoreInEvaluation(C4PropList * _this, bool fHide)
 {
 	Game.RoundResults.HideSettlementScore(fHide);
-	return C4Void();
 }
 
 static bool FnCustomMessage(C4PropList * _this, C4String *pMsg, C4Object *pObj, Nillable<long> iOwner, long iOffX, long iOffY, long dwClr, C4ID idDeco, C4PropList *pSrc, long dwFlags, long iHSize)
@@ -2500,11 +2454,11 @@ static bool FnCustomMessage(C4PropList * _this, C4String *pMsg, C4Object *pObj, 
 	uint32_t vpos = dwFlags & (C4GM_Top | C4GM_VCenter | C4GM_Bottom);
 	if (((hpos | (hpos-1)) + 1)>>1 != hpos)
 	{
-		throw new C4AulExecError("CustomMessage: Only one horizontal positioning flag allowed");
+		throw C4AulExecError("CustomMessage: Only one horizontal positioning flag allowed");
 	}
 	if (((vpos | (vpos-1)) + 1)>>1 != vpos)
 	{
-		throw new C4AulExecError("CustomMessage: Only one vertical positioning flag allowed");
+		throw C4AulExecError("CustomMessage: Only one vertical positioning flag allowed");
 	}
 	// message color
 	if (!dwClr) dwClr = 0xffffffff;
@@ -2775,175 +2729,173 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 		assert(pCDef->ValType == C4V_Int); // only int supported currently
 		pEngine->RegisterGlobalConstant(pCDef->Identifier, C4VInt(pCDef->Data));
 	}
+	C4PropListStatic * p = pEngine->GetPropList();
 	// add all def script funcs
 	for (C4ScriptFnDef *pDef = &C4ScriptGameFnMap[0]; pDef->Identifier; pDef++)
-		new C4AulDefFunc(pEngine, pDef);
-#define F(f) AddFunc(pEngine, #f, Fn##f)
-
-	AddFunc(pEngine, "GetX", FnGetX);
-	AddFunc(pEngine, "GetY", FnGetY);
-	AddFunc(pEngine, "GetDefinition", FnGetDefinition);
-	AddFunc(pEngine, "GetPlayerName", FnGetPlayerName);
-	AddFunc(pEngine, "GetPlayerType", FnGetPlayerType);
-	AddFunc(pEngine, "GetPlayerColor", FnGetPlayerColor);
-	AddFunc(pEngine, "GetPlrClonkSkin", FnGetPlrClonkSkin);
-	AddFunc(pEngine, "CreateObject", FnCreateObject);
-	AddFunc(pEngine, "CreateObjectAbove", FnCreateObjectAbove);
-	AddFunc(pEngine, "CreateConstruction", FnCreateConstruction);
-	AddFunc(pEngine, "FindConstructionSite", FnFindConstructionSite);
-	AddFunc(pEngine, "CheckConstructionSite", FnCheckConstructionSite);
-	AddFunc(pEngine, "Sound", FnSound);
-	AddFunc(pEngine, "SoundAt", FnSoundAt);
-	AddFunc(pEngine, "ChangeSoundModifier", FnChangeSoundModifier);
-	AddFunc(pEngine, "SetGlobalSoundModifier", FnSetGlobalSoundModifier);
-	AddFunc(pEngine, "Music", FnMusic);
-	AddFunc(pEngine, "MusicLevel", FnMusicLevel);
-	AddFunc(pEngine, "SetPlayList", FnSetPlayList);
-	AddFunc(pEngine, "SetPlrView", FnSetPlrView);
-	AddFunc(pEngine, "SetPlrKnowledge", FnSetPlrKnowledge);
-	AddFunc(pEngine, "GetPlrViewMode", FnGetPlrViewMode);
-	AddFunc(pEngine, "ResetCursorView", FnResetCursorView);
-	AddFunc(pEngine, "GetPlrView", FnGetPlrView);
-	AddFunc(pEngine, "GetWealth", FnGetWealth);
-	AddFunc(pEngine, "SetWealth", FnSetWealth);
-	AddFunc(pEngine, "DoPlayerScore", FnDoPlayerScore);
-	AddFunc(pEngine, "GetPlayerScore", FnGetPlayerScore);
-	AddFunc(pEngine, "GetPlayerScoreGain", FnGetPlayerScoreGain);
-	AddFunc(pEngine, "GetWind", FnGetWind);
-	AddFunc(pEngine, "SetWind", FnSetWind);
-	AddFunc(pEngine, "GetTemperature", FnGetTemperature);
-	AddFunc(pEngine, "SetTemperature", FnSetTemperature);
-	AddFunc(pEngine, "ShakeFree", FnShakeFree);
-	AddFunc(pEngine, "DigFree", FnDigFree);
-	AddFunc(pEngine, "DigFreeRect", FnDigFreeRect);
-	AddFunc(pEngine, "ClearFreeRect", FnClearFreeRect);
-	AddFunc(pEngine, "Hostile", FnHostile);
-	AddFunc(pEngine, "SetHostility", FnSetHostility);
-	AddFunc(pEngine, "PlaceVegetation", FnPlaceVegetation);
-	AddFunc(pEngine, "PlaceAnimal", FnPlaceAnimal);
-	AddFunc(pEngine, "GameOver", FnGameOver);
-	AddFunc(pEngine, "GetHiRank", FnGetHiRank);
-	AddFunc(pEngine, "GetCrew", FnGetCrew);
-	AddFunc(pEngine, "GetCrewCount", FnGetCrewCount);
-	AddFunc(pEngine, "GetPlayerCount", FnGetPlayerCount);
-	AddFunc(pEngine, "GetPlayerByIndex", FnGetPlayerByIndex);
-	AddFunc(pEngine, "EliminatePlayer", FnEliminatePlayer);
-	AddFunc(pEngine, "SurrenderPlayer", FnSurrenderPlayer);
-	AddFunc(pEngine, "FnGetLeagueScore", FnGetLeagueScore);
-	AddFunc(pEngine, "SetLeaguePerformance", FnSetLeaguePerformance);
-	AddFunc(pEngine, "SetLeagueProgressData", FnSetLeagueProgressData);
-	AddFunc(pEngine, "GetLeagueProgressData", FnGetLeagueProgressData);
-	AddFunc(pEngine, "CreateScriptPlayer", FnCreateScriptPlayer);
-	AddFunc(pEngine, "GetCursor", FnGetCursor);
-	AddFunc(pEngine, "GetViewCursor", FnGetViewCursor);
-	AddFunc(pEngine, "SetCursor", FnSetCursor);
-	AddFunc(pEngine, "SetViewCursor", FnSetViewCursor);
-	AddFunc(pEngine, "GetMaterial", FnGetMaterial);
-	AddFunc(pEngine, "GetBackMaterial", FnGetBackMaterial);
-	AddFunc(pEngine, "GetTexture", FnGetTexture);
-	AddFunc(pEngine, "GetBackTexture", FnGetBackTexture);
-	AddFunc(pEngine, "GetAverageTextureColor", FnGetAverageTextureColor);
-	AddFunc(pEngine, "GetMaterialCount", FnGetMaterialCount);
-	AddFunc(pEngine, "GBackSolid", FnGBackSolid);
-	AddFunc(pEngine, "GBackSemiSolid", FnGBackSemiSolid);
-	AddFunc(pEngine, "GBackLiquid", FnGBackLiquid);
-	AddFunc(pEngine, "GBackSky", FnGBackSky);
-	AddFunc(pEngine, "Material", FnMaterial);
-	AddFunc(pEngine, "BlastFree", FnBlastFree);
-	AddFunc(pEngine, "InsertMaterial", FnInsertMaterial);
-	AddFunc(pEngine, "CanInsertMaterial", FnCanInsertMaterial);
-	AddFunc(pEngine, "LandscapeWidth", FnLandscapeWidth);
-	AddFunc(pEngine, "LandscapeHeight", FnLandscapeHeight);
-	AddFunc(pEngine, "SetAmbientBrightness", FnSetAmbientBrightness);
-	AddFunc(pEngine, "GetAmbientBrightness", FnGetAmbientBrightness);
-	AddFunc(pEngine, "SetSeason", FnSetSeason);
-	AddFunc(pEngine, "GetSeason", FnGetSeason);
-	AddFunc(pEngine, "SetClimate", FnSetClimate);
-	AddFunc(pEngine, "GetClimate", FnGetClimate);
-	AddFunc(pEngine, "SetPlayerZoomByViewRange", FnSetPlayerZoomByViewRange);
-	AddFunc(pEngine, "GetPlayerZoomLimits", FnGetPlayerZoomLimits);
-	AddFunc(pEngine, "SetPlayerZoom", FnSetPlayerZoom);
-	AddFunc(pEngine, "SetPlayerViewLock", FnSetPlayerViewLock);
-	AddFunc(pEngine, "DoBaseMaterial", FnDoBaseMaterial);
-	AddFunc(pEngine, "DoBaseProduction", FnDoBaseProduction);
-	AddFunc(pEngine, "GainMissionAccess", FnGainMissionAccess);
-	AddFunc(pEngine, "IsNetwork", FnIsNetwork);
-	AddFunc(pEngine, "GetLeague", FnGetLeague);
-	AddFunc(pEngine, "TestMessageBoard", FnTestMessageBoard, false);
-	AddFunc(pEngine, "CallMessageBoard", FnCallMessageBoard, false);
-	AddFunc(pEngine, "AbortMessageBoard", FnAbortMessageBoard, false);
-	AddFunc(pEngine, "SetFoW", FnSetFoW);
-	AddFunc(pEngine, "SetMaxPlayer", FnSetMaxPlayer);
-	AddFunc(pEngine, "Object", FnObject);
-	AddFunc(pEngine, "GetTime", FnGetTime);
-	AddFunc(pEngine, "GetMissionAccess", FnGetMissionAccess);
-	AddFunc(pEngine, "MaterialName", FnMaterialName);
-	AddFunc(pEngine, "DrawMap", FnDrawMap);
-	AddFunc(pEngine, "DrawDefMap", FnDrawDefMap);
-	AddFunc(pEngine, "CreateParticle", FnCreateParticle);
-	AddFunc(pEngine, "ClearParticles", FnClearParticles);
-	AddFunc(pEngine, "SetSkyAdjust", FnSetSkyAdjust);
-	AddFunc(pEngine, "SetMatAdjust", FnSetMatAdjust);
-	AddFunc(pEngine, "GetSkyAdjust", FnGetSkyAdjust);
-	AddFunc(pEngine, "GetMatAdjust", FnGetMatAdjust);
-	AddFunc(pEngine, "SetSkyParallax", FnSetSkyParallax);
-	AddFunc(pEngine, "ReloadDef", FnReloadDef);
-	AddFunc(pEngine, "ReloadParticle", FnReloadParticle);
-	AddFunc(pEngine, "SetGamma", FnSetGamma);
-	AddFunc(pEngine, "ResetGamma", FnResetGamma);
-	AddFunc(pEngine, "FrameCounter", FnFrameCounter);
-	AddFunc(pEngine, "DrawMaterialQuad", FnDrawMaterialQuad);
-	AddFunc(pEngine, "SetFilmView", FnSetFilmView);
-	AddFunc(pEngine, "AddMsgBoardCmd", FnAddMsgBoardCmd);
-	AddFunc(pEngine, "SetGameSpeed", FnSetGameSpeed, false);
-	AddFunc(pEngine, "DrawMatChunks", FnDrawMatChunks, false);
-	AddFunc(pEngine, "GetPathLength", FnGetPathLength);
-	AddFunc(pEngine, "SetTextureIndex", FnSetTextureIndex);
-	AddFunc(pEngine, "RemoveUnusedTexMapEntries", FnRemoveUnusedTexMapEntries);
-	AddFunc(pEngine, "SimFlight", FnSimFlight);
-	AddFunc(pEngine, "LoadScenarioSection", FnLoadScenarioSection);
-	AddFunc(pEngine, "RemoveEffect", FnRemoveEffect);
-	AddFunc(pEngine, "GetEffect", FnGetEffect);
-	AddFunc(pEngine, "SetViewOffset", FnSetViewOffset);
-	AddFunc(pEngine, "SetPreSend", FnSetPreSend, false);
-	AddFunc(pEngine, "GetPlayerID", FnGetPlayerID);
-	AddFunc(pEngine, "GetPlayerTeam", FnGetPlayerTeam);
-	AddFunc(pEngine, "SetPlayerTeam", FnSetPlayerTeam);
-	AddFunc(pEngine, "GetTeamConfig", FnGetTeamConfig);
-	AddFunc(pEngine, "GetTeamName", FnGetTeamName);
-	AddFunc(pEngine, "GetTeamColor", FnGetTeamColor);
-	AddFunc(pEngine, "GetTeamByIndex", FnGetTeamByIndex);
-	AddFunc(pEngine, "GetTeamCount", FnGetTeamCount);
-	AddFunc(pEngine, "InitScenarioPlayer", FnInitScenarioPlayer, false);
-	AddFunc(pEngine, "SetScoreboardData", FnSetScoreboardData);
-	AddFunc(pEngine, "GetScoreboardString", FnGetScoreboardString, false);
-	AddFunc(pEngine, "GetScoreboardData", FnGetScoreboardData, false);
-	AddFunc(pEngine, "DoScoreboardShow", FnDoScoreboardShow);
-	AddFunc(pEngine, "SortScoreboard", FnSortScoreboard);
-	AddFunc(pEngine, "AddEvaluationData", FnAddEvaluationData);
-	AddFunc(pEngine, "HideSettlementScoreInEvaluation", FnHideSettlementScoreInEvaluation);
-	AddFunc(pEngine, "ExtractMaterialAmount", FnExtractMaterialAmount);
-	AddFunc(pEngine, "GetEffectCount", FnGetEffectCount);
-	AddFunc(pEngine, "CustomMessage", FnCustomMessage);
-	AddFunc(pEngine, "GuiOpen", FnGuiOpen);
-	AddFunc(pEngine, "GuiUpdateTag", FnGuiUpdateTag);
-	AddFunc(pEngine, "GuiClose", FnGuiClose);
-	AddFunc(pEngine, "GuiUpdate", FnGuiUpdate);
-	AddFunc(pEngine, "PauseGame", FnPauseGame, false);
-	AddFunc(pEngine, "PathFree", FnPathFree);
-	AddFunc(pEngine, "PathFree2", FnPathFree2);
-	AddFunc(pEngine, "SetNextMission", FnSetNextMission);
-	AddFunc(pEngine, "GetPlayerControlState", FnGetPlayerControlState);
-	AddFunc(pEngine, "SetPlayerControlEnabled", FnSetPlayerControlEnabled);
-	AddFunc(pEngine, "GetPlayerControlEnabled", FnGetPlayerControlEnabled);
-	AddFunc(pEngine, "GetPlayerControlAssignment", FnGetPlayerControlAssignment);
-	AddFunc(pEngine, "GetStartupPlayerCount", FnGetStartupPlayerCount);
-	AddFunc(pEngine, "GetStartupTeamCount", FnGetStartupTeamCount);
-	AddFunc(pEngine, "PlayerObjectCommand", FnPlayerObjectCommand);
-	AddFunc(pEngine, "EditCursor", FnEditCursor);
-	AddFunc(pEngine, "GainScenarioAchievement", FnGainScenarioAchievement);
-	AddFunc(pEngine, "GetPXSCount", FnGetPXSCount);
-
+		new C4AulDefFunc(p, pDef);
+#define F(f) ::AddFunc(p, #f, Fn##f)
+	F(GetX);
+	F(GetY);
+	F(GetDefinition);
+	F(GetPlayerName);
+	F(GetPlayerType);
+	F(GetPlayerColor);
+	F(GetPlrClonkSkin);
+	F(CreateObject);
+	F(CreateObjectAbove);
+	F(CreateConstruction);
+	F(FindConstructionSite);
+	F(CheckConstructionSite);
+	F(Sound);
+	F(SoundAt);
+	F(ChangeSoundModifier);
+	F(SetGlobalSoundModifier);
+	F(Music);
+	F(MusicLevel);
+	F(SetPlayList);
+	F(SetPlrView);
+	F(SetPlrKnowledge);
+	F(GetPlrViewMode);
+	F(ResetCursorView);
+	F(GetPlrView);
+	F(GetWealth);
+	F(SetWealth);
+	F(DoPlayerScore);
+	F(GetPlayerScore);
+	F(GetPlayerScoreGain);
+	F(GetWind);
+	F(SetWind);
+	F(GetTemperature);
+	F(SetTemperature);
+	F(ShakeFree);
+	F(DigFree);
+	F(DigFreeRect);
+	F(ClearFreeRect);
+	F(Hostile);
+	F(SetHostility);
+	F(PlaceVegetation);
+	F(PlaceAnimal);
+	F(GameOver);
+	F(GetHiRank);
+	F(GetCrew);
+	F(GetCrewCount);
+	F(GetPlayerCount);
+	F(GetPlayerByIndex);
+	F(EliminatePlayer);
+	F(SurrenderPlayer);
+	F(GetLeagueScore);
+	F(SetLeaguePerformance);
+	F(SetLeagueProgressData);
+	F(GetLeagueProgressData);
+	F(CreateScriptPlayer);
+	F(GetCursor);
+	F(GetViewCursor);
+	F(SetCursor);
+	F(SetViewCursor);
+	F(GetMaterial);
+	F(GetBackMaterial);
+	F(GetTexture);
+	F(GetBackTexture);
+	F(GetAverageTextureColor);
+	F(GetMaterialCount);
+	F(GBackSolid);
+	F(GBackSemiSolid);
+	F(GBackLiquid);
+	F(GBackSky);
+	F(Material);
+	F(BlastFree);
+	F(InsertMaterial);
+	F(CanInsertMaterial);
+	F(LandscapeWidth);
+	F(LandscapeHeight);
+	F(SetAmbientBrightness);
+	F(GetAmbientBrightness);
+	F(SetSeason);
+	F(GetSeason);
+	F(SetClimate);
+	F(GetClimate);
+	F(SetPlayerZoomByViewRange);
+	F(GetPlayerZoomLimits);
+	F(SetPlayerZoom);
+	F(SetPlayerViewLock);
+	F(DoBaseMaterial);
+	F(DoBaseProduction);
+	F(GainMissionAccess);
+	F(IsNetwork);
+	F(GetLeague);
+	::AddFunc(p, "TestMessageBoard", FnTestMessageBoard, false);
+	::AddFunc(p, "CallMessageBoard", FnCallMessageBoard, false);
+	::AddFunc(p, "AbortMessageBoard", FnAbortMessageBoard, false);
+	F(SetFoW);
+	F(SetMaxPlayer);
+	F(Object);
+	F(GetTime);
+	F(GetMissionAccess);
+	F(MaterialName);
+	F(DrawMap);
+	F(DrawDefMap);
+	F(CreateParticle);
+	F(ClearParticles);
+	F(SetSkyAdjust);
+	F(SetMatAdjust);
+	F(GetSkyAdjust);
+	F(GetMatAdjust);
+	F(SetSkyParallax);
+	F(ReloadDef);
+	F(ReloadParticle);
+	F(SetGamma);
+	F(ResetGamma);
+	F(FrameCounter);
+	F(DrawMaterialQuad);
+	F(SetFilmView);
+	F(AddMsgBoardCmd);
+	::AddFunc(p, "SetGameSpeed", FnSetGameSpeed, false);
+	::AddFunc(p, "DrawMatChunks", FnDrawMatChunks, false);
+	F(GetPathLength);
+	F(SetTextureIndex);
+	F(RemoveUnusedTexMapEntries);
+	F(SimFlight);
+	F(LoadScenarioSection);
+	F(RemoveEffect);
+	F(GetEffect);
+	F(SetViewOffset);
+	::AddFunc(p, "SetPreSend", FnSetPreSend, false);
+	F(GetPlayerID);
+	F(GetPlayerTeam);
+	F(SetPlayerTeam);
+	F(GetTeamConfig);
+	F(GetTeamName);
+	F(GetTeamColor);
+	F(GetTeamByIndex);
+	F(GetTeamCount);
+	::AddFunc(p, "InitScenarioPlayer", FnInitScenarioPlayer, false);
+	F(SetScoreboardData);
+	::AddFunc(p, "GetScoreboardString", FnGetScoreboardString, false);
+	::AddFunc(p, "GetScoreboardData", FnGetScoreboardData, false);
+	F(DoScoreboardShow);
+	F(SortScoreboard);
+	F(AddEvaluationData);
+	F(HideSettlementScoreInEvaluation);
+	F(ExtractMaterialAmount);
+	F(GetEffectCount);
+	F(CustomMessage);
+	F(GuiOpen);
+	F(GuiUpdateTag);
+	F(GuiClose);
+	F(GuiUpdate);
+	::AddFunc(p, "PauseGame", FnPauseGame, false);
+	F(PathFree);
+	F(PathFree2);
+	F(SetNextMission);
+	F(GetPlayerControlState);
+	F(SetPlayerControlEnabled);
+	F(GetPlayerControlEnabled);
+	F(GetPlayerControlAssignment);
+	F(GetStartupPlayerCount);
+	F(GetStartupTeamCount);
+	F(EditCursor);
+	F(GainScenarioAchievement);
+	F(GetPXSCount);
 	F(GetPlrKnowledge);
 	F(GetComponent);
 	F(GetBaseMaterial);
@@ -2959,7 +2911,6 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	F(GetPlrExtraData);
 	F(AddEffect);
 	F(CheckEffect);
-
 	F(PV_Linear);
 	F(PV_Random);
 	F(PV_Direction);
@@ -2972,10 +2923,10 @@ void InitGameFunctionMap(C4AulScriptEngine *pEngine)
 	F(PC_Die);
 	F(PC_Bounce);
 	F(PC_Stop);
-
-	AddFunc(pEngine, "IncinerateLandscape", FnIncinerateLandscape);
-	AddFunc(pEngine, "GetGravity", FnGetGravity);
-	AddFunc(pEngine, "SetGravity", FnSetGravity);
+	F(IncinerateLandscape);
+	F(GetGravity);
+	F(SetGravity);
+#undef F
 }
 
 C4ScriptConstDef C4ScriptGameConstMap[]=

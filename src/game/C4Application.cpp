@@ -102,7 +102,7 @@ bool C4Application::DoInit(int argc, char * argv[])
 	Revision.Ref(C4REVISION);
 
 	// Engine header message
-	Log(C4ENGINEINFOLONG);
+	Log(C4ENGINECAPTION);
 	LogF("Version: %s %s (%s)", C4VERSION, C4_OS, Revision.getData());
 	LogF("ExePath: \"%s\"", Config.General.ExePath.getData());
 	LogF("SystemDataPath: \"%s\"", Config.General.SystemDataPath);
@@ -176,17 +176,14 @@ bool C4Application::DoInit(int argc, char * argv[])
 	Add(pGameTimer = new C4ApplicationGameTimer());
 
 	// Initialize OpenGL
-	bool success = DDrawInit(this, GetConfigWidth(), GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.Monitor);
+	bool success = DDrawInit(this, GetConfigWidth(), GetConfigHeight(), Config.Graphics.Monitor);
 	if (!success) { LogFatal(LoadResStr("IDS_ERR_DDRAW")); Clear(); ShowGfxErrorDialog(); return false; }
 
 	if (!isEditor)
 	{
-		if (!SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, !Config.Graphics.Windowed))
+		if (!SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.RefreshRate, Config.Graphics.Monitor, !Config.Graphics.Windowed))
 			pWindow->SetSize(Config.Graphics.WindowX, Config.Graphics.WindowY);
 	}
-
-	// after initializing graphics, the particle system can check for compatibility
-	::Particles.DoInit();
 
 	// Initialize gamepad
 	if (!pGamePadControl && Config.General.GamepadEnabled)
@@ -488,9 +485,9 @@ void C4Application::ApplyResolutionConstraints()
 	uint32_t best_delta = ~0;
 	while (GetIndexedDisplayMode(++idx, &iXRes, &iYRes, &iBitDepth, &iRefreshRate, Config.Graphics.Monitor))
 	{
-		if (iBitDepth != Config.Graphics.BitDepth) continue;
+		if (iBitDepth != C4Draw::COLOR_DEPTH) continue;
 		uint32_t delta = std::abs(Config.Graphics.ResX*Config.Graphics.ResY - iXRes*iYRes);
-		if (!delta && iBitDepth == Config.Graphics.BitDepth && iRefreshRate == Config.Graphics.RefreshRate)
+		if (!delta && iBitDepth == C4Draw::COLOR_DEPTH && iRefreshRate == Config.Graphics.RefreshRate)
 			return; // Exactly the expected mode
 		if (delta < best_delta)
 		{
@@ -508,7 +505,6 @@ void C4Application::ApplyResolutionConstraints()
 			// Also, lang table not loaded yet
 			LogF("Warning: The selected resolution %dx%d is not available and has been changed to %dx%d.", Config.Graphics.ResX, Config.Graphics.ResY, iXRes, iYRes);
 		Config.Graphics.ResX = iXRes; Config.Graphics.ResY = iYRes;
-		Config.Graphics.BitDepth = iBitDepth;
 		Config.Graphics.RefreshRate = iRefreshRate;
 	}
 }
@@ -530,7 +526,7 @@ bool C4Application::PreInit()
 		if (Config.Graphics.ShowStartupMessages || Game.NetworkActive)
 		{
 			C4Facet cgo; cgo.Set(FullScreen.pSurface,0,0,C4GUI::GetScreenWdt(), C4GUI::GetScreenHgt());
-			GraphicsSystem.MessageBoard.Init(cgo,true);
+			GraphicsSystem.MessageBoard->Init(cgo,true);
 		}
 
 	// init loader: Black screen for first start if a video is to be shown; otherwise default spec
@@ -544,7 +540,7 @@ bool C4Application::PreInit()
 	if (!Game.PreInit()) return false;
 
 	// Music
-	if (!MusicSystem.Init("Frontend.*"))
+	if (!MusicSystem.Init("frontend"))
 		Log(LoadResStr("IDS_PRC_NOMUSIC"));
 
 	Game.SetInitProgress(fUseStartupDialog ? 34.0f : 2.0f);
@@ -698,13 +694,17 @@ void C4Application::GameTick()
 			break;
 		}
 		if(Config.Graphics.Windowed == 2 && FullScreenMode())
-			Application.SetVideoMode(GetConfigWidth(), GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, true);
+			Application.SetVideoMode(GetConfigWidth(), GetConfigHeight(), Config.Graphics.RefreshRate, Config.Graphics.Monitor, true);
+		if (!isEditor)
+			pWindow->GrabMouse(true);
 		break;
 	case C4AS_AfterGame:
 		// stop game
 		Game.Clear();
 		if(Config.Graphics.Windowed == 2 && !NextMission && !isEditor)
-			Application.SetVideoMode(GetConfigWidth(), GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, false);
+			Application.SetVideoMode(GetConfigWidth(), GetConfigHeight(), Config.Graphics.RefreshRate, Config.Graphics.Monitor, false);
+		if (!isEditor)
+			pWindow->GrabMouse(false);
 		AppState = C4AS_PreInit;
 		// if a next mission is desired, set to start it
 		if (NextMission)
@@ -817,24 +817,8 @@ void C4Application::OnCommand(const char *szCmd)
 void C4Application::Activate()
 {
 #ifdef USE_WIN32_WINDOWS
-	// Activate the application to regain focus if it has been lost during loading.
-	// As this is officially not possible any more in new versions of Windows
-	// (BringWindowTopTop alone won't have any effect if the calling process is
-	// not in the foreground itself), we are using an ugly OS hack.
-	DWORD nForeThread = GetWindowThreadProcessId(GetForegroundWindow(), 0);
-	DWORD nAppThread = GetCurrentThreadId();
-	if (nForeThread != nAppThread)
-	{
-		AttachThreadInput(nForeThread, nAppThread, true);
-		BringWindowToTop(FullScreen.hWindow);
-		ShowWindow(FullScreen.hWindow, SW_SHOW);
-		AttachThreadInput(nForeThread, nAppThread, false);
-	}
-	else
-	{
-		BringWindowToTop(FullScreen.hWindow);
-		ShowWindow(FullScreen.hWindow, SW_SHOW);
-	}
+	BringWindowToTop(FullScreen.hWindow);
+	ShowWindow(FullScreen.hWindow, SW_SHOW);
 #endif
 }
 

@@ -11,7 +11,7 @@
 
 func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 }
 
 local fAiming;
@@ -62,7 +62,7 @@ protected func HoldingEnabled() { return true; }
 
 func RejectUse(object clonk)
 {
-	return !clonk->HasHandAction();
+	return !clonk->HasHandAction(false, false, true);
 }
 
 func ControlUseStart(object clonk, int x, int y)
@@ -82,6 +82,7 @@ func ControlUseStart(object clonk, int x, int y)
 	if(!Contents(0))
 	{
 		clonk->CancelUse();
+		Sound("Objects::Weapons::Musket::Click*");
 		return true;
 	}
 
@@ -163,7 +164,7 @@ private func FireWeapon(object clonk, int angle)
 	loaded = false;
 	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(1500,0,-1500),Trans_Rotate(170,0,1,0),Trans_Rotate(30,0,0,1)));
 
-	Sound("GunShoot?");
+	Sound("Objects::Weapons::Musket::GunShoot?");
 
 	// Muzzle Flash & gun smoke
 	var x = Sin(angle, 20);
@@ -189,6 +190,5 @@ func Definition(def) {
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = 1;
-local Rebuy = true;
+local ForceFreeHands = true;

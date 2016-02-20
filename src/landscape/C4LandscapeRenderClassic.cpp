@@ -18,6 +18,7 @@
 #include "C4LandscapeRender.h"
 #include "C4Landscape.h"
 #include "C4Texture.h"
+#include "lib/StdColors.h"
 
 const int C4LS_MaxLightDistY = 8;
 const int C4LS_MaxLightDistX = 1;
@@ -38,7 +39,7 @@ bool C4LandscapeRenderClassic::ReInit(int32_t iWidth, int32_t iHeight)
 	delete Surface32; Surface32 = NULL;
 	Surface32 = new C4Surface();
 	// without shaders, the FoW is only as detailed as the landscape has tiles.
-	if(!Surface32->Create(iWidth, iHeight,false,pDraw->IsShaderific() ? 0 : 64, 0))
+	if (!Surface32->Create(iWidth, iHeight))
 		return false;
 	// Safe back info
 	this->iWidth = iWidth;

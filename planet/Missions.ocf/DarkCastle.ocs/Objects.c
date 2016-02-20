@@ -17,9 +17,6 @@ func InitializeObjects()
 
 	var Tree_Coniferous_Burned001 = CreateObject(Tree_Coniferous_Burned, 17, 1097);
 	Tree_Coniferous_Burned001->SetR(10);
-	var Tree_Coniferous_Burned002 = CreateObject(Tree_Coniferous_Burned, 43, 1246);
-	Tree_Coniferous_Burned002->SetCon(75);
-	Tree_Coniferous_Burned002->SetR(100);
 
 	var Tree_Coniferous001 = CreateObject(Tree_Coniferous, 415, 1117);
 	Tree_Coniferous001->SetR(10);
@@ -118,16 +115,6 @@ func InitializeObjects()
 	var Fern002 = CreateObject(Fern, 276, 1442);
 	Fern002->SetCon(22);
 
-	CreateObjectAbove(Tree_Coniferous, 408, 1167);
-	var Tree_Coniferous002 = CreateObject(Tree_Coniferous, 408, 1191);
-	Tree_Coniferous002->SetCon(47);
-	var Tree_Coniferous003 = CreateObjectAbove(Tree_Coniferous, 217, 1191);
-	Tree_Coniferous003->SetCon(39);
-	var Tree_Coniferous004 = CreateObject(Tree_Coniferous, 392, 1148);
-	Tree_Coniferous004->SetCon(27);
-	var Tree_Coniferous005 = CreateObject(Tree_Coniferous, 410, 1168);
-	Tree_Coniferous005->SetCon(3);
-
 	g_ruin1 = CreateObject(Ruin_WoodenCabin, 97, 1150);
 	g_ruin1->SetR(16);
 	g_ruin1.StaticSaveVar = "g_ruin1";
@@ -151,8 +138,10 @@ func InitializeObjects()
 	StoneDoor001->SetComDir(COMD_Down);
 	var StoneDoor002 = CreateObject(StoneDoor, 1348, 508);
 	StoneDoor002->SetComDir(COMD_Down);
+	StoneDoor002->DoDamage(170);
 	var StoneDoor003 = CreateObject(StoneDoor, 1347, 412);
 	StoneDoor003->SetComDir(COMD_Down);
+	StoneDoor003->DoDamage(170);
 
 	var SpinWheel001 = CreateObjectAbove(SpinWheel, 961, 672);
 	SpinWheel001->SetStoneDoor(StoneDoor001);
@@ -302,6 +291,7 @@ func InitializeObjects()
 	g_cannoneer.StaticSaveVar = "g_cannoneer";
 	g_cannoneer->SetDir(DIR_Left);
 	g_cannoneer->SetName("Brutus");
+	g_cannoneer->SetAlternativeSkin("Guard");
 	var Clonk016 = CreateObjectAbove(Clonk, 1317, 334);
 	Clonk016->SetName("Archibald");
 	AI->AddAI(Clonk016);
@@ -552,6 +542,8 @@ func InitializeObjects()
 	g_king->CreateContents(Firestone, 3);
 
 	CreateObject(Rule_Gravestones);
+
+	CreateObject(Rule_Restart);
 
 	return true;
 }

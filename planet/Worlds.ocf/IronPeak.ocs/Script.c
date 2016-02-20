@@ -13,6 +13,9 @@ static intro_init;
 
 protected func Initialize()
 {
+	// Show wealth in HUD.
+	GUI_Controller->ShowWealth();
+	
 	// Goal: Expand your area of influence to secure the ore.
 	var goal = CreateObject(Goal_Expansion);
 	goal->SetExpansionGoal(300 + 100 * SCENPAR_Difficulty);
@@ -178,7 +181,7 @@ global func FxSnowStormStart(object target, proplist effect)
 	// Always a strong wind, either to the left or the right.
 	effect.wind = (2 * Random(2) - 1) * (90 + Random(10));
 	// Accordingly a stormy sound.
-	Sound("WindLoop.ogg", true, 50, nil, 1);
+	Sound("Environment::WindLoop", true, 50, nil, 1);
 	return 1;
 }
 

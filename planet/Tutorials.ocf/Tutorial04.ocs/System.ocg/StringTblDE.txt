@@ -1,0 +1,63 @@
+# Dialogue: Lumberjack
+DlgLumberjackForest=Wo sind die Bäume hin?
+DlgLumberjackCutDown=Die habe ich alle zu Holz verarbeitet, damit wir unser Dorf wieder aufbauen können.
+DlgLumberjackNoWood=Das heißt, dass jetzt kein Holz mehr übrig ist?
+DlgLumberjackSupply=Doch. Wir haben einen kleinen Vorrat tief in der Mine, versteckt vor der dunklen Fraktion.
+
+# Dialogue: Fireman
+DlgFiremanWhereBarrel=Hey, wo hast du dieses große Fass gelassen, mit dem du die Feuer gelöscht hast?
+DlgFiremanFoundry=Ich habe es nach unten in die Mine gebracht, wo wir Lehm herstellen. Die Herstellung von Lehm benötigt Wasser.
+DlgFiremanWhereWater=Woher bekommst du das Wasser?
+DlgFiremanDive=Oh, ich tauche in jeden See den ich finden kann. Im Untergrund in den Minen sind ein paar.
+
+# Dialogue: Builder
+DlgBuilderThanks=Danke, dass du die Flagge gebaut hast.
+DlgBuilderNoProblem=Kein Problem.
+DlgBuilderPowerConnection=Wie du siehst, ist durch die Flagge der Fahrstuhl jetzt mit der Energieversorgung des Dorfes verbunden.
+
+# Dialogue: Farmer
+DlgFarmerWipf=Hey, wie geht es meinem Wipf?
+DlgFarmerDoingWell=Er versteht sich gut mit unseren Wipfen.
+DlgFarmerPleasure=Das hört sich gut an!
+
+# Dialogue: Lookout
+DlgLookoutNewAttack=Hallo, gibt es Anzeichen für einen Angriff?
+DlgLookoutNo=Nein, derzeit nicht.
+
+# Dialogue: Village head
+DlgVillageHeadThank=Danke, dass du uns geholfen hast, die Gebäude zu reparieren. Möchtest du noch mehr helfen?
+DlgVillageHeadHelp=Ja, natürlich. Wenn mein Wipf länger bei euren Wipfen bleiben darf. Wie kann ich helfen?
+DlgVillageHeadTools=Gut. Uns fehlen Werkzeuge. Ich wollte gerade diese Lore mit Material zur Werkstatt bringen. Aber siehst du das Problem?
+DlgVillageHeadProblem=Was für ein Problem?
+DlgVillageHeadGap=Diese Lücke hier müssen wir überwinden, damit wir die Lore zum Fahrstuhlschacht schieben können.
+DlgVillageHeadFix=Ich verstehe. Das schaffe ich!
+DlgVillageHeadPickaxe=Toll. Kannst du vielleicht danach eine Spitzhacke herstellen und etwas Erz abbauen? Uns fehlt leider Sprengstoff für einen schnelleren Abbau.
+DlgVillageHeadYes=Ja klar, kein Problem.
+DlgVillageHeadPutOre=Bitte bring die drei Erzklumpen in den Hochofen.
+DlgVillageHeadThanks=Danke noch mal für deine Hilfe.
+
+# Sequence: Outro dialogue
+MsgVillageHeadNoise=Was ist das für ein Geräusch?
+MsgFarmerAirplanes=Oh nein! Das sind bestimmt die Flugzeuge der dunklen Fraktion!
+MsgEvilLeaderItsUs=Ja, wir sind es wieder. Widerstand ist zwecklos. Gebt auf!
+MsgVillageHeadWhy=Wieso seid ihr zurückgekommen? Ihr habt unser Dorf doch bereits einmal zerstört...
+MsgEvilLeaderWipfs=Ich habe jetzt ein neues Hobby: Wipfe sammeln.
+MsgVillageHeadManiac=Du bist völlig verrückt! Kannst du uns nicht in Ruhe lassen?
+MsgEvilLeader=Ich verschwinde gleich wieder, aber erst will ich alle Wipfe haben.
+MsgPlayerDontTakeWipf=Bitte nehmt Rüdiger nicht!
+MsgEvilLeaderBegging=Ach, du Kleinkind. Betteln hilft dir nicht, meine Leute sind immun gegenüber Geweine. Dein Wipf gehört mir und am besten vergisst du, dass es ihn jemals gab. Wiedersehen wirst du ihn nicht!
+MsgEvilLeaderBye=Gut, wir sind hier fertig. Sagt euren Tierchen auf Wiedersehen...muhaha
+
+# Sequence: Outro messages
+MsgHenchman3DropMusket=Lass die Muskete fallen!
+MsgLookoutSurrender=Ich gebe auf!
+MsgHenchman1RunGirl=Verschwinde Mädchen oder wir schießen!
+MsgHenchman2Wipfs=Eure Wipfe gehören uns, muhaha.
+MsgFarmerComment=Ihr seid böse.
+MsgKidnapperGotThem=Wir haben sie.
+MsgHenchman1SeeYa=Ich bin jetzt weg.
+MsgHenchman2SeeYa=Tschüss!
+MsgHenchman3SeeYa=Bis bald!
+MsgHenchmanGotWipf1=Ich hab einen.
+MsgHenchmanGotWipf2=Wipf kommt!
+MsgHenchmanGotWipf3=Keine Sorge, das wird ein sanfter Flug.

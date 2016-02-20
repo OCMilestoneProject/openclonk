@@ -16,8 +16,8 @@
 #ifndef INC_C4Value
 #define INC_C4Value
 
-#include "C4Id.h"
 #include "C4StringTable.h"
+#include <C4ObjectPtr.h>
 
 // C4Value type
 enum C4V_Type
@@ -45,6 +45,7 @@ enum C4V_Type
 #define C4V_FirstPointer C4V_PropList
 
 const char* GetC4VName(const C4V_Type Type);
+template<typename T> class Nillable;
 
 union C4V_Data
 {
@@ -71,17 +72,28 @@ public:
 
 	explicit C4Value(bool data): NextRef(NULL), Type(C4V_Bool)
 	{ Data.Int = data; }
-	explicit C4Value(int32_t data):  NextRef(NULL), Type(C4V_Int)
+	explicit C4Value(int data):  NextRef(NULL), Type(C4V_Int)
 	{ Data.Int = data; }
+	explicit C4Value(long data): NextRef(NULL), Type(C4V_Int)
+	{ Data.Int = int32_t(data); }
+	explicit C4Value(C4PropListStatic *p);
+	explicit C4Value(C4Def *p);
 	explicit C4Value(C4Object *pObj);
+	explicit C4Value(C4Effect *p);
 	explicit C4Value(C4String *pStr): NextRef(NULL), Type(pStr ? C4V_String : C4V_Nil)
 	{ Data.Str = pStr; AddDataRef(); }
+	explicit C4Value(const char * s): NextRef(NULL), Type(s ? C4V_String : C4V_Nil)
+	{ Data.Str = s ? ::Strings.RegString(s) : NULL; AddDataRef(); }
+	explicit C4Value(const StdStrBuf & s): NextRef(NULL), Type(s.isNull() ? C4V_Nil : C4V_String)
+	{ Data.Str = s.isNull() ? NULL: ::Strings.RegString(s); AddDataRef(); }
 	explicit C4Value(C4ValueArray *pArray): NextRef(NULL), Type(pArray ? C4V_Array : C4V_Nil)
 	{ Data.Array = pArray; AddDataRef(); }
 	explicit C4Value(C4AulFunc * pFn): NextRef(NULL), Type(pFn ? C4V_Function : C4V_Nil)
 	{ Data.Fn = pFn; AddDataRef(); }
 	explicit C4Value(C4PropList *p): NextRef(NULL), Type(p ? C4V_PropList : C4V_Nil)
 	{ Data.PropList = p; AddDataRef(); }
+	C4Value(C4ObjectPtr p): C4Value(p.operator C4Object *()) {}
+	template<typename T> C4Value(Nillable<T> v): C4Value(v.IsNil() ? C4Value() : C4Value(v.operator T())) {}
 
 	C4Value& operator = (const C4Value& nValue) { Set(nValue); return *this; }
 
@@ -107,14 +119,12 @@ public:
 	C4AulFunc *_getFunction() const { return Data.Fn; }
 	C4PropList *_getPropList() const { return Data.PropList; }
 
-	// Template versions
-
 	bool operator ! () const { return !GetData(); }
 	inline operator const void* () const { return GetData() ? this : 0; }  // To allow use of C4Value in conditions
 
 	void Set(const C4Value &nValue) { Set(nValue.Data, nValue.Type); }
 
-	void SetInt(int i) { C4V_Data d; d.Int = i; Set(d, C4V_Int); }
+	void SetInt(int32_t i) { C4V_Data d; d.Int = i; Set(d, C4V_Int); }
 	void SetBool(bool b) { C4V_Data d; d.Int = b; Set(d, C4V_Bool); }
 	void SetString(C4String * Str) { C4V_Data d; d.Str = Str; Set(d, C4V_String); }
 	void SetArray(C4ValueArray * Array) { C4V_Data d; d.Array = Array; Set(d, C4V_Array); }
@@ -129,6 +139,7 @@ public:
 	bool IsIdenticalTo(const C4Value &cmp) const { return GetType()==cmp.GetType() && GetData()==cmp.GetData(); }
 
 	// Change and set Type to int in case it was nil or bool before
+	// Use with care: These don't handle int32_t overflow
 	C4Value & operator += (int32_t by) { Data.Int += by; Type=C4V_Int; return *this; }
 	C4Value & operator -= (int32_t by) { Data.Int -= by; Type=C4V_Int; return *this; }
 	C4Value & operator *= (int32_t by) { Data.Int *= by; Type=C4V_Int; return *this; }
@@ -193,10 +204,10 @@ public:
 	// Compilation
 	void CompileFunc(StdCompiler *pComp, C4ValueNumbers *);
 
-	static inline bool IsNullableType(C4V_Type Type)
+	static inline constexpr bool IsNullableType(C4V_Type Type)
 	{ return Type == C4V_Int || Type == C4V_Bool; }
 
-protected:
+private:
 	// data
 	C4V_Data Data;
 
@@ -205,7 +216,6 @@ protected:
 
 	// data type
 	C4V_Type Type;
-
 
 	void Set(C4V_Data nData, C4V_Type nType);
 
@@ -217,6 +227,9 @@ protected:
 	bool FnCnvEffect() const;
 	void LogDeletedObjectWarning(C4PropList *);
 
+	// Prevent unintended type conversions
+	template<typename T> explicit C4Value(T);
+
 	friend class C4PropList;
 };
 
@@ -226,14 +239,10 @@ inline C4Value C4VBool(bool b) { return C4Value(b); }
 C4Value C4VObj(C4Object *pObj);
 inline C4Value C4VPropList(C4PropList * p) { return C4Value(p); }
 inline C4Value C4VString(C4String *pStr) { return C4Value(pStr); }
+inline C4Value C4VString(StdStrBuf strString) { return C4Value(strString); }
+inline C4Value C4VString(const char *strString) { return C4Value(strString); }
 inline C4Value C4VArray(C4ValueArray *pArray) { return C4Value(pArray); }
 inline C4Value C4VFunction(C4AulFunc * pFn) { return C4Value(pFn); }
-
-C4Value C4VString(StdStrBuf strString);
-C4Value C4VString(const char *strString);
-
-#define C4VFalse C4VBool(false)
-#define C4VTrue C4VBool(true)
 
 extern const C4Value C4VNull;
 

@@ -35,7 +35,6 @@
 #include <C4GameObjects.h>
 
 bool SimFlightHitsLiquid(C4Real fcx, C4Real fcy, C4Real xdir, C4Real ydir);
-bool CreateConstructionSite(int32_t ctx, int32_t bty, C4ID strid, int32_t owner, C4Object *pByObj);
 
 bool ObjectActionWalk(C4Object *cObj)
 {
@@ -54,7 +53,7 @@ bool ObjectActionJump(C4Object *cObj, C4Real xdir, C4Real ydir, bool fByCom)
 {
 	// scripted jump?
 	assert(cObj);
-	C4AulParSet pars(C4VInt(fixtoi(xdir, 100)), C4VInt(fixtoi(ydir, 100)), C4VBool(fByCom));
+	C4AulParSet pars(fixtoi(xdir, 100), fixtoi(ydir, 100), fByCom);
 	if (!!cObj->Call(PSF_OnActionJump, &pars)) return true;
 	// hardcoded jump by action
 	if (!cObj->SetActionByName("Jump")) return false;
@@ -179,25 +178,6 @@ bool ObjectActionCornerScale(C4Object *cObj)
 	return true;
 }
 
-bool ObjectComMovement(C4Object *cObj, int32_t comdir)
-{
-	cObj->Action.ComDir=comdir;
-
-	PlayerObjectCommand(cObj->Owner,C4CMD_Follow,cObj);
-	// direkt turnaround if standing still
-	if (!cObj->xdir && (cObj->GetProcedure() == DFA_WALK || cObj->GetProcedure() == DFA_HANGLE))
-		switch (comdir)
-		{
-		case COMD_Left: case COMD_UpLeft: case COMD_DownLeft:
-			cObj->SetDir(DIR_Left);
-			break;
-		case COMD_Right: case COMD_UpRight: case COMD_DownRight:
-			cObj->SetDir(DIR_Right);
-			break;
-		}
-	return true;
-}
-
 bool ObjectComStop(C4Object *cObj)
 {
 	// Cease current action
@@ -211,9 +191,9 @@ bool ObjectComGrab(C4Object *cObj, C4Object *pTarget)
 	if (!pTarget) return false;
 	if (cObj->GetProcedure()!=DFA_WALK) return false;
 	if (!ObjectActionPush(cObj,pTarget)) return false;
-	cObj->Call(PSF_Grab, &C4AulParSet(C4VObj(pTarget), C4VBool(true)));
+	cObj->Call(PSF_Grab, &C4AulParSet(pTarget, true));
 	if (pTarget->Status && cObj->Status)
-		pTarget->Call(PSF_Grabbed, &C4AulParSet(C4VObj(cObj), C4VBool(true)));
+		pTarget->Call(PSF_Grabbed, &C4AulParSet(cObj, true));
 	return true;
 }
 
@@ -226,12 +206,12 @@ bool ObjectComUnGrab(C4Object *cObj)
 		if (ObjectActionStand(cObj))
 		{
 			if (!cObj->CloseMenu(false)) return false;
-			cObj->Call(PSF_Grab, &C4AulParSet(C4VObj(pTarget), C4VBool(false)));
+			cObj->Call(PSF_Grab, &C4AulParSet(pTarget, false));
 			// clear action target
 			cObj->Action.Target = NULL;
 			if (pTarget && pTarget->Status && cObj->Status)
 			{
-				pTarget->Call(PSF_Grabbed, &C4AulParSet(C4VObj(cObj), C4VBool(false)));
+				pTarget->Call(PSF_Grabbed, &C4AulParSet(cObj, false));
 			}
 			return true;
 		}
@@ -270,42 +250,6 @@ bool ObjectComLetGo(C4Object *cObj, int32_t xdirf)
 	return ObjectActionJump(cObj,itofix(xdirf),Fix0,true);
 }
 
-bool ObjectComEnter(C4Object *cObj) // by pusher
-{
-	if (!cObj) return false;
-
-	// NoPushEnter
-	if (cObj->Def->NoPushEnter) return false;
-
-	// Check object entrance, try command enter
-	C4Object *pTarget;
-	DWORD ocf=OCF_Entrance;
-	if ((pTarget=::Objects.AtObject(cObj->GetX(),cObj->GetY(),ocf,cObj)))
-		if (ocf & OCF_Entrance)
-			{ cObj->SetCommand(C4CMD_Enter,pTarget); return true; }
-
-	return false;
-}
-
-
-bool ObjectComUp(C4Object *cObj) // by DFA_WALK or DFA_SWIM
-{
-	if (!cObj) return false;
-
-	// Check object entrance, try command enter
-	C4Object *pTarget;
-	DWORD ocf=OCF_Entrance;
-	if ((pTarget=::Objects.AtObject(cObj->GetX(),cObj->GetY(),ocf,cObj)))
-		if (ocf & OCF_Entrance)
-			return PlayerObjectCommand(cObj->Owner,C4CMD_Enter,pTarget);
-
-	// Try jump
-	if (cObj->GetProcedure()==DFA_WALK)
-		return PlayerObjectCommand(cObj->Owner,C4CMD_Jump);
-
-	return false;
-}
-
 bool ObjectComDig(C4Object *cObj) // by DFA_WALK
 {
 	if (!ObjectActionDig(cObj))
@@ -339,7 +283,7 @@ bool ObjectComPut(C4Object *cObj, C4Object *pTarget, C4Object *pThing)
 	// Put call to object script
 	cObj->Call(PSF_Put);
 	// Target collection call
-	pTarget->Call(PSF_Collection,&C4AulParSet(C4VObj(pThing), C4VBool(true)));
+	pTarget->Call(PSF_Collection,&C4AulParSet(pThing, true));
 	// Success
 	return true;
 }
@@ -434,7 +378,7 @@ bool ObjectComPunch(C4Object *cObj, C4Object *pTarget, int32_t punch)
 {
 	if (!cObj || !pTarget) return false;
 	if (!punch) return true;
-	bool fBlowStopped = !!pTarget->Call(PSF_QueryCatchBlow,&C4AulParSet(C4VObj(cObj)));
+	bool fBlowStopped = !!pTarget->Call(PSF_QueryCatchBlow,&C4AulParSet(cObj));
 	if (fBlowStopped && punch>1) punch=punch/2; // half damage for caught blow, so shield+armor help in fistfight and vs monsters
 	pTarget->DoEnergy(-punch, false, C4FxCall_EngGetPunched, cObj->Controller);
 	int32_t tdir=+1; if (cObj->Action.Dir==DIR_Left) tdir=-1;
@@ -445,16 +389,14 @@ bool ObjectComPunch(C4Object *cObj, C4Object *pTarget, int32_t punch)
 	if (punch>=10)
 		if (ObjectActionTumble(pTarget,pTarget->Action.Dir,C4REAL100(150)*tdir,itofix(-2)))
 		{
-			pTarget->Call(PSF_CatchBlow,&C4AulParSet(C4VInt(punch),
-			              C4VObj(cObj)));
+			pTarget->Call(PSF_CatchBlow,&C4AulParSet(punch, cObj));
 			return true;
 		}
 
 	// Regular punch
 	if (ObjectActionGetPunched(pTarget,C4REAL100(250)*tdir,Fix0))
 	{
-		pTarget->Call(PSF_CatchBlow,&C4AulParSet(C4VInt(punch),
-		              C4VObj(cObj)));
+		pTarget->Call(PSF_CatchBlow,&C4AulParSet(punch, cObj));
 		return true;
 	}
 
@@ -488,13 +430,3 @@ bool ComDirLike(int32_t iComDir, int32_t iSample)
 	return false;
 }
 
-bool PlayerObjectCommand(int32_t plr, int32_t cmdf, C4Object *pTarget, int32_t tx, int32_t ty)
-{
-	C4Player *pPlr=::Players.Get(plr);
-	if (!pPlr) return false;
-	int32_t iAddMode = C4P_Command_Set;
-	// Adjust for old-style keyboard throw/drop control: add & in range
-	if (cmdf==C4CMD_Throw || cmdf==C4CMD_Drop) iAddMode = C4P_Command_Add | C4P_Command_Range;
-	// Route to player
-	return pPlr->ObjectCommand(cmdf,pTarget,tx,ty,NULL,C4VNull,iAddMode);
-}

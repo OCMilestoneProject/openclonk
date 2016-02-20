@@ -1,10 +1,14 @@
-/*-- Ropeladder_Grabber --*/
+/** 
+	Ropeladder Grabber 
+	Allows for picking up the rope ladder at its base.
+	
+	@author Randrian.
+*/
 
-func SaveScenarioObject() { return false; }
 
 public func Interact(object clonk)
 {
-	if(GetActionTarget())
+	if (GetActionTarget())
 		GetActionTarget()->StartRollUp();
 	else
 		RemoveObject();
@@ -16,17 +20,21 @@ public func IsInteractable(object clonk)
 	return clonk->GetProcedure() == "WALK" || clonk->GetProcedure() == "SCALE" || clonk->GetProcedure() == "HANGLE";
 }
 
-func GetInteractionMetaInfo(object clonk)
+public func GetInteractionMetaInfo(object clonk)
 {
 	return { Description = "$GrabLadder$", IconName = nil, IconID = nil, Selected = false };
 }
 
+public func SaveScenarioObject() { return false; }
+
+
+/*-- Properties --*/
+
 local ActMap = {
-		Attach = {
-			Prototype = Action,
-			Name = "Attach",
-			Procedure = DFA_ATTACH,
-		},
+	Attach = {
+		Prototype = Action,
+		Name = "Attach",
+		Procedure = DFA_ATTACH,
+	},
 };
 local Name = "$Name$";
-	

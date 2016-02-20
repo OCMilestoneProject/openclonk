@@ -11,6 +11,9 @@ static intro_init;
 
 protected func Initialize()
 {
+	// Show wealth in HUD.
+	GUI_Controller->ShowWealth();
+	
 	// Rules: team account and buying at flagpole.
 	CreateObject(Rule_TeamAccount);
 	CreateObject(Rule_BuyAtFlagpole);
@@ -32,7 +35,6 @@ protected func Initialize()
 	InitVegetation(SCENPAR_MapSize);
 	InitAnimals(SCENPAR_MapSize);
 	InitMaterial(4 - SCENPAR_Difficulty);
-	
 	return;
 }
 
@@ -74,10 +76,6 @@ protected func InitializePlayer(int plr)
 	// Give the player the elementary base materials and some tools.
 	GivePlayerElementaryBaseMaterial(plr);
 	GivePlayerToolsBaseMaterial(plr);
-	
-	// Show wealth
-	var controller = FindObject(Find_ID(GUI_Controller), Find_Owner(plr));
-	if (controller) controller->ShowWealth();
 	
 	// Initialize the intro sequence if not yet started.
 	if (!intro_init)

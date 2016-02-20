@@ -113,7 +113,7 @@ const char *CNATName(int32_t cnat)
 
 bool C4Object::Contact(int32_t iCNAT)
 {
-	if (Def->ContactFunctionCalls)
+	if (GetPropertyInt(P_ContactCalls))
 	{
 		return !! Call(FormatString(PSF_Contact, CNATName(iCNAT)).getData());
 	}
@@ -126,30 +126,11 @@ void C4Object::DoMotion(int32_t mx, int32_t my)
 	fix_x += mx; fix_y += my;
 }
 
-static inline int32_t ForceLimits(C4Real &rVal, int32_t iLow, int32_t iHi)
+void C4Object::StopAndContact(C4Real & ctco, C4Real limit, C4Real & speed, int32_t cnat)
 {
-	if (rVal<iLow) { rVal=iLow; return -1; }
-	if (rVal>iHi)  { rVal=iHi;  return +1; }
-	return 0;
-}
-
-void C4Object::TargetBounds(C4Real &ctco, int32_t limit_low, int32_t limit_hi, int32_t cnat_low, int32_t cnat_hi)
-{
-	switch (ForceLimits(ctco,limit_low,limit_hi))
-	{
-	case -1:
-		// stop
-		if (cnat_low==CNAT_Left) xdir=0; else ydir=0;
-		// do calls
-		Contact(cnat_low);
-		break;
-	case +1:
-		// stop
-		if (cnat_hi==CNAT_Right) xdir=0; else ydir=0;
-		// do calls
-		Contact(cnat_hi);
-		break;
-	}
+	ctco = limit;
+	speed = 0;
+	Contact(cnat);
 }
 
 int32_t C4Object::ContactCheck(int32_t iAtX, int32_t iAtY, uint32_t *border_hack_contacts, bool collide_halfvehic)
@@ -171,38 +152,51 @@ int32_t C4Object::ContactCheck(int32_t iAtX, int32_t iAtY, uint32_t *border_hack
 	return Shape.ContactCount;
 }
 
+// Stop the object and do contact calls if it collides with the border
 void C4Object::SideBounds(C4Real &ctcox)
 {
 	// layer bounds
-	if (Layer) if (Layer->Def->BorderBound & C4D_Border_Layer)
+	if (Layer && Layer->GetPropertyInt(P_BorderBound) & C4D_Border_Layer)
+	{
+		C4PropList* pActionDef = GetAction();
+		if (!pActionDef || pActionDef->GetPropertyP(P_Procedure) != DFA_ATTACH)
 		{
-			C4PropList* pActionDef = GetAction();
-			if (!pActionDef || pActionDef->GetPropertyP(P_Procedure) != DFA_ATTACH)
-			{
-				TargetBounds(ctcox, Layer->GetX() + Layer->Shape.GetX() - Shape.GetX(), Layer->GetX() + Layer->Shape.GetX() + Layer->Shape.Wdt + Shape.GetX(), CNAT_Left, CNAT_Right);
-			}
+			C4Real lbound = itofix(Layer->GetX() + Layer->Shape.GetX() - Shape.GetX()),
+			       rbound = itofix(Layer->GetX() + Layer->Shape.GetX() + Layer->Shape.Wdt - (Shape.GetX() + Shape.Wdt));
+			if (ctcox < lbound) StopAndContact(ctcox, lbound, xdir, CNAT_Left);
+			if (ctcox > rbound) StopAndContact(ctcox, rbound, xdir, CNAT_Right);
 		}
+	}
 	// landscape bounds
-	if (Def->BorderBound & C4D_Border_Sides)
-		TargetBounds(ctcox,0-Shape.GetX(),GBackWdt+Shape.GetX(),CNAT_Left,CNAT_Right);
+	C4Real lbound = itofix(0 - Shape.GetX()),
+	       rbound = itofix(GBackWdt - (Shape.GetX() + Shape.Wdt));
+	if (ctcox < lbound && GetPropertyInt(P_BorderBound) & C4D_Border_Sides)
+		StopAndContact(ctcox, lbound, xdir, CNAT_Left);
+	if (ctcox > rbound && GetPropertyInt(P_BorderBound) & C4D_Border_Sides)
+		StopAndContact(ctcox, rbound, xdir, CNAT_Right);
 }
 
 void C4Object::VerticalBounds(C4Real &ctcoy)
 {
 	// layer bounds
-	if (Layer) if (Layer->Def->BorderBound & C4D_Border_Layer)
+	if (Layer && Layer->GetPropertyInt(P_BorderBound) & C4D_Border_Layer)
+	{
+		C4PropList* pActionDef = GetAction();
+		if (!pActionDef || pActionDef->GetPropertyP(P_Procedure) != DFA_ATTACH)
 		{
-			C4PropList* pActionDef = GetAction();
-			if (!pActionDef || pActionDef->GetPropertyP(P_Procedure) != DFA_ATTACH)
-			{
-				TargetBounds(ctcoy, Layer->GetY() + Layer->Shape.GetY() - Shape.GetY(), Layer->GetY() + Layer->Shape.GetY() + Layer->Shape.Hgt + Shape.GetY(), CNAT_Top, CNAT_Bottom);
-			}
+			C4Real tbound = itofix(Layer->GetY() + Layer->Shape.GetY() - Shape.GetY()),
+			       bbound = itofix(Layer->GetY() + Layer->Shape.GetY() + Layer->Shape.Hgt - (Shape.GetY() + Shape.Hgt));
+			if (ctcoy < tbound) StopAndContact(ctcoy, tbound, ydir, CNAT_Top);
+			if (ctcoy > bbound) StopAndContact(ctcoy, bbound, ydir, CNAT_Bottom);
 		}
+	}
 	// landscape bounds
-	if (Def->BorderBound & C4D_Border_Top)
-		TargetBounds(ctcoy,0-Shape.GetY(),+1000000,CNAT_Top,CNAT_Bottom);
-	if (Def->BorderBound & C4D_Border_Bottom)
-		TargetBounds(ctcoy,-1000000,GBackHgt+Shape.GetY(),CNAT_Top,CNAT_Bottom);
+	C4Real tbound = itofix(0 - Shape.GetY()),
+	       bbound = itofix(GBackHgt - (Shape.GetY() + Shape.Hgt));
+	if (ctcoy < tbound && GetPropertyInt(P_BorderBound) & C4D_Border_Top)
+		StopAndContact(ctcoy, tbound, ydir, CNAT_Top);
+	if (ctcoy > bbound && GetPropertyInt(P_BorderBound) & C4D_Border_Bottom)
+		StopAndContact(ctcoy, bbound, ydir, CNAT_Bottom);
 }
 
 void C4Object::DoMovement()
@@ -441,8 +435,8 @@ void C4Object::DoMovement()
 	{
 		if (!InLiquid) // Enter liquid
 		{
-			if (OCF & OCF_HitSpeed2) if (Mass>3)
-					Splash(GetX(),GetY()+1,std::min(Shape.Wdt*Shape.Hgt/10,20),this);
+			if (OCF & OCF_HitSpeed2)
+				if (Mass>3) Splash();
 			fNoAttach=false;
 			InLiquid=1;
 		}
@@ -464,7 +458,7 @@ void C4Object::DoMovement()
 	// Movement Script Execution
 	if (fAnyContact)
 	{
-		C4AulParSet pars(C4VInt(fixtoi(oldxdir, 100)), C4VInt(fixtoi(oldydir, 100)));
+		C4AulParSet pars(fixtoi(oldxdir, 100), fixtoi(oldydir, 100));
 		if (old_ocf & OCF_HitSpeed1) Call(PSF_Hit, &pars);
 		if (old_ocf & OCF_HitSpeed2) Call(PSF_Hit2, &pars);
 		if (old_ocf & OCF_HitSpeed3) Call(PSF_Hit3, &pars);
@@ -584,7 +578,8 @@ bool C4Object::ExecMovement() // Every Tick1 by Execute
 	if (!Def->Rotateable) fix_r=Fix0;
 
 	// Out of bounds check
-	if ((!Inside<int32_t>(GetX(), -Shape.Wdt / 2, GBackWdt + Shape.Wdt / 2) && !(Def->BorderBound & C4D_Border_Sides)) || ((GetY() > GBackHgt + Shape.Hgt / 2) && !(Def->BorderBound & C4D_Border_Bottom)))
+	if ((!Inside<int32_t>(GetX() + Shape.GetX(), -Shape.Wdt, GBackWdt) && !(GetPropertyInt(P_BorderBound) & C4D_Border_Sides))
+	    || ((GetY() + Shape.GetY() > GBackHgt) && !(GetPropertyInt(P_BorderBound) & C4D_Border_Bottom)))
 	{
 		C4PropList* pActionDef = GetAction();
 		// Never remove attached objects: If they are truly outside landscape, their target will be removed,

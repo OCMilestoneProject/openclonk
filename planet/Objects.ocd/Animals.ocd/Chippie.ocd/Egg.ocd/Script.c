@@ -90,7 +90,7 @@ public func Hit(int x, int y)
 	}
 		
 	SetRDir(0);
-	Sound("SoftHit*");
+	Sound("Hits::SoftHit*");
 	
 	var particles = 
 	{
@@ -150,11 +150,11 @@ private func Hatch()
 	
 	var c = CreateObject(Chippie, 0, 0, GetOwner());
 	c->SetCon(50);
-	c->Sound("ChippieChirp*", false, 25);
+	c->Sound("Animals::Chippie::EggCrack*", false, 100);
 	
 	var particles = 
 	{
-		Prototype = Particles_Material(RGB(50, 200, 50)),
+		Prototype = Particles_Material(RGB(100, 255, 50)),
 		DampingX = 800, DampingY = 800,
 		ForceY = -GetGravity() / 10,
 	};

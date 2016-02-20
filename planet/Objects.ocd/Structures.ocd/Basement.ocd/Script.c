@@ -19,12 +19,16 @@ protected func Construction()
 
 protected func Initialize()
 {
-	var wdt = BoundBy(GetObjWidth(), 8, 120);
+	var wdt = GetObjWidth();
 	if (parent)
-		wdt = BoundBy(parent->GetObjWidth(), 8, 120);
-	SetWidth(wdt);
+	{
+		wdt = parent->~GetBasementWidth();
+		if (wdt == nil)
+			wdt = parent->GetObjWidth();
+	}
+	SetWidth(BoundBy(wdt, 8, 120));
 	// Move objects out of the basement.
-	MoveOutOfBasement();
+	MoveOutOfSolidMask();
 	return _inherited(...);
 }
 
@@ -54,10 +58,13 @@ public func CombineWith(object stick_to)
 	return;
 }
 
-public func  SetParent(object to_parent)
+public func SetParent(object to_parent)
 {
 	parent = to_parent;
-	SetWidth(BoundBy(parent->GetObjWidth(), 8, 120));
+	var wdt = parent->~GetBasementWidth();
+	if (wdt == nil)
+		wdt = parent->GetObjWidth();
+	SetWidth(BoundBy(wdt, 8, 120));
 	// Notify the parent.
 	parent->~SetBasement(this);
 	return;
@@ -65,43 +72,47 @@ public func  SetParent(object to_parent)
 
 public func GetParent() { return parent; }
 
-// Move objects out of the basement.
-private func MoveOutOfBasement()
-{
-	// Find all objects inside the basement which are stuck.
-	var wdt = GetObjWidth();
-	var hgt = GetObjHeight();
-	var lying_around = FindObjects(Find_Or(Find_Category(C4D_Vehicle), Find_Category(C4D_Object), Find_Category(C4D_Living)), Find_InRect(-wdt / 2 - 1, -hgt / 2 - 2, wdt + 2, hgt + 4));
-	// Move up these objects.
-	for (var obj in lying_around)
-	{
-		var x = obj->GetX();
-		var y = obj->GetY();
-		var dif = 0;
-		// Move up object until it is not stuck any more.
-		while (obj->Stuck() || obj->GetContact(-1, CNAT_Bottom))
-		{
-			// Only up to 32 pixels.
-			if (dif > 32)
-			{
-				obj->SetPosition(x, y);
-				break;
-			}
-			dif++;
-			obj->SetPosition(x, y - dif);
-		}
-	}
-	return;
-}
-
 // Is a construction that is built just below the surface.
 public func IsBelowSurfaceConstruction() { return true; }
 
 // Sticking to other structures, at the bottom of that structure.
 public func ConstructionCombineWith() { return "IsStructureWithoutBasement"; }
 public func ConstructionCombineDirection() { return CONSTRUCTION_STICK_Bottom; }
+public func ConstructionCombineOffset(object other)
+{
+	// Some structures like the elevator require the basement to have an offset.
+	return other->~GetBasementOffset();
+}
 
 public func NoConstructionFlip() { return true; }
+
+public func AlternativeConstructionPreview(object previewer, int direction, object combine_with)
+{
+	var wdt = GetSiteWidth(direction, combine_with);
+	previewer->SetObjDrawTransform(1000 * wdt / 40, 0, 0, 0, 1000, 0, previewer.GFX_StructureOverlay);
+	return;
+}
+
+public func GetSiteWidth(int direction, object combine_with)
+{
+	var wdt = GetDefWidth();
+	if (combine_with)
+	{
+		wdt = combine_with->~GetBasementWidth();
+		if (wdt == nil)
+			wdt = combine_with->GetObjWidth();
+	}
+	return BoundBy(wdt, 8, 120);
+}
+
+public func SetConstructionSiteOverlay(object site, int direction, object combine_with)
+{
+	var wdt = GetSiteWidth(direction, combine_with);
+	site->SetGraphics(nil, Basement, 1, GFXOV_MODE_Base);
+	site->SetClrModulation(RGBa(255, 255, 255, 128), 1);
+	site->SetObjDrawTransform(1000 * wdt / 40, 0, 0, 0, 1000, -4000, 1);
+	return true;
+}
 
 // Don't stick to itself, so it should not be a structure.
 public func IsStructure() { return false; }

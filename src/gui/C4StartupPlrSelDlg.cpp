@@ -31,6 +31,7 @@
 #include <C4GraphicsResource.h>
 #include <C4RankSystem.h>
 #include "gui/C4MouseControl.h"
+#include "lib/StdColors.h"
 #include <cctype>
 #include <algorithm>
 
@@ -359,7 +360,7 @@ void C4StartupPlrSelDlg::CrewListItem::OnDeathMessageSet(const StdStrBuf &rsNewM
 	// save
 	RewriteCore();
 	// acoustic feedback
-	C4GUI::GUISound("Connect");
+	C4GUI::GUISound("UI::Confirmed");
 }
 
 void C4StartupPlrSelDlg::CrewListItem::RewriteCore()
@@ -730,6 +731,10 @@ void C4StartupPlrSelDlg::OnItemCheckChange(C4GUI::Element *pCheckBox)
 	switch (eMode)
 	{
 	case PSDM_Player:
+		// Deselect all other players
+		for (ListItem* pEl = static_cast<ListItem*>(pPlrListBox->GetFirst()); pEl != NULL; pEl = pEl->GetNext())
+			if (pCheckBox && pEl != pCheckBox->GetParent())
+				pEl->SetActivated(false);
 		// update Config.General.Participants
 		UpdateActivatedPlayers();
 		break;
@@ -769,7 +774,7 @@ void C4StartupPlrSelDlg::OnActivateBtn(C4GUI::Control *btn)
 	if (!pSel) return;
 	pSel->SetActivated(!pSel->IsActivated());
 	// update stuff
-	OnItemCheckChange(NULL);
+	OnItemCheckChange(pSel->GetCheckBox());
 }
 
 void C4StartupPlrSelDlg::DoBack()
@@ -846,7 +851,7 @@ void C4StartupPlrSelDlg::OnCrewBtn(C4GUI::Control *btn)
 void C4StartupPlrSelDlg::SetPlayerMode()
 {
 	// change view to listing players
-	C4GUI::GUISound("DoorClose");
+	C4GUI::GUISound("UI::Close");
 	StdStrBuf LastPlrFilename;
 	LastPlrFilename.Copy(static_cast<const StdStrBuf &>(CurrPlayer.Grp.GetFullName()));
 	CurrPlayer.Grp.Close();
@@ -875,7 +880,7 @@ void C4StartupPlrSelDlg::SetCrewMode(PlayerListItem *pSel)
 		                         strCrew.getData(), C4GUI::Ico_Player);
 		return;
 	}
-	C4GUI::GUISound("DoorOpen");
+	C4GUI::GUISound("UI::Open");
 	eMode = PSDM_Crew;
 	UpdatePlayerList();
 	UpdateSelection();
@@ -934,7 +939,7 @@ void C4StartupPlrSelDlg::SelectItem(const StdStrBuf &Filename, bool fActivate)
 			{
 				pPlrItem->SetActivated(true);
 				// player activation updates
-				OnItemCheckChange(NULL);
+				OnItemCheckChange(pPlrItem->GetCheckBox());
 			}
 			// max one
 			return;
@@ -1290,7 +1295,7 @@ void C4StartupPlrColorPickerDlg::Picker::MouseInput(C4GUI::CMouse &rMouse, int32
 		if (HandleMouseDown(iX, iY))
 		{
 			rMouse.pDragElement = this;
-			C4GUI::GUISound("Command");
+			C4GUI::GUISound("UI::Select");
 		}
 		else
 		{
@@ -1325,7 +1330,7 @@ C4StartupPlrPropertiesDlg::C4StartupPlrPropertiesDlg(C4StartupPlrSelDlg::PlayerL
 		C4P.PrefColorDw = C4P.GetPrefColorValue(C4P.PrefColor);
 		C4P.OldPrefControlStyle = 1;
 		C4P.OldPrefAutoContextMenu = 1;
-		C4P.OldPrefControl = C4P_Control_Keyboard1;
+		C4P.OldPrefControl = 0;
 	}
 	const int32_t BetweenElementDist = 2;
 	// use black fonts here

@@ -65,7 +65,7 @@ bool C4AbstractApp::GetIndexedDisplayMode(int32_t iIndex, int32_t *piXRes, int32
 
 void C4AbstractApp::RestoreVideoMode() {}
 
-bool C4AbstractApp::SetVideoMode(int, int, unsigned int, unsigned int, unsigned int, bool)
+bool C4AbstractApp::SetVideoMode(int, int, unsigned int, unsigned int, bool)
 {
 	return true;
 }
@@ -102,6 +102,7 @@ C4Window::C4Window() {}
 C4Window::~C4Window() {}
 void C4Window::EnumerateMultiSamples(std::vector<int, std::allocator<int> >&) const  {}
 void C4Window::FlashWindow() {}
+void C4Window::GrabMouse(bool) {}
 bool C4Window::GetSize(C4Rect*) {return 0;}
 C4Window* C4Window::Init(C4Window::WindowKind, C4AbstractApp*, char const*, const C4Rect *) {return this;}
 bool C4Window::ReInit(C4AbstractApp*) {return 0;}

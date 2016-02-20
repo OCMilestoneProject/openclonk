@@ -5,7 +5,6 @@
 	Move objects remotely.
 --*/
 
-local reach;
 local radius; //actual effect radius to grab objects
 local radiusparticle; //radius of particles around object
 
@@ -20,10 +19,12 @@ local target_object;
 
 protected func Initialize()
 {
-	reach = 150;
 	radius = 60;
 	radiusparticle = radius / 4;
 }
+
+// The reach of the tele glove, can be modified by overloading.
+public func GetTeleGloveReach() { return 150; }
 
 public func GetCarryMode() { return CARRY_HandBack; }
 public func GetCarrySpecial(clonk) { return carry_bone; }
@@ -46,7 +47,7 @@ protected func ControlUseStart(object clonk, ix, iy)
 {
 	StartUsage(clonk);
 	UpdateGloveAngle(clonk, ix, iy);
-	return 1;
+	return true;
 }
 
 private func StartUsage(object clonk)
@@ -71,9 +72,9 @@ private func StartUsage(object clonk)
 
 
 	//Animations and effects for TeleGlove
-	Sound("Electrical",nil,nil,nil,+1);
-	PlayAnimation("Opening", -5, Anim_Linear(0,0,GetAnimationLength("Opening"), 10, ANIM_Hold), Anim_Const(1000));
-	anim_spin = PlayAnimation("Spin",5, Anim_Linear(0,0,GetAnimationLength("Spin"), 40, ANIM_Loop), Anim_Const(1000));
+	Sound("Objects::Electrical",nil,nil,nil,+1);
+	PlayAnimation("Opening", -5, Anim_Linear(0,0,GetAnimationLength("Opening"), 10, ANIM_Hold));
+	anim_spin = PlayAnimation("Spin",5, Anim_Linear(0,0,GetAnimationLength("Spin"), 40, ANIM_Loop));
 	
 	// Light effects
 	SetLightRange(50, 10);
@@ -107,9 +108,6 @@ private func UpdateGloveAngle(object clonk, int x, int y)
 
 	iAngle=angle;
 
-//	var weight = 0;
-//	if( Abs(iAngle) > 90) weight = 1000*( Abs(iAngle)-60 )/90;
-
 	clonk->SetAnimationPosition(aim_anim,  Anim_Const(Abs(iAngle) * 11111/1000));
 	
 	// Light position at remote location
@@ -137,7 +135,7 @@ public func ControlUseHolding(object clonk, ix, iy)
 	if (Random(2)) particles = Particles_ElectroSpark1();
 	else particles = Particles_ElectroSpark2();
 	
-	if(distp < reach)
+	if (distp < GetTeleGloveReach())
 	{
 		//Particles moving towards object
 		CreateParticle("ElectroSpark", ix + xs, iy + ys, PV_Random(-xs/2, -xs/4), PV_Random(-ys/2, -ys/4), PV_Random(5, 10), particles, 5);
@@ -157,7 +155,8 @@ public func ControlUseHolding(object clonk, ix, iy)
 	if(target_object)
 	{
 		if(Distance(target_object->GetX(), target_object->GetY(), clonk->GetX() + ix, clonk->GetY() + iy) > radius ||
-		Distance(target_object->GetX(), target_object->GetY(), clonk->GetX(), clonk->GetY()) > reach)
+		Distance(target_object->GetX(), target_object->GetY(), clonk->GetX(), clonk->GetY()) > GetTeleGloveReach() ||
+		target_object->~RejectTeleGloveControl(this))
 		{
 			LostTargetObject(target);
 			target_object = nil;
@@ -170,7 +169,8 @@ public func ControlUseHolding(object clonk, ix, iy)
 					Find_NoContainer(),
 					Find_Category(C4D_Object),
 					Find_And(Find_Distance(radius, ix, iy),
-					Find_Distance(reach - 15)),
+					Find_Distance(GetTeleGloveReach() - 15)),
+					Find_Not(Find_Func("RejectTeleGloveControl", this)),
 					Sort_Distance(ix,iy));
 
 		if(target)
@@ -229,12 +229,12 @@ global func FxTeleGloveReleasedStart(object target, effect)
 	return;
 }
 
-global func FxTeleGloveWeightStart(object target, int num)
+global func FxTeleGloveWeightStart(object target, proplist effect)
 {
 	target->SetMass(target->GetMass()/2);
 }
 
-global func FxTeleGloveWeightStop(object target, int num, int reason, bool temp)
+global func FxTeleGloveWeightStop(object target, proplist effect, int reason, bool temp)
 {
 	target->SetMass(target->GetDefCoreVal("Mass", "DefCore"));
 }
@@ -258,8 +258,8 @@ protected func ControlUseCancel(object clonk, int ix, int iy)
 protected func CancelUse(object clonk)
 {
 	EndUsage(clonk);
-	Sound("Electrical",nil,nil,nil,-1);
-	if(aiming = 1) PlayAnimation("Closing", -5, Anim_Linear(0,0,GetAnimationLength("Closing"), 10, ANIM_Hold), Anim_Const(1000));
+	Sound("Objects::Electrical",nil,nil,nil,-1);
+	if(aiming = 1) PlayAnimation("Closing", -5, Anim_Linear(0,0,GetAnimationLength("Closing"), 10, ANIM_Hold));
 	StopAnimation(anim_spin);
 	aiming = 0;
 	if(target_object) LostTargetObject(target_object);
@@ -269,7 +269,7 @@ protected func CancelUse(object clonk)
 
 func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 }
 
 func IsInventorProduct() { return true; }
@@ -279,7 +279,5 @@ func Definition(def) {
 }
 
 local Name = "$Name$";
-local UsageHelp = "$UsageHelp$";
 local Description = "$Description$";
 local Collectible = 1;
-local Rebuy = true;

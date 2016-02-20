@@ -34,6 +34,8 @@
 
 #include <StdPNG.h>
 
+static const int MAX_BACKGROUND_FPS = 5;
+
 C4GraphicsSystem::C4GraphicsSystem()
 {
 	Default();
@@ -46,9 +48,6 @@ C4GraphicsSystem::~C4GraphicsSystem()
 
 bool C4GraphicsSystem::Init()
 {
-	// Init video module
-	if (Config.Graphics.VideoModule)
-		Video.Init(FullScreen.pSurface);
 	// Success
 	return true;
 }
@@ -56,15 +55,11 @@ bool C4GraphicsSystem::Init()
 void C4GraphicsSystem::Clear()
 {
 	// Clear message board
-	MessageBoard.Clear();
-	// Clear upper board
-	UpperBoard.Clear();
+	MessageBoard.reset();
 	// clear loader
 	if (pLoaderScreen) { delete pLoaderScreen; pLoaderScreen=NULL; }
 	// Close viewports
 	::Viewports.Clear();
-	// Clear video system
-	Video.Clear();
 	// No debug stuff
 	DeactivateDebugOutput();
 }
@@ -75,9 +70,10 @@ bool C4GraphicsSystem::StartDrawing()
 	if (!pDraw) return false;
 	if (!pDraw->Active) return false;
 
-	// only if application is active or windowed (if config allows)
-	if (!Application.Active && (!Application.isEditor || !Config.Graphics.RenderInactiveEM)) return false;
-
+	// if the window is not focused, draw no more than MAX_BACKGROUND_FPS frames per second
+	if (!Application.Active && (C4TimeMilliseconds::Now() - lastFrame) < 1000 / MAX_BACKGROUND_FPS)
+		return false;
+	
 	// drawing OK
 	return true;
 }
@@ -85,6 +81,7 @@ bool C4GraphicsSystem::StartDrawing()
 void C4GraphicsSystem::FinishDrawing()
 {
 	if (!Application.isEditor) FullScreen.pSurface->PageFlip();
+	lastFrame = C4TimeMilliseconds::Now();
 }
 
 void C4GraphicsSystem::Execute()
@@ -101,7 +98,7 @@ void C4GraphicsSystem::Execute()
 			{
 				// Message board
 				if (iRedrawBackground) ClearFullscreenBackground();
-				MessageBoard.Execute();
+				MessageBoard->Execute();
 				if (!C4GUI::IsActive())
 					{ FinishDrawing(); return; }
 				fBGDrawn = true;
@@ -135,7 +132,7 @@ void C4GraphicsSystem::Execute()
 		UpperBoard.Execute();
 
 		// Message board
-		MessageBoard.Execute();
+		MessageBoard->Execute();
 
 		// Help & Messages
 		DrawHelp();
@@ -149,18 +146,13 @@ void C4GraphicsSystem::Execute()
 		::pGUI->Render(false);
 	}
 
-	// Video record & status (fullsrceen)
-	if (!Application.isEditor)
-		Video.Execute();
-
 	// done
 	FinishDrawing();
 }
 
 void C4GraphicsSystem::Default()
 {
-	UpperBoard.Default();
-	MessageBoard.Default();
+	MessageBoard.reset(new C4MessageBoard);
 	InvalidateBg();
 	ShowVertices=false;
 	ShowAction=false;
@@ -174,7 +166,6 @@ void C4GraphicsSystem::Default()
 	ShowHelp=false;
 	FlashMessageText[0]=0;
 	FlashMessageTime=0; FlashMessageX=FlashMessageY=0;
-	Video.Default();
 	pLoaderScreen=NULL;
 }
 
@@ -267,7 +258,7 @@ bool C4GraphicsSystem::DoSaveScreenshot(bool fSaveAll, const char *szFilename, f
 				// update facet
 				bkFct.Set(FullScreen.pSurface, 0, 0, ceil(float(bkWdt2)/zoom), ceil(float(bkHgt2)/zoom), iX/zoom, iY/zoom, zoom, 0, 0);
 				// draw there
-				pVP->Draw(bkFct, false);
+				pVP->Draw(bkFct, true, false);
 				// render
 				FullScreen.pSurface->PageFlip(); FullScreen.pSurface->PageFlip();
 				// get output (locking primary!)
@@ -275,9 +266,12 @@ bool C4GraphicsSystem::DoSaveScreenshot(bool fSaveAll, const char *szFilename, f
 				{
 					// transfer each pixel - slooow...
 					for (int32_t iY2 = 0; iY2 < bkHgt2; ++iY2)
+#ifndef USE_CONSOLE
 						glReadPixels(0, FullScreen.pSurface->Hgt - iY2 - 1, bkWdt2, 1, GL_BGR, GL_UNSIGNED_BYTE, reinterpret_cast<BYTE *>(png->GetRow(iY + iY2)) + iX * 3);
-						/*for (int32_t iX2=0; iX2<bkWdt2; ++iX2)
-							png.SetPix(iX+iX2, iY+iY2, FullScreen.pSurface->GetPixDw(iX2, iY2, false));*/
+#else
+						for (int32_t iX2=0; iX2<bkWdt2; ++iX2)
+							png->SetPix(iX+iX2, iY+iY2, FullScreen.pSurface->GetPixDw(iX2, iY2, false));
+#endif
 					// done; unlock
 					FullScreen.pSurface->Unlock();
 					// This can take a long time and we would like to pump messages
@@ -469,4 +463,3 @@ bool C4GraphicsSystem::ToggleShowHelp()
 	return true;
 }
 
-C4GraphicsSystem GraphicsSystem;

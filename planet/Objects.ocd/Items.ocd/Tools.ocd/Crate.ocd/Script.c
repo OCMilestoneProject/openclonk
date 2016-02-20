@@ -22,21 +22,18 @@ public func GetCarryTransform(clonk)
 
 protected func Construction()
 {
-	crateanim = PlayAnimation("Open", 1, Anim_Linear(0, 0, 1, 20, ANIM_Hold), Anim_Const(1000));
+	PlayAnimation("Open", 1, Anim_Linear(0, 0, 1, 20, ANIM_Hold));
 	SetProperty("MeshTransformation",Trans_Rotate(RandomX(20,80),0,1,0));
 	return _inherited(...);
 }
 
 /*-- Contents --*/
 
-private func MaxContentsCount()
-{
-	return 5;
-}
+local MaxContentsCount = 5;
 
 protected func RejectCollect(id def, object obj)
 {
-	if (ContentsCount() >= MaxContentsCount())
+	if (ContentsCount() >= MaxContentsCount)
 		return true;
 	if (obj->~IsCarryHeavy())
 		return true;
@@ -45,21 +42,19 @@ protected func RejectCollect(id def, object obj)
 
 private func Open()
 {
-	StopAnimation(crateanim);
-	crateanim = PlayAnimation("Open", 5, Anim_Linear(0, 0, GetAnimationLength("Open"), 22, ANIM_Hold), Anim_Const(1000));
-	Sound("ChestOpen");
+	PlayAnimation("Open", 5, Anim_Linear(0, 0, GetAnimationLength("Open"), 22, ANIM_Hold));
+	Sound("Structures::Chest::Open");
 }
 
 private func Close()
 {
-	StopAnimation(crateanim);
-	crateanim = PlayAnimation("Close", 5, Anim_Linear(0, 0, GetAnimationLength("Close"), 15, ANIM_Hold), Anim_Const(1000));
-	Sound("ChestClose");
+	crateanim = PlayAnimation("Close", 5, Anim_Linear(0, 0, GetAnimationLength("Close"), 15, ANIM_Hold));
+	Sound("Structures::Chest::Close");
 }
 
 protected func Definition(def)
 {
-		SetProperty("PictureTransformation", Trans_Mul(Trans_Translate(0,-3000,-5000), Trans_Rotate(-30,1,0,0), Trans_Rotate(30,0,1,0), Trans_Translate(1000,1,0)),def);
+	def.PictureTransformation = Trans_Mul(Trans_Translate(-500, -1500, -3000), Trans_Rotate(-30,1,0,0), Trans_Rotate(30,0,1,0));
 }
 
 public func IsTool() { return true; }
@@ -68,7 +63,7 @@ public func IsContainer() { return true; }
 
 func Hit()
 {
-	Sound("DullWoodHit?");
+	Sound("Hits::Materials::Wood::DullWoodHit?");
 }
 
 local Name = "$Name$";

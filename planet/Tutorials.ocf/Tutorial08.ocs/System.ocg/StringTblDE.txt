@@ -1,0 +1,26 @@
+# Dialogue: Chief
+DlgChiefHello=Hallo, ich bin der Vorarbeiter dieser Minenoperation. Es gab eine schlimme Katastrophe, der Damm zum Meer ist gebrochen und die Mine geflutet.
+DlgChiefReply=Oh nein, wie schrecklich. Ich bin gekommen, um Metall zu kaufen.
+DlgChiefNoMetal=Nun, wir haben gerade kein Metall da. Unser Transportweg aus der Mine ist geflutet. Ich habe noch Leute, die da unten festsitzen.
+DlgChiefHelp=Was ist, wenn ich euch helfe, das Metall aus der Mine zu bringen?
+DlgChiefAppreciation=Das wäre wundervoll. Du kannst diese Pumpe hier benutzen. Leider ist sie nicht stark genug, um alles Wasser hier wegzupumpen, aber vielleicht ist sie trotzdem nützlich.
+DlgChiefReward=Kriege ich eine Belohnung?
+DlgChiefMetal=Ja, natürlich. Du darfst alles Metall behalten, wenn du nach hier oben bringst. Wenn du mir sagst, wie du das geschafft hast!
+DlgChiefLorry=Hier ist die Lore mit dem Metall!
+DlgChiefKeepLorry=Klasse gemacht. Wir können jetzt die gleiche Methode anwenden, um die Mine weiter auszubeuten. Du kannst alles Metall behalten.
+DlgChiefReally=Du kannst wirklich die Lore und das Metall behalten.
+
+# Dialogue: Miner
+DlgMinerGreeting=Hallo, ich bin %s. Bist du einer der Minenleute hier?
+DlgMinerYes=Ja. Mein Name ist %s. Ich bin jetzt seit über einem Tag hier unten eingesperrt. Hast du vielleicht etwas zu essen?
+DlgMinerNoFood=Nein, tut mir leid. Wenn ich etwas finde, komme ich wieder.
+DlgMinerYesFood=Ja, ich habe hier etwas %s. Kannst du haben.
+DlgMinerEatFood=Danke für das Essen! Wie bist du eigentlich hier herunter gekommen? Gibt es einen Weg nach oben?
+DlgMinerWayOut=Ja, man kann einfach nach oben schwimmen, entlang des Fahrstuhlschachtes.
+
+# Dialogue: Explosive Expert
+DlgExpertHello=Hallo, ich suche nach einer Möglichkeit, um Loren an die Oberfläche zu bringen. Kannst du mir helfen?
+DlgExpertNoHelp=Dazu fällt mir gar nichts ein. Ich bin hier für Sprengstoffe zuständig.
+DlgExpertWhatExplosives=Oh, Sprengstoffe! Hast du welche, die ich verwenden kann?
+DlgExpertUseExplosives=Dynamit ist da. Nimm das, was du im Chemielabor oder in der Werkstatt findest.
+DlgExpertThanks=Vielen Dank.

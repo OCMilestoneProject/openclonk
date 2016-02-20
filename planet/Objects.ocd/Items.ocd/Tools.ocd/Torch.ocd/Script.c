@@ -22,7 +22,7 @@ protected func Initialize()
 
 private func Hit()
 {
-	Sound("WoodHit?");
+	Sound("Hits::Materials::Wood::WoodHit?");
 	return;
 }
 
@@ -31,6 +31,12 @@ public func GetCarryMode() { return CARRY_HandBack; }
 public func IsWorkshopProduct() { return true; }
 public func IsTool() { return true; }
 public func IsToolProduct() { return true; }
+
+// Returns whether the torch currently is a source of light.
+public func IsLightSource()
+{
+	return !!GetEffect("IntBurning", this);
+}
 
 
 /*-- Usage --*/
@@ -216,5 +222,4 @@ protected func Definition(def)
 local Collectible = 1;
 local Name = "$Name$";
 local Description = "$Description$";
-local Rebuy = true;
 

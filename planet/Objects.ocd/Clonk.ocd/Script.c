@@ -30,19 +30,19 @@
 protected func Construction()
 {
 	_inherited(...);
-
-	SetAction("Walk");
-	SetDir(Random(2));
-	// Broadcast for rules
-	GameCallEx("OnClonkCreation", this);
+	
+	SetSkin(0);
 
 	AddEffect("IntTurn", this, 1, 1, this);
 	AddEffect("IntEyes", this, 1, 35+Random(4), this);
 
 	AttachBackpack();
 	iHandMesh = [0,0];
-
-	SetSkin(0);
+	
+	SetAction("Walk");
+	SetDir(Random(2));
+	// Broadcast for rules
+	GameCallEx("OnClonkCreation", this);
 }
 
 /* When adding to the crew of a player */
@@ -107,30 +107,25 @@ public func Redefine(idTo)
 protected func CatchBlow()
 {
 	if (GetAction() == "Dead") return;
-	if (!Random(5)) Hurt();
-}
-	
-protected func Hurt()
-{
-	if(gender == 0)
-		Sound("Hurt?");
-	else
-		Sound("FHurt?");
+	if (!Random(5)) PlaySoundHurt();
 }
 	
 protected func Grab(object pTarget, bool fGrab)
 {
-	Sound("Grab");
+	if (fGrab)
+		Sound("Clonk::Action::Grab");
+	else
+		Sound("Clonk::Action::UnGrab");
 }
 
 protected func Get()
 {
-	Sound("Grab");
+	Sound("Clonk::Action::Grab");
 }
 
 protected func Put()
 {
-	Sound("Grab");
+	Sound("Clonk::Action::Grab");
 }
 
 protected func Death(int killed_by)
@@ -148,12 +143,16 @@ protected func Death(int killed_by)
 	// Some effects on dying.
 	if (!this.silent_death)
 	{
-		if(gender == 0)
-			Sound("Die");
-		else
-			Sound("FDie");
-			
+		PlaySkinSound("Die*");
 		DeathAnnounce();
+		
+		// When killed by a team member, the other Clonk randomly plays a sound.
+		if (!Random(5) && killed_by != NO_OWNER && killed_by != GetOwner() && !Hostile(killed_by, GetOwner()))
+		{
+			var other_cursor = GetCursor(killed_by);
+			if (other_cursor)
+				other_cursor->~PlaySoundTaunt();
+		}
 	}
 	CloseEyes(1);
 	
@@ -176,6 +175,12 @@ protected func DeepBreath()
 	Sound("Breath");
 }
 
+public func Incineration()
+{
+	PlaySoundShock();
+	return _inherited(...);
+}
+
 protected func CheckStuck()
 {
 	// Prevents getting stuck on middle vertex
@@ -190,7 +195,7 @@ public func Eat(object food)
 	{
 		Heal(food->NutritionalValue());
 		food->RemoveObject();
-		Sound("Munch?");
+		Sound("Clonk::Action::Munch?");
 		SetAction("Eat");
 	}
 }
@@ -256,6 +261,20 @@ public func IsBridging(){return WildcardMatch(GetAction(), "Bridge*");}
 
 // Clonks act as containers for the interaction menu as long as they are alive.
 public func IsContainer() { return GetAlive(); }
+
+// You can not interact with dead Clonks.
+// This would be the place to show a death message etc.
+public func RejectInteractionMenu(object to)
+{
+	if (!GetAlive())
+		return Format("$MsgDeadClonk$", GetName());
+	return _inherited(to, ...);
+}
+
+public func GetSurroundingEntryMessage(object for_clonk)
+{
+	if (!GetAlive()) return Format("{{Clonk_Grave}} %s", Clonk_Grave->GetInscriptionForClonk(this));
+}
 
 /* Carry items on the clonk */
 
@@ -353,7 +372,7 @@ func DoUpdateAttach(bool sec)
 		if(HasHandAction(sec, 1))
 		{
 			iHandMesh[sec] = AttachMesh(obj, pos_hand, bone, trans);
-			PlayAnimation(closehand, CLONK_ANIM_SLOT_Hands, Anim_Const(GetAnimationLength(closehand)), Anim_Const(1000));
+			PlayAnimation(closehand, CLONK_ANIM_SLOT_Hands, Anim_Const(GetAnimationLength(closehand)));
 		}
 	}
 	else if(iAttachMode == CARRY_HandBack)
@@ -361,7 +380,7 @@ func DoUpdateAttach(bool sec)
 		if(HasHandAction(sec, 1))
 		{
 			iHandMesh[sec] = AttachMesh(obj, pos_hand, bone, trans);
-			PlayAnimation(closehand, CLONK_ANIM_SLOT_Hands, Anim_Const(GetAnimationLength(closehand)), Anim_Const(1000));
+			PlayAnimation(closehand, CLONK_ANIM_SLOT_Hands, Anim_Const(GetAnimationLength(closehand)));
 		}
 		else
 			iHandMesh[sec] = AttachMesh(obj, pos_back, bone2, trans);
@@ -369,7 +388,7 @@ func DoUpdateAttach(bool sec)
 	else if(iAttachMode == CARRY_HandAlways)
 	{
 		iHandMesh[sec] = AttachMesh(obj, pos_hand, bone, trans);
-		PlayAnimation(closehand, CLONK_ANIM_SLOT_Hands, Anim_Const(GetAnimationLength(closehand)), Anim_Const(1000));
+		PlayAnimation(closehand, CLONK_ANIM_SLOT_Hands, Anim_Const(GetAnimationLength(closehand)));
 	}
 	else if(iAttachMode == CARRY_Back)
 	{
@@ -381,7 +400,7 @@ func DoUpdateAttach(bool sec)
 		if(HasHandAction(sec, 1) && !sec && !special_other)
 		{
 			iHandMesh[sec] = AttachMesh(obj, "pos_tool1", bone, trans);
-			PlayAnimation("CarryArms", CLONK_ANIM_SLOT_Hands, Anim_Const(obj->~GetCarryPhase(this)), Anim_Const(1000));
+			PlayAnimation("CarryArms", CLONK_ANIM_SLOT_Hands, Anim_Const(obj->~GetCarryPhase(this)));
 			fBothHanded = 1;
 		}
 	}
@@ -389,7 +408,7 @@ func DoUpdateAttach(bool sec)
 	{
 		if(HasHandAction(sec, 1) && !sec)
 		{
-			PlayAnimation("CarrySpear", CLONK_ANIM_SLOT_Hands, Anim_Const(0), Anim_Const(1000));
+			PlayAnimation("CarrySpear", CLONK_ANIM_SLOT_Hands, Anim_Const(0));
 		}
 		else
 			iHandMesh[sec] = AttachMesh(obj, pos_back, bone2, trans);
@@ -436,27 +455,35 @@ static const CARRY_Spear        = 6;
 static const CARRY_Musket       = 7;
 static const CARRY_Grappler     = 8;
 
-func HasHandAction(sec, just_wear)
+func HasHandAction(sec, just_wear, bool force_landscape_letgo)
 {
+	// Check if the clonk is currently able to use hands
+	// sec: Needs both hands (e.g. CarryHeavy?)
+	// just_wear: ???
+	// force_landscape_letgo: Also allow from actions where hands are currently grabbing the landscape (scale, hangle)
 	if(sec && fBothHanded)
 		return false;
 	if(just_wear)
 	{
-		if( HasActionProcedure() && !fHandAction ) // For wear purpose fHandAction==-1 also blocks
+		if( HasActionProcedure(force_landscape_letgo) && !fHandAction ) // For wear purpose fHandAction==-1 also blocks
 			return true;
 	}
 	else
 	{
-		if( HasActionProcedure() && (!fHandAction || fHandAction == -1) )
+		if( HasActionProcedure(force_landscape_letgo) && (!fHandAction || fHandAction == -1) )
 			return true;
 	}
 	return false;
 }
 
-func HasActionProcedure()
+func HasActionProcedure(bool force_landscape_letgo)
 {
+	// Check if the clonk is currently in an action where he could use his hands
+	// if force_landscape_letgo is true, also allow during scale/hangle assuming the clonk will let go
 	var action = GetAction();
 	if (action == "Walk" || action == "Jump" || action == "WallJump" || action == "Kneel" || action == "Ride" || action == "BridgeStand")
+		return true;
+	if (force_landscape_letgo) if (action == "Scale" || action == "Hangle")
 		return true;
 	return false;
 }
@@ -491,8 +518,12 @@ public func OnInteractionMenuOpen(object menu)
 {
 	_inherited(menu, ...);
 	
-	var surrounding = CreateObject(Helper_Surrounding);
-	surrounding->InitFor(this, menu);
+	// Allow picking up stuff from the surrounding only if not in a container itself.
+	if (!Contained())
+	{
+		var surrounding = CreateObject(Helper_Surrounding);
+		surrounding->InitFor(this, menu);
+	}
 }
 
 /* Mesh transformations */
@@ -630,7 +661,12 @@ func SetSkin(int new_skin)
 
 	RemoveBackpack(); //add a backpack
 	AttachBackpack();
-	SetAction("Jump"); //refreshes animation
+	//refreshes animation (whatever that means?)
+	// Go back to original action afterwards and hope
+	// that noone calls SetSkin during more compex activities
+	var prev_action = GetAction();
+	SetAction("Jump");
+	SetAction(prev_action);
 
 	return skin;
 }
@@ -639,6 +675,61 @@ func GetSkinCount() { return 4; }
 func GetSkin() { return skin; }
 func GetSkinName() { return skin_name; }
 
+
+// Returns the skin name as used to select the right sound subfolder.
+public func GetSoundSkinName()
+{
+	if (skin_name == nil) return "Adventurer";
+	return skin_name;
+}
+
+public func PlaySkinSound(string sound, ...)
+{
+	Sound(Format("Clonk::Skin::%s::%s", GetSoundSkinName(), sound), ...);
+}
+
+/*
+Helper functions to play some sounds. This are encapsulated here in case sound names change.
+*/
+public func PlaySoundConfirm(...)
+{
+	if (GetSoundSkinName() != "Farmer")
+		PlaySkinSound("Confirm*", ...);
+}
+public func PlaySoundDecline(...)
+{
+	if (GetSoundSkinName() != "Farmer")
+		PlaySkinSound("Decline*", ...);
+}
+// Doubtful sound, e.g. when trying a clearly impossible action.
+public func PlaySoundDoubt(...)
+{
+	if (GetSoundSkinName() != "Farmer")
+		PlaySkinSound("Doubt*", ...);
+}
+
+public func PlaySoundHurt(...) { PlaySkinSound("Hurt*", ...); }
+// Sound that is supposed to be funny in situations where the Clonk maybe did something "evil" like killing a teammate.
+public func PlaySoundTaunt(...)
+{
+	if (GetSoundSkinName() == "Alchemist")
+		PlaySkinSound("EvilConfirm*", ...);
+	else if (GetSoundSkinName() == "Steampunk")
+		PlaySkinSound("Laughter*", ...);
+}
+// Surprised sounds, e.g. when catching fire.
+public func PlaySoundShock(...)
+{
+	if (GetSoundSkinName() == "Steampunk" || GetSoundSkinName() == "Adventurer")
+		PlaySkinSound("Shock*", ...);
+}
+public func PlaySoundScream() { PlaySkinSound("Scream*"); }
+// General idle sounds, played when also playing an idle animation.
+public func PlaySoundIdle(...)
+{
+	if (GetSoundSkinName() == "Steampunk")
+		PlaySkinSound("Singing*", ...);
+}
 //Portrait definition of this Clonk for messages
 func GetPortrait()
 {
@@ -649,6 +740,17 @@ func SetPortrait(proplist custom_portrait)
 {
 	this.portrait = custom_portrait;
 	return true;
+}
+
+// Callback from the engine when a command failed.
+public func CommandFailure(string command, object target)
+{
+	// Don't play a sound when an exit command fails (this is a hotfix, because exiting fails all the time).
+	if (command == "Exit")
+		return; 
+	// Otherwise play a sound that the clonk is doubting this command.
+	PlaySoundDoubt();
+	return;
 }
 
 /* Magic */
@@ -930,6 +1032,7 @@ Swim = {
 //	SwimOffset = -5,
 	StartCall = "StartSwim",
 	AbortCall = "StopSwim",
+	Sound = "Clonk::Movement::DivingLoop*",
 },
 Hangle = {
 	Prototype = Action,
@@ -1105,9 +1208,7 @@ local JumpSpeed = 400;
 local ThrowSpeed = 294;
 local NoBurnDecay = 1;
 local ContactIncinerate = 10;
-
-// Clonks are always shown in the interaction menu.
-public func HasInteractionMenu() { return true; }
+local BorderBound = C4D_Border_Sides;
 
 func Definition(def) {
 	// Set perspective

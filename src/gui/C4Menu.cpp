@@ -29,6 +29,7 @@
 #include <C4Game.h>
 #include <C4PlayerList.h>
 #include <C4GameControl.h>
+#include "lib/StdColors.h"
 
 const int32_t     C4MN_DefInfoWdt     = 270, // default width of info windows
                   C4MN_DlgWdt         = 270, // default width of dialog windows
@@ -955,38 +956,6 @@ void C4Menu::AdjustSelection()
 		SetSelection(-1, Selection >= 0, false);
 	else
 		SetSelection(iSel, iSel != Selection, true);
-}
-
-bool C4Menu::ConvertCom(int32_t &rCom, int32_t &rData, bool fAsyncConversion)
-{
-	// This function converts normal Coms to menu Coms before they are send to the queue
-
-	// Menu not active
-	if (!IsActive()) return false;
-
-	// Convert plain com control to menu com
-	switch (rCom)
-	{
-		// Convert recognized menu coms
-	case COM_Throw:    rCom = COM_MenuEnter;    break;
-	case COM_Dig:      rCom = COM_MenuClose;    break;
-	case COM_Special2: rCom = COM_MenuEnterAll; break;
-	case COM_Up:       rCom = COM_MenuUp;       break;
-	case COM_Left:     rCom = COM_MenuLeft;     break;
-	case COM_Down:     rCom = COM_MenuDown;     break;
-	case COM_Right:    rCom = COM_MenuRight;    break;
-		// Not a menu com: do nothing
-	default: return true;
-	}
-
-	// If text is still progressing, any menu com will complete it first
-	// Note: conversion to COM_MenuShowText is not synchronized because text lengths may vary
-	// between clients. The above switch is used to determine whether the com was a menu com
-	if (fTextProgressing && fAsyncConversion)
-		rCom = COM_MenuShowText;
-
-	// Done
-	return true;
 }
 
 bool C4Menu::SetLocation(int32_t iX, int32_t iY)

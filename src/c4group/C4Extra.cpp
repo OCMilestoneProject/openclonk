@@ -23,17 +23,12 @@
 #include <C4Game.h>
 #include <C4Log.h>
 
-void C4Extra::Default()
+C4Extra::C4Extra()
 {
-	// zero fields
 }
 
-void C4Extra::Clear()
+C4Extra::~C4Extra()
 {
-	// free class members
-	for(unsigned int i = 0; i < ExtraGroups.size(); ++i)
-		delete ExtraGroups[i];
-	ExtraGroups.clear();
 }
 
 bool C4Extra::InitGroup()
@@ -43,7 +38,7 @@ bool C4Extra::InitGroup()
 	{
 		std::unique_ptr<C4Group> pGroup(new C4Group);
 		if(pGroup->Open( ((*iter).strBuf + DirSep + C4CFN_Extra).getData()))
-			ExtraGroups.push_back(pGroup.release());
+			ExtraGroups.emplace_back(std::move(pGroup));
 	}
 
 	// done, success

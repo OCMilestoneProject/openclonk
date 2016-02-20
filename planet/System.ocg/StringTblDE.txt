@@ -9,6 +9,9 @@ CON_Roll_Desc=Eine Vorwärtsrolle machen.
 CON_Jump=Springen
 CON_Jump_Desc=Im Laufen abspringen, aus dem Wasser springen oder sich von einer Wand abstoßen.
 
+CON_FallThrough=Herabsteigen
+CON_FallThrough_Desc=Nach unten durch eine durchlässige Platform fallen lassen.
+
 CON_AimAxisLeft=Zielen - Links (Analog Stick)
 CON_AimAxisRight=Zielen - Rechts (Analog Stick)
 CON_AimAxisUp=Zielen - Hoch (Analog Stick)
@@ -70,6 +73,9 @@ CON_ZoomIn_Desc=In die Spielwelt hineinzoomen um Details sichtbar zu machen.
 CON_ZoomOut=Rauszoomen
 CON_ZoomOut_Desc=Aus der Spielwelt herauszoomen um eine Übersicht zu bekommen.
 
+CON_Interact=Interagieren
+CON_Interact_Desc=Interagieren mit Fahrzeugen, Gebäuden und anderen Dingen die bei dem Clonk stehen: Gebäude betreten und verlassen, Fahrzeuge anfassen und in Gebäude schieben, Werkzeuge und Waffen in Werkstätten herstellen und vieles mehr.
+
 # -- Assignment specific strings
 
 KEY_MouseUse=Benutzen
@@ -94,9 +100,6 @@ KEY_Down=Runter
 KEY_Down_Desc=Nach unten klettern, schwimmen oder sich beim Hangeln fallen lassen. Im Stehen wird hiermit ein herumliegender Gegenstand aufgesammelt.
 
 KEY_AimAxis_Desc=Mit dem Analog Stick zum Werfen oder Benutzen eines Gegenständes zielen. Kann auch statt den Richtungstasten zum Steuern des Clonks verwendet werden.
-
-KEY_Interact=Interagieren
-KEY_Interact_Desc=Interagieren mit Fahrzeugen, Gebäuden und anderen Dingen die bei dem Clonk stehen: Gebäude betreten und verlassen, Fahrzeuge anfassen und in Gebäude schieben, Werkzeuge und Waffen in Werkstätten herstellen und vieles mehr.
 
 KEY_Hotkey_Desc=Hotkeys:|Nr + l/r Maustaste - Den jeweiligen Gegenstand in die eine/andere Hand nehmen|Nr + Shift - Den jeweiligen Gegenstand ablegen|Nr + Interagieren - Mit dem jeweiligen Ding interagieren|Nr + Strg - Den jeweiligen Clonk aus der Mannschaftsleiste auswählen
 

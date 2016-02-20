@@ -15,6 +15,7 @@
  */
 
 #include "C4Include.h"
+#include <C4DrawGL.h>
 #include <StdMesh.h>
 #include <algorithm>
 
@@ -545,14 +546,14 @@ std::vector<int> StdMeshSkeleton::GetMatchingBones(const StdMeshSkeleton& child_
 }
 
 StdSubMesh::StdSubMesh() :
-	Material(NULL), buffer_offset(0)
+	Material(NULL), vertex_buffer_offset(0), index_buffer_offset(0)
 {
 }
 
 StdMesh::StdMesh() :
 	Skeleton(new StdMeshSkeleton)
 #ifndef USE_CONSOLE
-	, vbo(0)
+	, vbo(0), ibo(0), vaoid(0)
 #endif
 {
 	BoundingBox.x1 = BoundingBox.y1 = BoundingBox.z1 = 0.0f;
@@ -563,8 +564,12 @@ StdMesh::StdMesh() :
 StdMesh::~StdMesh()
 {
 #ifndef USE_CONSOLE
+	if (ibo)
+		glDeleteBuffers(1, &ibo);
 	if (vbo)
 		glDeleteBuffers(1, &vbo);
+	if (vaoid)
+		pGL->FreeVAOID(vaoid);
 #endif
 }
 
@@ -574,6 +579,11 @@ void StdMesh::PostInit()
 	// Order submeshes so that opaque submeshes come before non-opaque ones
 	std::sort(SubMeshes.begin(), SubMeshes.end(), StdMeshSubMeshVisibilityCmpPred());
 	UpdateVBO();
+	UpdateIBO();
+
+	// Allocate a VAO ID as well
+	assert(vaoid == 0);
+	vaoid = pGL->GenVAOID();
 #endif
 }
 
@@ -594,10 +604,7 @@ void StdMesh::UpdateVBO()
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-#ifdef GL_KHR_debug
-	if (glObjectLabel)
-		glObjectLabel(GL_BUFFER, vbo, -1, (Label + "/VBO").c_str());
-#endif
+	pGL->ObjectLabel(GL_BUFFER, vbo, -1, (Label + "/VBO").c_str());
 
 	// Unmapping the buffer may fail for certain reasons, in which case we need to try again.
 	do
@@ -621,7 +628,7 @@ void StdMesh::UpdateVBO()
 		for (auto &submesh : SubMeshes)
 		{
 			// Store the offset, so the render code can use it later
-			submesh.buffer_offset = cursor - buffer;
+			submesh.vertex_buffer_offset = cursor - buffer;
 
 			if (submesh.Vertices.empty()) continue;
 			size_t vertices_size = sizeof(submesh.Vertices[0]) * submesh.Vertices.size();
@@ -631,6 +638,28 @@ void StdMesh::UpdateVBO()
 	} while (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE);
 	// Unbind the buffer so following rendering calls do not use it
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void StdMesh::UpdateIBO()
+{
+	assert(ibo == 0);
+	if (ibo != 0)
+		glDeleteBuffers(1, &ibo);
+	glGenBuffers(1, &ibo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+
+	size_t total_faces = 0;
+	for (auto &submesh : SubMeshes)
+		total_faces += submesh.GetNumFaces();
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, total_faces * 3 * sizeof(GLuint), NULL, GL_STATIC_DRAW);
+	size_t offset = 0;
+	for (auto &submesh : SubMeshes)
+	{
+		submesh.index_buffer_offset = offset * 3 * sizeof(GLuint);
+		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, submesh.index_buffer_offset, submesh.GetNumFaces() * 3 * sizeof(GLuint), &submesh.Faces[0]);
+		offset += submesh.GetNumFaces();
+	}
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 #endif
 
@@ -701,7 +730,7 @@ void StdSubMeshInstance::SetMaterial(const StdMeshMaterial& material)
 #endif
 }
 
-void StdSubMeshInstance::SetFaceOrdering(const StdSubMesh& submesh, FaceOrdering ordering)
+void StdSubMeshInstance::SetFaceOrdering(StdMeshInstance& instance, const StdSubMesh& submesh, FaceOrdering ordering)
 {
 #ifndef USE_CONSOLE
 	if (CurrentFaceOrdering != ordering)
@@ -709,24 +738,23 @@ void StdSubMeshInstance::SetFaceOrdering(const StdSubMesh& submesh, FaceOrdering
 		CurrentFaceOrdering = ordering;
 		if (ordering == FO_Fixed)
 		{
-			for (unsigned int i = 0; i < submesh.GetNumFaces(); ++i)
-				Faces[i] = submesh.GetFace(i);
+			LoadFacesForCompletion(instance, submesh, instance.GetCompletion());
 		}
 	}
 #endif
 }
 
-void StdSubMeshInstance::SetFaceOrderingForClrModulation(const StdSubMesh& submesh, uint32_t clrmod)
+void StdSubMeshInstance::SetFaceOrderingForClrModulation(StdMeshInstance& instance, const StdSubMesh& submesh, uint32_t clrmod)
 {
 #ifndef USE_CONSOLE
 	bool opaque = Material->IsOpaque();
 
 	if(!opaque)
-		SetFaceOrdering(submesh, FO_FarthestToNearest);
+		SetFaceOrdering(instance, submesh, FO_FarthestToNearest);
 	else if( ((clrmod >> 24) & 0xff) != 0xff)
-		SetFaceOrdering(submesh, FO_NearestToFarthest);
+		SetFaceOrdering(instance, submesh, FO_NearestToFarthest);
 	else
-		SetFaceOrdering(submesh, FO_Fixed);
+		SetFaceOrdering(instance, submesh, FO_Fixed);
 #endif
 }
 
@@ -881,6 +909,7 @@ void StdMeshInstance::AnimationNode::CompileFunc(StdCompiler* pComp, const StdMe
 			const StdMeshBone* bone = Mesh->GetSkeleton().GetBoneByName(bone_name);
 			if(!bone) pComp->excCorrupt("No such bone: \"%s\"", bone_name.getData());
 			Custom.BoneIndex = bone->Index;
+			Custom.Transformation = new StdMeshTransformation;
 		}
 		else
 		{
@@ -1031,6 +1060,9 @@ void StdMeshInstance::AttachedMesh::DenumeratePointers()
 	Child->AttachParent = this;
 
 	MapBonesOfChildToParent(Parent->GetMesh().GetSkeleton(), Child->GetMesh().GetSkeleton());
+
+	if(OwnChild)
+		Child->DenumeratePointers();
 }
 
 bool StdMeshInstance::AttachedMesh::ClearPointers(class C4Object* pObj)
@@ -1053,6 +1085,9 @@ StdMeshInstance::StdMeshInstance(const StdMesh& mesh, float completion):
 		BoneTransforms(Mesh->GetSkeleton().GetNumBones(), StdMeshMatrix::Identity()),
 		SubMeshInstances(Mesh->GetNumSubMeshes()), AttachParent(NULL),
 		BoneTransformsDirty(false)
+#ifndef USE_CONSOLE
+		, ibo(0), vaoid(0)
+#endif
 {
 	// Create submesh instances
 	for (unsigned int i = 0; i < Mesh->GetNumSubMeshes(); ++i)
@@ -1067,6 +1102,11 @@ StdMeshInstance::StdMeshInstance(const StdMesh& mesh, float completion):
 
 StdMeshInstance::~StdMeshInstance()
 {
+#ifndef USE_CONSOLE
+	if (ibo) glDeleteBuffers(1, &ibo);
+	if (vaoid) pGL->FreeVAOID(vaoid);
+#endif
+
 	// If we are attached then detach from parent
 	if (AttachParent)
 		AttachParent->Parent->DetachMesh(AttachParent->Number);
@@ -1090,7 +1130,10 @@ void StdMeshInstance::SetFaceOrdering(FaceOrdering ordering)
 {
 #ifndef USE_CONSOLE
 	for (unsigned int i = 0; i < Mesh->GetNumSubMeshes(); ++i)
-		SubMeshInstances[i]->SetFaceOrdering(Mesh->GetSubMesh(i), ordering);
+		SubMeshInstances[i]->SetFaceOrdering(*this, Mesh->GetSubMesh(i), ordering);
+
+	// Faces have been reordered: upload new order to GPU
+	UpdateIBO();
 
 	// Update attachments (only own meshes for now... others might be displayed both attached and non-attached...)
 	// still not optimal.
@@ -1104,7 +1147,10 @@ void StdMeshInstance::SetFaceOrderingForClrModulation(uint32_t clrmod)
 {
 #ifndef USE_CONSOLE
 	for (unsigned int i = 0; i < Mesh->GetNumSubMeshes(); ++i)
-		SubMeshInstances[i]->SetFaceOrderingForClrModulation(Mesh->GetSubMesh(i), clrmod);
+		SubMeshInstances[i]->SetFaceOrderingForClrModulation(*this, Mesh->GetSubMesh(i), clrmod);
+
+	// Faces have been reordered: upload new order to GPU
+	UpdateIBO();
 
 	// Update attachments (only own meshes for now... others might be displayed both attached and non-attached...)
 	// still not optimal.
@@ -1123,29 +1169,32 @@ void StdMeshInstance::SetCompletion(float completion)
 	// full pool.
 	for(unsigned int i = 0; i < Mesh->GetNumSubMeshes(); ++i)
 		SubMeshInstances[i]->LoadFacesForCompletion(*this, Mesh->GetSubMesh(i), completion);
+
+	// Faces have been reordered: upload new order to GPU
+	UpdateIBO();
 #endif
 }
 
-StdMeshInstance::AnimationNode* StdMeshInstance::PlayAnimation(const StdStrBuf& animation_name, int slot, AnimationNode* sibling, ValueProvider* position, ValueProvider* weight)
+StdMeshInstance::AnimationNode* StdMeshInstance::PlayAnimation(const StdStrBuf& animation_name, int slot, AnimationNode* sibling, ValueProvider* position, ValueProvider* weight, bool stop_previous_animation)
 {
 	const StdMeshAnimation* animation = Mesh->GetSkeleton().GetAnimationByName(animation_name);
 	if (!animation) { delete position; delete weight; return NULL; }
 
-	return PlayAnimation(*animation, slot, sibling, position, weight);
+	return PlayAnimation(*animation, slot, sibling, position, weight, stop_previous_animation);
 }
 
-StdMeshInstance::AnimationNode* StdMeshInstance::PlayAnimation(const StdMeshAnimation& animation, int slot, AnimationNode* sibling, ValueProvider* position, ValueProvider* weight)
+StdMeshInstance::AnimationNode* StdMeshInstance::PlayAnimation(const StdMeshAnimation& animation, int slot, AnimationNode* sibling, ValueProvider* position, ValueProvider* weight, bool stop_previous_animation)
 {
 	position->Value = Clamp(position->Value, Fix0, ftofix(animation.Length));
 	AnimationNode* child = new AnimationNode(&animation, position);
-	InsertAnimationNode(child, slot, sibling, weight);
+	InsertAnimationNode(child, slot, sibling, weight, stop_previous_animation);
 	return child;
 }
 
-StdMeshInstance::AnimationNode* StdMeshInstance::PlayAnimation(const StdMeshBone* bone, const StdMeshTransformation& trans, int slot, AnimationNode* sibling, ValueProvider* weight)
+StdMeshInstance::AnimationNode* StdMeshInstance::PlayAnimation(const StdMeshBone* bone, const StdMeshTransformation& trans, int slot, AnimationNode* sibling, ValueProvider* weight, bool stop_previous_animation)
 {
 	AnimationNode* child = new AnimationNode(bone, trans);
-	InsertAnimationNode(child, slot, sibling, weight);
+	InsertAnimationNode(child, slot, sibling, weight, stop_previous_animation);
 	return child;
 }
 
@@ -1532,6 +1581,9 @@ void StdMeshInstance::ReorderFaces(StdMeshMatrix* global_trans)
 	}
 
 	// TODO: Also reorder submeshes, attached meshes and include AttachTransformation for attached meshes...
+
+	// Faces have been reordered: upload new order to GPU
+	UpdateIBO();
 #endif
 }
 
@@ -1696,11 +1748,19 @@ StdMeshInstance::AnimationNodeList::iterator StdMeshInstance::GetStackIterForSlo
 		return AnimationStack.insert(AnimationStack.end(), NULL);
 }
 
-void StdMeshInstance::InsertAnimationNode(AnimationNode* node, int slot, AnimationNode* sibling, ValueProvider* weight)
+void StdMeshInstance::InsertAnimationNode(AnimationNode* node, int slot, AnimationNode* sibling, ValueProvider* weight, bool stop_previous_animation)
 {
+	assert(!sibling || !stop_previous_animation);
 	// Default
 	if (!sibling) sibling = GetRootAnimationForSlot(slot);
 	assert(!sibling || sibling->Slot == slot);
+	
+	// Stop any animation already running in this slot?
+	if (sibling && stop_previous_animation)
+	{
+		StopAnimation(sibling);
+		sibling = NULL;
+	}
 
 	// Find two subsequent numbers in case we need to create two nodes, so
 	// script can deduce the second node.
@@ -1858,3 +1918,69 @@ void StdMeshInstance::SetBoneTransformsDirty(bool value)
 		}
 	}
 }
+
+#ifndef USE_CONSOLE
+void StdMeshInstance::UpdateIBO()
+{
+	// First, find out whether we have fixed face ordering or not
+	bool all_submeshes_fixed = true;
+	for (StdSubMeshInstance* inst : SubMeshInstances)
+	{
+		all_submeshes_fixed = (inst->GetFaceOrdering() == StdSubMeshInstance::FO_Fixed);
+		if (!all_submeshes_fixed) break;
+
+		// If true, submesh is 100% complete
+		all_submeshes_fixed = inst->GetNumFaces() == inst->GetSubMesh().GetNumFaces();
+		if (!all_submeshes_fixed) break;
+	}
+
+	// If the face ordering is fixed, then we don't need a custom
+	// IBO. This is typically the case for all meshes without transparency
+	// and 100% completion.
+	if (all_submeshes_fixed)
+	{
+		if (ibo) glDeleteBuffers(1, &ibo);
+		if (vaoid) pGL->FreeVAOID(vaoid);
+		ibo = 0; vaoid = 0;
+	}
+	else
+	{
+		// We have a custom face ordering, or we render only a subset
+		// of our faces. Create a custom IBO and upload the index
+		// data.
+		if (ibo == 0)
+		{
+			// This is required, because the IBO binding is part
+			// of the VAO state. If we create a new IBO we cannot
+			// keep using any old VAO. But we always create and 
+			// destroy them together, so we can assert here.
+			assert(vaoid == 0);
+
+			size_t total_faces = 0;
+			for (unsigned int i = 0; i < Mesh->GetNumSubMeshes(); ++i)
+				total_faces += Mesh->GetSubMesh(i).GetNumFaces();
+
+			glGenBuffers(1, &ibo);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+
+			// TODO: Optimize mode. In many cases this is still fairly static.
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, total_faces * 3 * sizeof(GLuint), NULL, GL_STREAM_DRAW);
+		}
+		else
+		{
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+		}
+
+		for (StdSubMeshInstance* inst : SubMeshInstances)
+		{
+			assert(inst->GetNumFaces() <= inst->GetSubMesh().GetNumFaces());
+			glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, inst->GetSubMesh().GetOffsetInIBO(), inst->GetNumFaces() * 3 * sizeof(GLuint), &inst->Faces[0]);
+		}
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		if (vaoid == 0)
+			vaoid = pGL->GenVAOID();
+	}
+}
+#endif

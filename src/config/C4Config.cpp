@@ -99,18 +99,15 @@ void C4ConfigGraphics::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(ShowStartupMessages,   "ShowStartupMessages",  1             ,false, true));
 	pComp->Value(mkNamingAdapt(HighResLandscape,      "HighResLandscape",     1             ,false, true));
 	pComp->Value(mkNamingAdapt(VerboseObjectLoading,  "VerboseObjectLoading", 0             ));
-	pComp->Value(mkNamingAdapt(VideoModule,           "VideoModule",          0             ,false, true));
 	pComp->Value(mkNamingAdapt(MenuTransparency,      "MenuTransparency",     1             ,false, true));
 	pComp->Value(mkNamingAdapt(UpperBoard,            "UpperBoard",           1             ,false, true));
 	pComp->Value(mkNamingAdapt(ShowClock,             "ShowClock",            0             ,false, true));
 	pComp->Value(mkNamingAdapt(ShowCrewNames,         "ShowCrewNames",        1             ,false, true));
 	pComp->Value(mkNamingAdapt(ShowCrewCNames,        "ShowCrewCNames",       0             ,false, true));
-	pComp->Value(mkNamingAdapt(BitDepth,              "BitDepth",             32            ,false, true));
 	pComp->Value(mkNamingAdapt(Windowed,              "Windowed",             0             ,false, true));
 	pComp->Value(mkNamingAdapt(PXSGfx,                "PXSGfx"  ,             1             ));
 	pComp->Value(mkNamingAdapt(Gamma,                 "Gamma"  ,              100           ));
 	pComp->Value(mkNamingAdapt(Currency,              "Currency"  ,           0             ));
-	pComp->Value(mkNamingAdapt(RenderInactiveEM,      "RenderInactiveEM",     1             ));
 	pComp->Value(mkNamingAdapt(Monitor,               "Monitor",              0             )); // 0 = D3DADAPTER_DEFAULT
 	pComp->Value(mkNamingAdapt(FireParticles,         "FireParticles",        1         ));
 	pComp->Value(mkNamingAdapt(MaxRefreshDelay,       "MaxRefreshDelay",      30            ));
@@ -143,6 +140,7 @@ void C4ConfigNetwork::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(Comment,                 "Comment",              ""            ,false, true));
 	pComp->Value(mkNamingAdapt(PortTCP,                 "PortTCP",              C4NetStdPortTCP       ,false, true));
 	pComp->Value(mkNamingAdapt(PortUDP,                 "PortUDP",              C4NetStdPortUDP       ,false, true));
+	pComp->Value(mkNamingAdapt(EnableUPnP,              "EnableUPnP",           1             , false, true));
 	pComp->Value(mkNamingAdapt(PortDiscovery,           "PortDiscovery",        C4NetStdPortDiscovery ,false, true));
 	pComp->Value(mkNamingAdapt(PortRefServer,           "PortRefServer",        C4NetStdPortRefServer ,false, true));
 	pComp->Value(mkNamingAdapt(ControlMode,             "ControlMode",          0             ));
@@ -166,7 +164,6 @@ void C4ConfigNetwork::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(PacketLogging,           "PacketLogging",        0             ));
 	
 
-	pComp->Value(mkNamingAdapt(s(PuncherAddress),       "PuncherAddress",       "clonk.de:11115")); // maybe store default for this one?
 	pComp->Value(mkNamingAdapt(mkParAdapt(LastLeagueServer, StdCompiler::RCT_All),     "LastLeagueServer",     ""            ));
 	pComp->Value(mkNamingAdapt(mkParAdapt(LastLeaguePlayerName, StdCompiler::RCT_All), "LastLeaguePlayerName", ""            ));
 	pComp->Value(mkNamingAdapt(mkParAdapt(LastLeagueAccount, StdCompiler::RCT_All),    "LastLeagueAccount",    ""            ));
@@ -354,11 +351,6 @@ bool C4Config::Load(const char *szConfigFile)
 	if (fWinSock) WSACleanup();
 #endif
 	General.DefaultLanguage();
-	// bit depth sanity check (might be corrupted by resolution check bug in old version)
-	if (Graphics.BitDepth < 16)
-	{
-		Graphics.BitDepth = 32;
-	}
 	// Warning against invalid ports
 	if (Config.Network.PortTCP>0 && Config.Network.PortTCP == Config.Network.PortRefServer)
 	{

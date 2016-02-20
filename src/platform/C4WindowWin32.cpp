@@ -110,16 +110,13 @@ LRESULT APIENTRY FullScreenWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			if (Application.Active)
 			{
 				// restore textures
-				if (pTexMgr) pTexMgr->IntUnlock();
 				if (Application.FullScreenMode())
 				{
-					Application.SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, true);
+					Application.SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.RefreshRate, Config.Graphics.Monitor, true);
 				}
 			}
 			else
 			{
-				if (pTexMgr)
-					pTexMgr->IntLock();
 				if (Application.FullScreenMode())
 				{
 					::ChangeDisplaySettings(NULL, 0);
@@ -162,7 +159,12 @@ LRESULT APIENTRY FullScreenWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_SYSKEYDOWN:
 		if (wParam == 18) break;
 		if (Game.DoKeyboardInput(scancode, KEYEV_Down, !!(lParam & 0x20000000), GetKeyState(VK_CONTROL) < 0, GetKeyState(VK_SHIFT) < 0, !!(lParam & 0x40000000), NULL))
+		{
+			// Remove handled message from queue to prevent Windows "standard" sound for unprocessed system message
+			MSG msg;
+			PeekMessage(&msg, hwnd, 0, 0, PM_REMOVE);
 			return 0;
+		}
 		break;
 	case WM_CHAR:
 	{
@@ -220,7 +222,7 @@ LRESULT APIENTRY FullScreenWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		case SIZE_MAXIMIZED:
 			::Application.OnResolutionChanged(p.x, p.y);
 			if(Application.pWindow) // this might be called from C4Window::Init in which case Application.pWindow is not yet set
-				::SetWindowPos(Application.pWindow->hRenderWindow, NULL, 0, 0, p.x, p.y, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOREDRAW | SWP_NOZORDER);
+				::SetWindowPos(Application.pWindow->renderwnd, NULL, 0, 0, p.x, p.y, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOREDRAW | SWP_NOZORDER);
 			break;
 		}
 		break;
@@ -583,7 +585,7 @@ C4Window * C4Window::Init(C4Window::WindowKind windowKind, C4AbstractApp * pApp,
 
 		// We don't re-init viewport windows currently, so we don't need a child window
 		// for now: Render into main window.
-		hRenderWindow = hWindow;
+		renderwnd = hWindow;
 	}
 	else if (windowKind == W_Fullscreen)
 	{
@@ -611,11 +613,11 @@ C4Window * C4Window::Init(C4Window::WindowKind windowKind, C4AbstractApp * pApp,
 
 		RECT rc;
 		GetClientRect(hWindow, &rc);
-		hRenderWindow = CreateWindowExW(0, L"STATIC", NULL, WS_CHILD,
+		renderwnd = CreateWindowExW(0, L"STATIC", NULL, WS_CHILD,
 		                                0, 0, rc.right - rc.left, rc.bottom - rc.top,
 		                                hWindow, NULL, pApp->GetInstance(), NULL);
-		if(!hRenderWindow) { DestroyWindow(hWindow); return NULL; }
-		ShowWindow(hRenderWindow, SW_SHOW);
+		if(!renderwnd) { DestroyWindow(hWindow); return NULL; }
+		ShowWindow(renderwnd, SW_SHOW);
 
 	#ifndef USE_CONSOLE
 		// Show & focus
@@ -662,13 +664,13 @@ C4Window * C4Window::Init(C4Window::WindowKind windowKind, C4AbstractApp * pApp,
 		            ConsoleDlgWindowStyle,
 		            CW_USEDEFAULT,CW_USEDEFAULT,rtSize.right-rtSize.left,rtSize.bottom-rtSize.top,
 					::Console.hWindow,NULL,pApp->GetInstance(),NULL);
-		hRenderWindow = hWindow;
+		renderwnd = hWindow;
 		return hWindow ? this : 0;
 	}
 	else if (windowKind == W_Control)
 	{
 		// controlled externally
-		hWindow = hRenderWindow = NULL;
+		hWindow = renderwnd = NULL;
 	}
 	return this;
 }
@@ -688,10 +690,9 @@ bool C4Window::ReInit(C4AbstractApp* pApp)
 	                                        hWindow, NULL, pApp->hInstance, NULL);
 	if(!hNewRenderWindow) return false;
 
-	CStdGLCtx::Reinitialize();
 	ShowWindow(hNewRenderWindow, SW_SHOW);
-	DestroyWindow(hRenderWindow);
-	hRenderWindow = hNewRenderWindow;
+	DestroyWindow(renderwnd);
+	renderwnd = hNewRenderWindow;
 
 	return true;
 }
@@ -701,10 +702,10 @@ void C4Window::Clear()
 	// Destroy window if we own it
 	if (eKind != W_Control)
 	{
-		if (hRenderWindow) DestroyWindow(hRenderWindow);
-		if (hWindow && hWindow != hRenderWindow) DestroyWindow(hWindow);
+		if (renderwnd) DestroyWindow(renderwnd);
+		if (hWindow && hWindow != renderwnd) DestroyWindow(hWindow);
 	}
-	hRenderWindow = NULL;
+	renderwnd = NULL;
 	hWindow = NULL;
 }
 
@@ -749,7 +750,7 @@ void C4Window::SetSize(unsigned int cx, unsigned int cy)
 
 		// Also resize child window
 		GetClientRect(hWindow, &rect);
-		::SetWindowPos(hRenderWindow, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOREDRAW | SWP_NOZORDER);
+		::SetWindowPos(renderwnd, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOREDRAW | SWP_NOZORDER);
 	}
 }
 
@@ -758,6 +759,11 @@ void C4Window::FlashWindow()
 	// please activate me!
 	if (hWindow)
 		::FlashWindow(hWindow, FLASHW_ALL | FLASHW_TIMERNOFG);
+}
+
+void C4Window::GrabMouse(bool grab)
+{
+	// TODO
 }
 
 void C4Window::EnumerateMultiSamples(std::vector<int>& samples) const
@@ -797,7 +803,6 @@ C4AbstractApp::C4AbstractApp() :
 		Active(false), pWindow(NULL), fQuitMsgReceived(false),
 		hInstance(NULL), fDspModeSet(false)
 {
-	ZeroMemory(&pfd, sizeof(pfd)); pfd.nSize = sizeof(pfd);
 	ZeroMemory(&dspMode, sizeof(dspMode)); dspMode.dmSize =  sizeof(dspMode);
 	ZeroMemory(&OldDspMode, sizeof(OldDspMode)); OldDspMode.dmSize =  sizeof(OldDspMode);
 	idMainThread = 0;
@@ -887,7 +892,7 @@ void C4AbstractApp::RestoreVideoMode()
 {
 }
 
-bool C4AbstractApp::SetVideoMode(int iXRes, int iYRes, unsigned int iColorDepth, unsigned int iRefreshRate, unsigned int iMonitor, bool fFullScreen)
+bool C4AbstractApp::SetVideoMode(int iXRes, int iYRes, unsigned int iRefreshRate, unsigned int iMonitor, bool fFullScreen)
 {
 #ifndef USE_CONSOLE
 	SetWindowLong(pWindow->hWindow, GWL_EXSTYLE,
@@ -949,7 +954,7 @@ bool C4AbstractApp::SetVideoMode(int iXRes, int iYRes, unsigned int iColorDepth,
 		int i=0;
 		if (!fFound) while (EnumDisplaySettingsW(Mon.GetWideChar(), i++, &dmode))
 				// compare enumerated mode with requested settings
-				if (static_cast<int>(dmode.dmPelsWidth) == iXRes && static_cast<int>(dmode.dmPelsHeight) == iYRes && dmode.dmBitsPerPel == iColorDepth && dmode.dmDisplayOrientation == orientation
+				if (static_cast<int>(dmode.dmPelsWidth) == iXRes && static_cast<int>(dmode.dmPelsHeight) == iYRes && dmode.dmBitsPerPel == C4Draw::COLOR_DEPTH && dmode.dmDisplayOrientation == orientation
 				        && (iRefreshRate == 0 || dmode.dmDisplayFrequency == iRefreshRate))
 				{
 					fFound=true;

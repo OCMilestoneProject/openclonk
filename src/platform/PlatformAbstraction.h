@@ -24,6 +24,10 @@
 #include <config.h>
 #endif // HAVE_CONFIG_H
 
+#if defined(USE_WIN32_WINDOWS) || (defined(_WIN32) && defined(USE_GTK))
+#define USE_WGL
+#endif
+
 // We need to #define the target Windows version selector macros before we
 // including any MinGW header.
 #ifdef _WIN64
@@ -46,10 +50,6 @@
 #ifndef NOMINMAX
 # define NOMINMAX
 #endif
-#endif
-
-#if defined(_WIN32) && !defined(USE_CONSOLE) && !defined(USE_SDL_MAINLOOP) && !defined(USE_X11) && !defined(USE_COCOA)
-#define USE_WIN32_WINDOWS
 #endif
 
 #ifdef _MSC_VER
@@ -88,10 +88,6 @@
 #else
 typedef ptrdiff_t ssize_t;
 #endif
-
-
-// std::make_unique
-#include "platform/make_unique.h"
 
 #if defined(__GNUC__)
 // Allow checks for correct printf-usage

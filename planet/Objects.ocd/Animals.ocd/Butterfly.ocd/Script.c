@@ -7,16 +7,13 @@
 
 #include Library_Insect
 
-func Construction()
+local fly_anim, fly_anim_len;
+
+public func Construction(...)
 {
 	StartGrowth(15);
-}
-
-local fly_anim;
-
-protected func Initialize()
-{
-	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(0,0, GetAnimationLength("Fly"), 10, ANIM_Loop), Anim_Const(1000));
+	fly_anim_len = GetAnimationLength("Fly");
+	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(0,0, fly_anim_len, 10, ANIM_Loop));
 	this.MeshTransformation = Trans_Rotate(270,1,1,1);
 	SetAction("Fly");
 
@@ -25,7 +22,7 @@ protected func Initialize()
 
 	lib_insect_max_dist = 300;
 	lib_insect_shy = true;
-	_inherited();
+	return _inherited(...);
 }
 
 /* Insect library */
@@ -44,6 +41,8 @@ private func GetAttraction(proplist coordinates)
 			continue;
 		if (plant->GetCon() < 30) // Too small
 			continue;
+		if (plant->GBackSemiSolid()) // Under water or covered with solid material
+			continue;
 		var width = plant->GetObjWidth();
 		var height = plant->GetObjHeight();
 		coordinates.x = plant->GetX() + Random(width) - width / 2;
@@ -60,7 +59,7 @@ private func MissionComplete()
 	if (!attraction) return _inherited();
 	var wait = 20 + Random(80);
 	// Slow animation speed
-	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, GetAnimationLength("Fly"), 20, ANIM_Loop), Anim_Const(1000));
+	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, fly_anim_len, 20, ANIM_Loop));
 	ScheduleCall(this, "RegularSpeed", wait);
 	SetCommand("Wait", nil,nil,nil,nil, wait);
 }
@@ -72,20 +71,20 @@ private func MissionCompleteFailed()
 
 private func RegularSpeed()
 {
-	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, GetAnimationLength("Fly"), 10, ANIM_Loop), Anim_Const(1000));
+	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, fly_anim_len, 10, ANIM_Loop));
 }
 
 // Hold the animation
 private func SleepComplete()
 {
-	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, GetAnimationLength("Fly")/2, 10, ANIM_Hold), Anim_Const(1000));
+	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, fly_anim_len/2, 10, ANIM_Hold));
 	_inherited();
 }
 
 // Restart the animation
 private func WakeUp()
 {
-	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, GetAnimationLength("Fly"), 10, ANIM_Loop), Anim_Const(1000));
+	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, fly_anim_len, 10, ANIM_Loop));
 	_inherited();
 }
 
@@ -106,10 +105,10 @@ private func GetRestingPlace(proplist coordinates)
 	return false;
 }
 
-private func Death()
+private func Death(...)
 {
-	_inherited();
-	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, GetAnimationLength("Fly")/2, 10, ANIM_Hold), Anim_Const(1000));
+	_inherited(...);
+	fly_anim = PlayAnimation("Fly", 1, Anim_Linear(GetAnimationPosition(fly_anim), 0, fly_anim_len/2, 10, ANIM_Hold));
 	SetAction("Dead");
 }
 
@@ -216,6 +215,8 @@ local MaxEnergy = 40000;
 local MaxBreath = 125;
 local Placement = 2;
 local NoBurnDecay = 1;
+local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
+local ContactCalls = true;
 
 func Definition(def) {
 	SetProperty("PictureTransformation", Trans_Mul(Trans_Rotate(20,1,0,0),Trans_Rotate(70,0,1,0)), def);

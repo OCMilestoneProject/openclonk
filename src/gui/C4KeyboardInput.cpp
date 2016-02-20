@@ -22,41 +22,18 @@
 #include <C4Game.h>
 #include <C4Window.h>
 
-#ifdef USE_X11
-#include <gdk/gdkx.h>
+#ifdef USE_GTK
 #include <gtk/gtk.h>
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
 #include <X11/XKBlib.h>
+#endif
 #endif
 
 #include <algorithm>
 
 #ifdef USE_SDL_MAINLOOP
 #include <SDL.h>
-#include <string>
-#include <vector>
-
-#include <SDL_keysym.h>
-
-namespace
-{
-	std::string getKeyName(C4KeyCode k)
-	{
-		std::string result = SDL_GetKeyName(static_cast<SDLKey>(k));
-		// unknown key
-		if (result == "unknown key")
-			result = FormatString("\\x%x", (DWORD) k).getData();
-		// some special cases
-		if (result == "world 0") result = "´";
-		if (result == "world 1") result = "ß";
-		if (result == "world 2") result = "Ü";
-		if (result == "world 3") result = "Ä";
-		if (result == "world 4") result = "Ö";
-		// capitalize first letter
-		result[0] = toupper(result[0]);
-		// return key name
-		return result;
-	}
-}
 #endif
 
 /* ----------------- Key maps ------------------ */
@@ -100,117 +77,117 @@ struct C4KeyCodeMapEntry
 	const char *szShortName;
 };
 
-#if defined(USE_WIN32_WINDOWS) || defined(USE_X11)
-const C4KeyCodeMapEntry KeyCodeMap[] = {
-	{K_ESCAPE,		"Escape",	"Esc"},
-    {K_1,			"1",			NULL},
-    {K_2,			"2",			NULL},
-    {K_3,			"3",			NULL},
-    {K_4,			"4",			NULL},
-    {K_5,			"5",			NULL},
-    {K_6,			"6",			NULL},
-    {K_7,			"7",			NULL},
-    {K_8,			"8",			NULL},
-    {K_9,			"9",			NULL},
-    {K_0,			"0",			NULL},
-    {K_MINUS,		"Minus",		"-"},
-    {K_EQUAL,		"Equal",		"="},
-	{K_BACK,		"BackSpace",	NULL},
-	{K_TAB,			"Tab",			NULL},
-    {K_Q,			"Q",			NULL},
-    {K_W,			"W",			NULL},
-    {K_E,			"E",			NULL},
-    {K_R,			"R",			NULL},
-    {K_T,			"T",			NULL},
-    {K_Y,			"Y",			NULL},
-    {K_U,			"U",			NULL},
-    {K_I,			"I",			NULL},
-    {K_O,			"O",			NULL},
-    {K_P,			"P",			NULL},
-    {K_LEFT_BRACKET,"LeftBracket",	"["},
-    {K_RIGHT_BRACKET,"RightBracket","]"},
-	{K_RETURN,		"Return",		"Ret"},
-	{K_CONTROL_L,	"LeftControl",	"LCtrl"},
-    {K_A,			"A",			NULL},
-    {K_S,			"S",			NULL},
-    {K_D,			"D",			NULL},
-    {K_F,			"F",			NULL},
-    {K_G,			"G",			NULL},
-    {K_H,			"H",			NULL},
-    {K_J,			"J",			NULL},
-    {K_K,			"K",			NULL},
-    {K_L,			"L",			NULL},
-    {K_SEMICOLON,	"Semicolon",	";"},
-    {K_APOSTROPHE,	"Apostrophe",	"'"},
-	{K_GRAVE_ACCENT,"GraveAccent",	"`"},
-	{K_SHIFT_L,		"LeftShift",	"LShift"},
-    {K_BACKSLASH,	"Backslash",	"\\"},
-    {K_Z,			"Z",			NULL},
-    {K_X,			"X",			NULL},
-    {K_C,			"C",			NULL},
-    {K_V,			"V",			NULL},
-    {K_B,			"B",			NULL},
-    {K_N,			"N",			NULL},
-    {K_M,			"M",			NULL},
-    {K_COMMA,		"Comma",		","},
-    {K_PERIOD,		"Period",		"."},
-    {K_SLASH,		"Slash",		"/"},
-	{K_SHIFT_R,		"RightShift",	"RShift"},
-	{K_MULTIPLY,	"Multiply",		"N*"},
-	{K_ALT_L,		"LeftAlt",		"LAlt"},
-	{K_SPACE,		"Space",		"Sp"},
-	{K_CAPS,		"Capslock",		NULL},
-	{K_F1,			"F1",			NULL},
-	{K_F2,			"F2",			NULL},
-	{K_F3,			"F3",			NULL},
-	{K_F4,			"F4",			NULL},
-	{K_F5,			"F5",			NULL},
-	{K_F6,			"F6",			NULL},
-	{K_F7,			"F7",			NULL},
-	{K_F8,			"F8",			NULL},
-	{K_F9,			"F9",			NULL},
-	{K_F10,			"F10",			NULL},
-	{K_NUM,			"NumLock",		"NLock"},
-	{K_SCROLL,		"ScrollLock",	"SLock"},
-	{K_NUM7,		"Num7", 		"N7"},
-	{K_NUM8,		"Num8", 		"N8"},
-	{K_NUM9,		"Num9", 		"N9"},
-	{K_SUBTRACT,	"Subtract",		"N-"},
-	{K_NUM4,		"Num4", 		"N4"},
-	{K_NUM5,		"Num5", 		"N5"},
-	{K_NUM6,		"Num6", 		"N6"},
-	{K_ADD,			"Add",			"N+"},
-	{K_NUM1,		"Num1", 		"N1"},
-	{K_NUM2,		"Num2", 		"N2"},
-	{K_NUM3,		"Num3", 		"N3"},
-	{K_NUM0,		"Num0",			"N0"},
-	{K_DECIMAL,		"Decimal",		"N,"},
-	{K_86,			"|<>",			NULL},
-	{K_F11,			"F11",			NULL},
-	{K_F12,			"F12",			NULL},
-	{K_NUM_RETURN,	"NumReturn",	"NRet"},
-	{K_CONTROL_R,	"RightControl",	"RCtrl"},
-	{K_DIVIDE,		"Divide",		"N/"},
-	{K_ALT_R,		"RightAlt",		"RAlt"},
-	{K_HOME,		"Home",			NULL},
-	{K_UP,			"Up",			NULL},
-	{K_PAGEUP,		"PageUp",		NULL},
-	{K_LEFT,		"Left",			NULL},
-	{K_RIGHT,		"Right", 		NULL},
-	{K_END,			"End",			NULL},
-	{K_DOWN,		"Down",			NULL},
-	{K_PAGEDOWN,	"PageDown",		NULL},
-	{K_INSERT,		"Insert",		"Ins"},
-	{K_DELETE,		"Delete",		"Del"},
-	{K_PAUSE,		"Pause",		NULL},
-	{K_WIN_L,		"LeftWin",		"LWin"},
-	{K_WIN_R,		"RightWin",		"RWin"},
-	{K_MENU,		"Menu",			NULL},
-	{K_PRINT,		"Print",		NULL},
-    {0x00,	NULL, 			NULL}
-};
-#elif defined(USE_COCOA)
+#if defined(USE_COCOA)
 #include "CocoaKeycodeMap.h"
+#else
+const C4KeyCodeMapEntry KeyCodeMap[] = {
+	{K_ESCAPE,        "Escape",       "Esc"},
+	{K_1,             "1",            NULL},
+	{K_2,             "2",            NULL},
+	{K_3,             "3",            NULL},
+	{K_4,             "4",            NULL},
+	{K_5,             "5",            NULL},
+	{K_6,             "6",            NULL},
+	{K_7,             "7",            NULL},
+	{K_8,             "8",            NULL},
+	{K_9,             "9",            NULL},
+	{K_0,             "0",            NULL},
+	{K_MINUS,         "Minus",        "-"},
+	{K_EQUAL,         "Equal",        "="},
+	{K_BACK,          "BackSpace",    NULL},
+	{K_TAB,           "Tab",          NULL},
+	{K_Q,             "Q",            NULL},
+	{K_W,             "W",            NULL},
+	{K_E,             "E",            NULL},
+	{K_R,             "R",            NULL},
+	{K_T,             "T",            NULL},
+	{K_Y,             "Y",            NULL},
+	{K_U,             "U",            NULL},
+	{K_I,             "I",            NULL},
+	{K_O,             "O",            NULL},
+	{K_P,             "P",            NULL},
+	{K_LEFT_BRACKET,  "LeftBracket",  "["},
+	{K_RIGHT_BRACKET, "RightBracket", "]"},
+	{K_RETURN,        "Return",       "Ret"},
+	{K_CONTROL_L,     "LeftControl",  "LCtrl"},
+	{K_A,             "A",            NULL},
+	{K_S,             "S",            NULL},
+	{K_D,             "D",            NULL},
+	{K_F,             "F",            NULL},
+	{K_G,             "G",            NULL},
+	{K_H,             "H",            NULL},
+	{K_J,             "J",            NULL},
+	{K_K,             "K",            NULL},
+	{K_L,             "L",            NULL},
+	{K_SEMICOLON,     "Semicolon",    ";"},
+	{K_APOSTROPHE,    "Apostrophe",   "'"},
+	{K_GRAVE_ACCENT,  "GraveAccent",  "`"},
+	{K_SHIFT_L,       "LeftShift",    "LShift"},
+	{K_BACKSLASH,     "Backslash",    "\\"},
+	{K_Z,             "Z",            NULL},
+	{K_X,             "X",            NULL},
+	{K_C,             "C",            NULL},
+	{K_V,             "V",            NULL},
+	{K_B,             "B",            NULL},
+	{K_N,             "N",            NULL},
+	{K_M,             "M",            NULL},
+	{K_COMMA,         "Comma",        ","},
+	{K_PERIOD,        "Period",       "."},
+	{K_SLASH,         "Slash",        "/"},
+	{K_SHIFT_R,       "RightShift",   "RShift"},
+	{K_MULTIPLY,      "Multiply",     "N*"},
+	{K_ALT_L,         "LeftAlt",      "LAlt"},
+	{K_SPACE,         "Space",        "Sp"},
+	{K_CAPS,          "Capslock",     NULL},
+	{K_F1,            "F1",           NULL},
+	{K_F2,            "F2",           NULL},
+	{K_F3,            "F3",           NULL},
+	{K_F4,            "F4",           NULL},
+	{K_F5,            "F5",           NULL},
+	{K_F6,            "F6",           NULL},
+	{K_F7,            "F7",           NULL},
+	{K_F8,            "F8",           NULL},
+	{K_F9,            "F9",           NULL},
+	{K_F10,           "F10",          NULL},
+	{K_NUM,           "NumLock",      "NLock"},
+	{K_SCROLL,        "ScrollLock",   "SLock"},
+	{K_NUM7,          "Num7",         "N7"},
+	{K_NUM8,          "Num8",         "N8"},
+	{K_NUM9,          "Num9",         "N9"},
+	{K_SUBTRACT,      "Subtract",     "N-"},
+	{K_NUM4,          "Num4",         "N4"},
+	{K_NUM5,          "Num5",         "N5"},
+	{K_NUM6,          "Num6",         "N6"},
+	{K_ADD,           "Add",          "N+"},
+	{K_NUM1,          "Num1",         "N1"},
+	{K_NUM2,          "Num2",         "N2"},
+	{K_NUM3,          "Num3",         "N3"},
+	{K_NUM0,          "Num0",         "N0"},
+	{K_DECIMAL,       "Decimal",      "N,"},
+	{K_86,            "|<>",          NULL},
+	{K_F11,           "F11",          NULL},
+	{K_F12,           "F12",          NULL},
+	{K_NUM_RETURN,    "NumReturn",    "NRet"},
+	{K_CONTROL_R,     "RightControl", "RCtrl"},
+	{K_DIVIDE,        "Divide",       "N/"},
+	{K_ALT_R,         "RightAlt",     "RAlt"},
+	{K_HOME,          "Home",         NULL},
+	{K_UP,            "Up",           NULL},
+	{K_PAGEUP,        "PageUp",       NULL},
+	{K_LEFT,          "Left",         NULL},
+	{K_RIGHT,         "Right",        NULL},
+	{K_END,           "End",          NULL},
+	{K_DOWN,          "Down",         NULL},
+	{K_PAGEDOWN,      "PageDown",     NULL},
+	{K_INSERT,        "Insert",       "Ins"},
+	{K_DELETE,        "Delete",       "Del"},
+	{K_PAUSE,         "Pause",        NULL},
+	{K_WIN_L,         "LeftWin",      "LWin"},
+	{K_WIN_R,         "RightWin",     "RWin"},
+	{K_MENU,          "Menu",         NULL},
+	{K_PRINT,         "Print",        NULL},
+	{0x00,            NULL,           NULL}
+};
 #endif
 
 void C4KeyCodeEx::FixShiftKeys()
@@ -329,7 +306,6 @@ C4KeyCode C4KeyCodeEx::String2KeyCode(const StdStrBuf &sName)
 		}
 
 	}
-#if defined(USE_WIN32_WINDOWS) || defined(USE_COCOA) || defined(USE_X11)
 	// query map
 	const C4KeyCodeMapEntry *pCheck = KeyCodeMap;
 	while (pCheck->szName) {
@@ -338,17 +314,11 @@ C4KeyCode C4KeyCodeEx::String2KeyCode(const StdStrBuf &sName)
 		}
 		++pCheck;
 	}
-	return KEY_Undefined;
-#elif defined(USE_SDL_MAINLOOP)
-	for (C4KeyCode k = 0; k < SDLK_LAST; ++k)
-	{
-		if (SEqualNoCase(sName.getData(), getKeyName(k).c_str()))
-			return k;
-	}
-	return KEY_Undefined;
-#else
-	return KEY_Undefined;
+#if defined(USE_SDL_MAINLOOP)
+	SDL_Scancode s = SDL_GetScancodeFromName(sName.getData());
+	if (s != SDL_SCANCODE_UNKNOWN) return s;
 #endif
+	return KEY_Undefined;
 }
 
 StdStrBuf C4KeyCodeEx::KeyCode2String(C4KeyCode wCode, bool fHumanReadable, bool fShort)
@@ -418,7 +388,7 @@ StdStrBuf C4KeyCodeEx::KeyCode2String(C4KeyCode wCode, bool fHumanReadable, bool
 		// for config files and such: dump scancode
 		return FormatString("$%x", static_cast<unsigned int>(wCode));
 	}
-#if defined(_WIN32)
+#if defined(USE_WIN32_WINDOWS) || (defined(_WIN32) && defined(USE_GTK))
 
 	// Query map
 	const C4KeyCodeMapEntry *pCheck = KeyCodeMap;
@@ -448,7 +418,7 @@ StdStrBuf C4KeyCodeEx::KeyCode2String(C4KeyCode wCode, bool fHumanReadable, bool
 			if (wCode == pCheck->wCode) return StdStrBuf((pCheck->szShortName && fShort) ? pCheck->szShortName : pCheck->szName); else ++pCheck;
 	// not found: Compose as direct code
 	return FormatString("\\x%x", static_cast<unsigned int>(wCode));
-#elif defined(USE_X11)
+#elif defined(USE_GTK)
 	Display * const dpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
 	KeySym keysym = (KeySym)XkbKeycodeToKeysym(dpy,wCode+8,0,0);
 	char* name = NULL;
@@ -463,7 +433,10 @@ StdStrBuf C4KeyCodeEx::KeyCode2String(C4KeyCode wCode, bool fHumanReadable, bool
 		return buf;
 	}
 #elif defined(USE_SDL_MAINLOOP)
-	return StdStrBuf(getKeyName(wCode).c_str());
+	StdStrBuf buf;
+	buf.Copy(SDL_GetScancodeName(static_cast<SDL_Scancode>(wCode)));
+	if (!buf.getLength()) buf.Format("\\x%x", wCode);
+	return buf;
 #endif
 	return FormatString("$%x", static_cast<unsigned int>(wCode));
 }
@@ -581,7 +554,7 @@ bool C4KeyEventData::operator ==(const struct C4KeyEventData &cmp) const
 /* ----------------- C4CustomKey------------------ */
 
 C4CustomKey::C4CustomKey(const C4KeyCodeEx &DefCode, const char *szName, C4KeyScope Scope, C4KeyboardCallbackInterface *pCallback, unsigned int uiPriority)
-		: Scope(Scope), Name(), uiPriority(uiPriority), iRef(0)
+		: Scope(Scope), Name(), uiPriority(uiPriority), iRef(0), is_down(false)
 {
 	// generate code
 	if (DefCode.Key != KEY_Default) DefaultCodes.push_back(DefCode);
@@ -596,7 +569,7 @@ C4CustomKey::C4CustomKey(const C4KeyCodeEx &DefCode, const char *szName, C4KeySc
 }
 
 C4CustomKey::C4CustomKey(const CodeList &rDefCodes, const char *szName, C4KeyScope Scope, C4KeyboardCallbackInterface *pCallback, unsigned int uiPriority)
-		: DefaultCodes(rDefCodes), Scope(Scope), Name(), uiPriority(uiPriority), iRef(0)
+		: DefaultCodes(rDefCodes), Scope(Scope), Name(), uiPriority(uiPriority), iRef(0), is_down(false)
 {
 	// ctor for default key
 	Name.Copy(szName);
@@ -606,14 +579,6 @@ C4CustomKey::C4CustomKey(const CodeList &rDefCodes, const char *szName, C4KeySco
 		vecCallbacks.push_back(pCallback);
 		pCallback->pOriginalKey = this;
 	}
-}
-
-C4CustomKey::C4CustomKey(const C4KeyCodeEx &Code, const StdStrBuf &rName)
-		: Codes(), DefaultCodes(), Scope(KEYSCOPE_None), Name(), uiPriority(PRIO_None), iRef(0)
-{
-	// ctor for custom key override
-	if (Code.Key != KEY_Default) Codes.push_back(Code);
-	Name.Copy(rName);
 }
 
 C4CustomKey::C4CustomKey(const C4CustomKey &rCpy, bool fCopyCallbacks)
@@ -677,6 +642,8 @@ void C4CustomKey::CompileFunc(StdCompiler *pComp)
 
 bool C4CustomKey::Execute(C4KeyEventType eEv, C4KeyCodeEx key)
 {
+	// remember down-state
+	is_down = (eEv == KEYEV_Down);
 	// execute all callbacks
 	for (CBVec::iterator i = vecCallbacks.begin(); i != vecCallbacks.end(); ++i)
 		if ((*i)->OnKeyEvent(key, eEv))
@@ -837,7 +804,7 @@ bool C4KeyboardInput::DoInput(const C4KeyCodeEx &InKey, C4KeyEventType InEvent, 
 {
 	// store last-key-info
 	LastKeyExtraData.iStrength = (iStrength >= 0) ? iStrength : ((InEvent != KEYEV_Up) * 100);
-	LastKeyExtraData.game_x = LastKeyExtraData.game_y = LastKeyExtraData.vp_x = LastKeyExtraData.vp_y = 0;
+	LastKeyExtraData.game_x = LastKeyExtraData.game_y = LastKeyExtraData.vp_x = LastKeyExtraData.vp_y = C4KeyEventData::KeyPos_None;
 	// check all key events generated by this key: First the keycode itself, then any more generic key events like KEY_Any
 	const int32_t iKeyRangeMax = 5;
 	int32_t iKeyRangeCnt=0, j;
@@ -900,12 +867,12 @@ bool C4KeyboardInput::DoInput(const C4KeyCodeEx &InKey, C4KeyEventType InEvent, 
 				assert(pKey);
 				// check priority
 				if (pKey->GetPriority() == uiExecPrio)
-					// check scope
-					if (pKey->GetScope() & InScope)
-						// check shift modifier (not on release, because a key release might happen with a different modifier than its pressing!)
-						if (InEvent == KEYEV_Up || pKey->IsCodeMatched(C4KeyCodeEx(FallbackKeys[j], C4KeyShiftState(InKey.dwShift))))
-							// exec it
-							if (pKey->Execute(InEvent, InKey))
+					// check scope and modifier
+					// (not on release of a key that has been down, because a key release might happen with a different modifier or in different scope than its pressing!)
+					if ((InEvent == KEYEV_Up && pKey->IsDown())
+						|| ((pKey->GetScope() & InScope) && pKey->IsCodeMatched(C4KeyCodeEx(FallbackKeys[j], C4KeyShiftState(InKey.dwShift)))))
+						// exec it
+						if (pKey->Execute(InEvent, InKey))
 								return true;
 			}
 		// nothing found in this priority: exec next

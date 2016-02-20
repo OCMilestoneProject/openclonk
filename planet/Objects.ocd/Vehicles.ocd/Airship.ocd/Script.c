@@ -14,8 +14,6 @@ local propanim, turnanim;
 local throttle;
 local enginesound;
 
-local health = 30;
-
 //Rectangle defining where to look for objents contained in the gondola
 local gondola = [-20,-2,40,30];
 
@@ -27,25 +25,22 @@ protected func Initialize()
 	throttle = 0;
 
 	// init graphics
-	propanim = PlayAnimation("Flight", 5, Anim_Const(0), Anim_Const(1000));
-
-	//Create Hitbox
-	var hitbox = CreateObjectAbove(Airship_Hitbox);
-	hitbox->SetAction("Attach", this);
+	propanim = PlayAnimation("Flight", 5, Anim_Const(0));
 
 	// The airship starts facing left; so default to that value
 	SetDir(DIR_Left);
 
-	turnanim = PlayAnimation("TurnLeft", 10, Anim_Const(GetAnimationLength("TurnLeft")), Anim_Const(1000));
+	turnanim = PlayAnimation("TurnLeft", 10, Anim_Const(GetAnimationLength("TurnLeft")));
 
 	// Start the Airship behaviour
 	AddEffect("IntAirshipMovement", this, 1, 1, this);
 }
 
-public func Damage()
+public func Damage(int change, int cause, int by_player)
 {
-	if(GetDamage() >= health)
+	if (GetDamage() >= this.HitPoints)
 	{
+		SetController(by_player);
 		AirshipDeath();
 	}
 }
@@ -118,7 +113,7 @@ public func FxIntAirshipMovementTimer(object target, proplist effect, int time)
 		{
 			// Fade pitch from -45 to 0
 			enginesound += 5;
-			Sound("FanLoop",nil,nil,nil, 1, 0, enginesound - 50);
+			Sound("Structures::FanLoop",nil,nil,nil, 1, 0, enginesound - 50);
 		}
 	}
 	else if(enginesound)
@@ -126,9 +121,9 @@ public func FxIntAirshipMovementTimer(object target, proplist effect, int time)
 		// Fade pitch from 0 to minimum -45, then turn off
 		enginesound = Max(enginesound - 10);
 		if (enginesound)
-			Sound("FanLoop", nil, nil, nil, 1, 0, enginesound - 50);
+			Sound("Structures::FanLoop", nil, nil, nil, 1, 0, enginesound - 50);
 		else
-			Sound("FanLoop", nil, nil, nil, -1);
+			Sound("Structures::FanLoop", nil, nil, nil, -1);
 	}
 
 	// Wind movement if in the air
@@ -172,8 +167,7 @@ func TurnAirship(int to_dir)
 	if (to_dir == DIR_Right)
 		animName = "TurnRight";
 
-	StopAnimation(turnanim);
-	turnanim = PlayAnimation(animName, 10, Anim_Linear(0, 0, GetAnimationLength(animName), 36, ANIM_Hold), Anim_Const(1000));
+	turnanim = PlayAnimation(animName, 10, Anim_Linear(0, 0, GetAnimationLength(animName), 36, ANIM_Hold));
 	
 	SetAnimDir(to_dir);
 	
@@ -292,14 +286,21 @@ func ControlStop(object clonk, int control)
 
 private func AirshipPilot()
 {
-	//Looks for a clonk within the Gondola
-	var g = gondola;
-	var clonk = FindObject(Find_ID(Clonk), Find_OCF(OCF_Alive),Find_InRect(g[0],g[1],g[2],g[3]));
-	if(clonk)
-		return clonk;
-	else
-		return false;
+	// Looks for a clonk within the gondola.
+	return FindObject(Find_ID(Clonk), Find_OCF(OCF_Alive), Find_InRect(gondola[0], gondola[1], gondola[2], gondola[3]));
 }
+
+/*-- Projectile Target --*/
+
+// Only is a projectile target if the projectile hits the balloon part of the airship.
+public func IsProjectileTarget(object projectile, object shooter)
+{
+	// Ensure the hitbox overlaps roughly with the balloon part.
+	var dx = GetX() - projectile->GetX();
+	var dy = GetY() - projectile->GetY();
+	return Abs(dx) <= 21 && dy > 0;
+}
+
 
 /* -- Airship Destruction --*/
 
@@ -311,18 +312,18 @@ func AirshipDeath()
 	//Now let's copy it's animation, and hold it there
 	var animspot;
 	animspot = GetAnimationPosition(turnanim);
-	if(turnanim == -1) burntairship->PlayAnimation("TurnLeft", 10, Anim_Const(animspot), Anim_Const(1000));
+	if(turnanim == -1) burntairship->PlayAnimation("TurnLeft", 10, Anim_Const(animspot)); // this doesn't make sense
 	else
-		burntairship->PlayAnimation("TurnRight", 10, Anim_Const(animspot), Anim_Const(1000));
+		burntairship->PlayAnimation("TurnRight", 10, Anim_Const(animspot));
 
-	//Set ruin on fire
-	burntairship->Incinerate();
+	// Set ruin on fire: set controller of the fire to the cause of the death (which is the current controller of the airship).
+	burntairship->Incinerate(100, GetController());
 
 	//Make sure engine sound is gone
-	Sound("FanLoop",nil,nil,nil,-1);
+	Sound("Structures::FanLoop",nil,nil,nil,-1);
 
 	//This object has served its purpose.
-	Explode(27);
+	Explode(20);
 }
 
 public func IsShipyardProduct() { return true; }
@@ -353,6 +354,7 @@ func Definition(def)
 local Name = "$Name$";
 local Description = "$Description$";
 local Touchable = 2;
-local Rebuy = true;
 local Plane = 500;
 local SolidMaskPlane = 275;
+local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
+local HitPoints = 30;

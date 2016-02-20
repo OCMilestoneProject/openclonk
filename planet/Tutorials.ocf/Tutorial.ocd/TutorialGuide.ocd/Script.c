@@ -10,7 +10,6 @@
 
 
 local messages; // A container to hold all messages.
-local message_index; // Progress in reading messages.
 local message_open; // Currently open message.
 local close_on_last; // Close guide on after last message.
 
@@ -19,7 +18,6 @@ protected func Initialize()
 	// Visibility
 	this.Visibility = VIS_Owner;
 	messages = [];
-	message_index = nil;
 	message_open = nil;
 	close_on_last = false;
 	
@@ -37,10 +35,8 @@ protected func Initialize()
 */
 public func AddGuideMessage(string msg)
 {
-	// Automatically set index to current.
-	message_index = GetLength(messages);
 	// Add message to list.
-	messages[message_index] = msg;
+	messages[GetLength(messages)] = msg;
 	// Update the menu, because of the next button.
 	if (message_open != nil)
 		ShowGuideMenu(message_open);
@@ -48,30 +44,58 @@ public func AddGuideMessage(string msg)
 }
 
 /* Shows a guide message to the player, also resets the internal index to that point.
-*	@param show_index The message corresponding to this index will be shown.
+*	@param show_index The message corresponding to this index will be shown, if nil the last message will be shown.
 */
 public func ShowGuideMessage(int show_index)
 {
-	message_index = Max(0, show_index);
-	ShowGuideMenu(message_index);
-	// Increase index if possible.	
-	if (GetLength(messages) > message_index + 1)
-		message_index++;
+	// If the index is not specified show last message, index must be between first and last message.
+	if (show_index == nil)
+		show_index = GetLength(messages) - 1;
+	show_index = BoundBy(show_index, 0, GetLength(messages) - 1);
+	// Show the guide message.
+	ShowGuideMenu(show_index);
 	return;
 }
 
-/* Hides the guide and its menu to the player.
-*/
+// Hides the guide and its menu to the player.
 public func HideGuide()
 {
-	CloseGuideMenu();
+	if (this.Visibility = VIS_Owner)
+	{
+		// Change visibility and do script callback.
+		this.Visibility = VIS_None;
+		GameCall("OnGuideMessageRemoved", GetOwner(), message_open);
+	}
 	return;
+}
+
+// Shows the guide and its menu to the player, if it was hidden before.
+public func ShowGuide()
+{
+	if (this.Visibility = VIS_None)
+	{
+		// Change visibility and do script callback.
+		this.Visibility = VIS_Owner;
+		GameCall("OnGuideMessageShown", GetOwner(), message_open);
+	}
+	return;
+}
+
+// Returns whether the guide is currently hidden.
+public func IsHidden()
+{
+	return this.Visibility == VIS_None;
 }
 
 public func EnableCloseOnLastMessage(bool disable)
 {
 	close_on_last = !disable;
 	return;
+}
+
+public func GetMessageCount()
+{
+	return GetLength(messages);
 }
 
 protected func Destruction()
@@ -118,19 +142,14 @@ private func InitializeMenu()
 		ID = 1,
 		Right = Format("0%%+%dem", menu_height),
 		Symbol = GetID(),
-		BackgroundColor = {Std = 0, Hover = 0x50ffffff},
-		OnMouseIn = GuiAction_SetTag("Hover"),
-		OnMouseOut = GuiAction_SetTag("Std"),
-		OnClick = GuiAction_Call(this, "ShowCurrentMessage"),
 	};
 	var prop_text = 
 	{
+		Left = Format("0%%%s", ToEmString(10 * menu_height + text_margin)),
+		// 'Right' will be set on update
 		Target = this,
 		ID = 2,
-		Left = Format("0%%%s", ToEmString(10 * menu_height + text_margin)),
-		Right = Format("100%%%s", ToEmString(- 5 * menu_height - text_margin)),
-		Text = "",
-		BackgroundColor = {Std = 0},	
+		Text = nil,
 	};	
 	prop_next =
 	{
@@ -177,7 +196,7 @@ private func InitializeMenu()
 private func ShowGuideMenu(int index)
 {
 	// There will always be the removal of the previous message.
-	if (message_open != nil)
+	if (message_open != nil && !IsHidden())
 		GameCall("OnGuideMessageRemoved", GetOwner(), message_open);
 
 	// Show the new message.
@@ -191,7 +210,7 @@ private func ShowGuideMenu(int index)
 	message_open = index;
 
 	// Notify the scenario script.
-	if (message_open != nil)	
+	if (message_open != nil && !IsHidden())	
 		GameCall("OnGuideMessageShown", GetOwner(), message_open);
 	return;
 }
@@ -200,7 +219,16 @@ private func UpdateGuideMenu(string guide_message, bool has_next, bool has_prev,
 {
 	// Update the text message entry.
 	prop_menu.text.Text = guide_message;
-	GuiUpdate(prop_menu.text, id_menu, prop_menu.text.ID, this);
+
+	// Don't usually leave a margin for the text - just when actually showing buttons.
+	var is_showing_buttons = has_next || has_close || has_prev;
+	
+	var text_right_side = "100%";
+	if (is_showing_buttons)
+	{
+		text_right_side = Format("100%-2.9em");
+	}
+	GuiUpdate({Right = text_right_side, Text = guide_message}, id_menu, prop_menu.text.ID, this);
 	
 	// Update the next/close button.
 	if (has_next || has_close)
@@ -249,19 +277,8 @@ private func CloseGuideMenu()
 	return;
 }
 
-// Menu callback: the player has clicked on the guide.
-private func ShowCurrentMessage()
-{
-	// Show guide message if there is a new one.
-	ShowGuideMenu(message_index);
-	// Increase index if possible.
-	if (GetLength(messages) > message_index + 1)
-		message_index++;
-	return;
-}
-
 // Menu callback: the player has clicked on next message.
-public func ShowNextMessage()
+private func ShowNextMessage()
 {
 	if (message_open >= GetLength(messages) - 1)
 	{
@@ -274,7 +291,7 @@ public func ShowNextMessage()
 }
 
 // Menu callback: the player has clicked on previous message.
-public func ShowPreviousMessage()
+private func ShowPreviousMessage()
 {
 	if (message_open == 0)
 		return;

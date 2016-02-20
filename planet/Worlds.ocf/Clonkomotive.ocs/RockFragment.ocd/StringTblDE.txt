@@ -1,0 +1,2 @@
+Name=Felsbrocken
+Description=Verletzt Clonks und beschädigt Gebäude.

@@ -20,10 +20,12 @@
 #include <C4Include.h>
 #include <C4Object.h>
 
+#include <C4AulExec.h>
 #include <C4DefList.h>
 #include <C4Effect.h>
 #include <C4ObjectInfo.h>
 #include <C4Physics.h>
+#include <C4PXS.h>
 #include <C4ObjectCom.h>
 #include <C4Command.h>
 #include <C4Viewport.h>
@@ -348,7 +350,7 @@ void C4Object::AssignRemoval(bool fExitContents)
 	// Destruction call in container
 	if (Contained)
 	{
-		C4AulParSet pars(C4VObj(this));
+		C4AulParSet pars(this);
 		Contained->Call(PSF_ContentsDestruction, &pars);
 		if (!Status) return;
 	}
@@ -763,7 +765,7 @@ void C4Object::UpdateInMat()
 	// mat changed?
 	if (newmat != InMat)
 	{
-		Call(PSF_OnMaterialChanged,&C4AulParSet(C4VInt(newmat),C4VInt(InMat)));
+		Call(PSF_OnMaterialChanged,&C4AulParSet(newmat,InMat));
 		InMat = newmat;
 	}
 }
@@ -882,7 +884,7 @@ void C4Object::UpdateOCF()
 		{ LogF("Warning: contained in deleted object %p (%s)!", static_cast<void*>(Contained), Contained->GetName()); }
 #endif
 	// Keep the bits that only have to be updated with SetOCF (def, category, con, alive, onfire)
-	OCF=OCF & (OCF_Normal | OCF_Exclusive | OCF_Grab | OCF_FullCon | OCF_Rotate | OCF_OnFire
+	OCF=OCF & (OCF_Normal | OCF_Exclusive | OCF_FullCon | OCF_Rotate | OCF_OnFire
 		| OCF_Alive | OCF_CrewMember | OCF_AttractLightning);
 	// OCF_inflammable: can catch fire and is not currently burning.
 	if (!OnFire && GetPropertyInt(P_ContactIncinerate) > 0)
@@ -890,6 +892,9 @@ void C4Object::UpdateOCF()
 	// OCF_Carryable: Can be picked up
 	if (GetPropertyInt(P_Collectible))
 		OCF|=OCF_Carryable;
+	// OCF_Grab: Can be grabbed.
+	if (GetPropertyInt(P_Touchable))
+		OCF |= OCF_Grab;
 	// OCF_Construct: Can be built outside
 	if (Def->Constructable && (Con<FullCon)
 	    && (fix_r == Fix0) && !OnFire)
@@ -990,14 +995,10 @@ bool C4Object::ExecLife()
 	// InMat incineration
 	if (!::Game.iTick10)
 		if (InMat!=MNone)
-			if (::MaterialMap.Map[InMat].Incindiary)
+			if (::MaterialMap.Map[InMat].Incendiary)
 				if (GetPropertyInt(P_ContactIncinerate) > 0)
 				{
-					C4AulFunc *pCallFunc = GetFunc(PSF_OnInIncendiaryMaterial);
-					if (pCallFunc)
-					{
-						pCallFunc->Exec(this, &C4AulParSet());
-					}
+					Call(PSF_OnInIncendiaryMaterial, &C4AulParSet());
 				}
 
 	// birthday
@@ -1013,7 +1014,7 @@ bool C4Object::ExecLife()
 				{
 					// message
 					GameMsgObject(FormatString(LoadResStr("IDS_OBJ_BIRTHDAY"),GetName (), Info->TotalPlayingTime / 3600 / 5).getData(),this);
-					StartSoundEffect("Trumpet",false,100,this);
+					StartSoundEffect("UI::Trumpet",false,100,this);
 				}
 
 				Info->Age = iNewAge;
@@ -1136,7 +1137,7 @@ void C4Object::AssignDeath(bool fForced)
 	// Remove from light sources
 	SetLightRange(0,0);
 	// Engine script call
-	C4AulParSet pars(C4VInt(iDeathCausingPlayer));
+	C4AulParSet pars(iDeathCausingPlayer);
 	Call(PSF_Death, &pars);
 	// Lose contents
 	while ((thing=Contents.GetObject())) thing->Exit(thing->GetX(),thing->GetY());
@@ -1148,8 +1149,8 @@ void C4Object::AssignDeath(bool fForced)
 	// Now, it is done for every crew member)
 	if(pPlr)
 		if(!pPlr->Crew.ObjectCount())
-			::GameScript.GRBroadcast(PSF_RelaunchPlayer,
-			                         &C4AulParSet(C4VInt(Owner),C4VInt(iDeathCausingPlayer),Status ? C4VObj(this) : C4VNull));
+			::Game.GRBroadcast(PSF_RelaunchPlayer,
+			                   &C4AulParSet(Owner, iDeathCausingPlayer, Status ? this : NULL));
 	if (pInfo)
 		pInfo->HasDied = false;
 }
@@ -1214,13 +1215,19 @@ void C4Object::DoDamage(int32_t iChange, int32_t iCausedBy, int32_t iCause)
 	// Change value
 	Damage = std::max<int32_t>( Damage+iChange, 0 );
 	// Engine script call
-	Call(PSF_Damage,&C4AulParSet(C4VInt(iChange), C4VInt(iCause), C4VInt(iCausedBy)));
+	Call(PSF_Damage,&C4AulParSet(iChange, iCause, iCausedBy));
 }
 
 void C4Object::DoEnergy(int32_t iChange, bool fExact, int32_t iCause, int32_t iCausedByPlr)
 {
-	// iChange 100% = Physical 100000
-	if (!fExact) iChange=iChange*C4MaxPhysical/100;
+	if (!fExact)
+	{
+		// Clamp range of change to prevent integer overflow errors
+		// Do not clamp directly to (0...MaxEnergy)-current_energy, because
+		// the change value calculated here may be reduced by effect callbacks
+		int32_t scale = C4MaxPhysical / 100; // iChange 100% = Physical 100000
+		iChange = Clamp<int32_t>(iChange, std::numeric_limits<int32_t>::min()/scale, std::numeric_limits<int32_t>::max()/scale)*scale;
+	}
 	// Was zero?
 	bool fWasZero=(Energy==0);
 	// Mark last damage causing player to trace kills
@@ -1232,7 +1239,7 @@ void C4Object::DoEnergy(int32_t iChange, bool fExact, int32_t iCause, int32_t iC
 	iChange = Clamp<int32_t>(iChange, -Energy, GetPropertyInt(P_MaxEnergy) - Energy);
 	Energy += iChange;
 	// call to object
-	Call(PSF_EnergyChange,&C4AulParSet(C4VInt(iChange), C4VInt(iCause), C4VInt(iCausedByPlr)));
+	Call(PSF_EnergyChange,&C4AulParSet(iChange, iCause, iCausedByPlr));
 	// Alive and energy reduced to zero: death
 	if (Alive) if (Energy==0) if (!fWasZero) AssignDeath(false);
 }
@@ -1254,7 +1261,7 @@ void C4Object::DoBreath(int32_t iChange)
 	iChange = Clamp<int32_t>(iChange, -Breath, GetPropertyInt(P_MaxBreath) - Breath);
 	Breath += iChange;
 	// call to object
-	Call(PSF_BreathChange,&C4AulParSet(C4VInt(iChange)));
+	Call(PSF_BreathChange,&C4AulParSet(iChange));
 }
 
 void C4Object::DoCon(int32_t iChange, bool grow_from_center)
@@ -1360,8 +1367,8 @@ bool C4Object::Exit(int32_t iX, int32_t iY, int32_t iR, C4Real iXDir, C4Real iYD
 	UpdateFace(true);
 	SetOCF();
 	// Engine calls
-	if (fCalls) pContainer->Call(PSF_Ejection,&C4AulParSet(C4VObj(this)));
-	if (fCalls) Call(PSF_Departure,&C4AulParSet(C4VObj(pContainer)));
+	if (fCalls) pContainer->Call(PSF_Ejection,&C4AulParSet(this));
+	if (fCalls) Call(PSF_Departure,&C4AulParSet(pContainer));
 	// Success (if the obj wasn't "re-entered" by script)
 	return !Contained;
 }
@@ -1378,14 +1385,14 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	// No valid target or target is self
 	if (!pTarget || (pTarget==this)) return false;
 	// check if entrance is allowed
-	if (!! Call(PSF_RejectEntrance, &C4AulParSet(C4VObj(pTarget)))) return false;
+	if (!! Call(PSF_RejectEntrance, &C4AulParSet(pTarget))) return false;
 	// check if we end up in an endless container-recursion
 	for (C4Object *pCnt=pTarget->Contained; pCnt; pCnt=pCnt->Contained)
 		if (pCnt==this) return false;
 	// Check RejectCollect, if desired
 	if (pfRejectCollect)
 	{
-		if (!!pTarget->Call(PSF_RejectCollection,&C4AulParSet(C4VPropList(Def), C4VObj(this))))
+		if (!!pTarget->Call(PSF_RejectCollection,&C4AulParSet(Def, this)))
 		{
 			*pfRejectCollect = true;
 			return false;
@@ -1431,10 +1438,10 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	Contained->UpdateMass();
 	Contained->SetOCF();
 	// Collection call
-	if (fCalls) pTarget->Call(PSF_Collection2,&C4AulParSet(C4VObj(this)));
+	if (fCalls) pTarget->Call(PSF_Collection2,&C4AulParSet(this));
 	if (!Contained || !Contained->Status || !pTarget->Status) return true;
 	// Entrance call
-	if (fCalls) Call(PSF_Entrance,&C4AulParSet(C4VObj(Contained)));
+	if (fCalls) Call(PSF_Entrance,&C4AulParSet(Contained));
 	if (!Contained || !Contained->Status || !pTarget->Status) return true;
 	// Success
 	return true;
@@ -1457,7 +1464,7 @@ bool C4Object::ActivateEntrance(int32_t by_plr, C4Object *by_obj)
 
 	// Try entrance activation
 	if (OCF & OCF_Entrance)
-		if (!! Call(PSF_ActivateEntrance,&C4AulParSet(C4VObj(by_obj))))
+		if (!! Call(PSF_ActivateEntrance,&C4AulParSet(by_obj)))
 			return true;
 	// Failure
 	return false;
@@ -1792,7 +1799,7 @@ void C4Object::SetName(const char * NewName)
 
 int32_t C4Object::GetValue(C4Object *pInBase, int32_t iForPlayer)
 {
-	C4Value r = Call(PSF_CalcValue, &C4AulParSet(C4VObj(pInBase), C4VInt(iForPlayer)));
+	C4Value r = Call(PSF_CalcValue, &C4AulParSet(pInBase, iForPlayer));
 	int32_t iValue;
 	if (r != C4VNull)
 		iValue = r.getInt();
@@ -1808,7 +1815,7 @@ int32_t C4Object::GetValue(C4Object *pInBase, int32_t iForPlayer)
 	// do any adjustments based on where the item is bought
 	if (pInBase)
 	{
-		r = pInBase->Call(PSF_CalcSellValue, &C4AulParSet(C4VObj(this), C4VInt(iValue)));
+		r = pInBase->Call(PSF_CalcSellValue, &C4AulParSet(this, iValue));
 		if (r != C4VNull)
 			iValue = r.getInt();
 	}
@@ -1834,7 +1841,7 @@ bool C4Object::Promote(int32_t torank, bool exception, bool fForceRankName)
 	// call to object
 	Call(PSF_Promotion);
 
-	StartSoundEffect("Trumpet",0,100,this);
+	StartSoundEffect("UI::Trumpet",0,100,this);
 	return true;
 }
 
@@ -2558,7 +2565,7 @@ bool C4Object::MenuCommand(const char *szCommand)
 {
 	// Native script execution
 	if (!Def || !Status) return false;
-	return !! Def->Script.DirectExec(this, szCommand, "MenuCommand");
+	return !! ::AulExec.DirectExec(this, szCommand, "MenuCommand");
 }
 
 C4Object *C4Object::ComposeContents(C4ID id)
@@ -2587,7 +2594,7 @@ C4Object *C4Object::ComposeContents(C4ID id)
 	if (fInsufficient)
 	{
 		// BuildNeedsMaterial call to object...
-		if (!Call(PSF_BuildNeedsMaterial,&C4AulParSet(C4VPropList(C4Id2Def(idNeeded)), C4VInt(iNeeded))))
+		if (!Call(PSF_BuildNeedsMaterial,&C4AulParSet(C4Id2Def(idNeeded), iNeeded)))
 			// ...game message if not overloaded
 			GameMsgObjectError(Needs.getData(),this);
 		// Return
@@ -2754,11 +2761,11 @@ void C4Object::SetCommand(int32_t iCommand, C4Object *pTarget, C4Value iTx, int3
 		if (!CloseMenu(false)) return;
 	// Script overload
 	if (fControl)
-		if (!!Call(PSF_ControlCommand,&C4AulParSet(C4VString(CommandName(iCommand)),
-		           C4VObj(pTarget),
+		if (!!Call(PSF_ControlCommand,&C4AulParSet(CommandName(iCommand),
+		           pTarget,
 		           iTx,
-		           C4VInt(iTy),
-		           C4VObj(pTarget2),
+		           iTy,
+		           pTarget2,
 		           iData)))
 			return;
 	// Inside vehicle control overload
@@ -2766,13 +2773,13 @@ void C4Object::SetCommand(int32_t iCommand, C4Object *pTarget, C4Value iTx, int3
 		if (Contained->Def->VehicleControl & C4D_VehicleControl_Inside)
 		{
 			Contained->Controller=Controller;
-			if (!!Contained->Call(PSF_ControlCommand,&C4AulParSet(C4VString(CommandName(iCommand)),
-			                      C4VObj(pTarget),
+			if (!!Contained->Call(PSF_ControlCommand,&C4AulParSet(CommandName(iCommand),
+			                      pTarget,
 			                      iTx,
-			                      C4VInt(iTy),
-			                      C4VObj(pTarget2),
+			                      iTy,
+			                      pTarget2,
 			                      iData,
-			                      C4VObj(this))))
+			                      this)))
 				return;
 		}
 	// Outside vehicle control overload
@@ -2780,11 +2787,11 @@ void C4Object::SetCommand(int32_t iCommand, C4Object *pTarget, C4Value iTx, int3
 		if (Action.Target)  if (Action.Target->Def->VehicleControl & C4D_VehicleControl_Outside)
 			{
 				Action.Target->Controller=Controller;
-				if (!!Action.Target->Call(PSF_ControlCommand,&C4AulParSet(C4VString(CommandName(iCommand)),
-				                          C4VObj(pTarget),
+				if (!!Action.Target->Call(PSF_ControlCommand,&C4AulParSet(CommandName(iCommand),
+				                          pTarget,
 				                          iTx,
-				                          C4VInt(iTy),
-				                          C4VObj(pTarget2),
+				                          iTy,
+				                          pTarget2,
 				                          iData)))
 					return;
 			}
@@ -2807,7 +2814,7 @@ bool C4Object::ExecuteCommand()
 	if (Command) Command->Execute();
 	// Command finished: engine call
 	if (Command && Command->Finished)
-		Call(PSF_ControlCommandFinished,&C4AulParSet(C4VString(CommandName(Command->Command)), C4VObj(Command->Target), Command->Tx, C4VInt(Command->Ty), C4VObj(Command->Target2), Command->Data));
+		Call(PSF_ControlCommandFinished,&C4AulParSet(CommandName(Command->Command), Command->Target, Command->Tx, Command->Ty, Command->Target2, Command->Data));
 	// Clear finished commands
 	while (Command && Command->Finished) ClearCommand(Command);
 	// Done
@@ -2853,7 +2860,7 @@ bool C4Object::SetAction(C4PropList * Act, C4Object *pTarget, C4Object *pTarget2
 		if (Animation)
 		{
 			// note that weight is ignored
-			Action.Animation = pMeshInstance->PlayAnimation(Animation->GetData(), 0, NULL, new C4ValueProviderAction(this), new C4ValueProviderConst(itofix(1)));
+			Action.Animation = pMeshInstance->PlayAnimation(Animation->GetData(), 0, NULL, new C4ValueProviderAction(this), new C4ValueProviderConst(itofix(1)), true);
 		}
 	}
 	// Stop previous act sound
@@ -2869,13 +2876,16 @@ bool C4Object::SetAction(C4PropList * Act, C4Object *pTarget, C4Object *pTarget2
 	if (Act!=LastAction)
 	{
 		Action.Time=0;
-		// reset action data if procedure is changed
+		// reset action data and targets if procedure is changed
 		if ((Act ? Act->GetPropertyP(P_Procedure) : -1)
-		    != (LastAction ? LastAction->GetPropertyP(P_Procedure) : -1))
+			!= (LastAction ? LastAction->GetPropertyP(P_Procedure) : -1))
+		{
 			Action.Data = 0;
+			Action.Target = NULL;
+			Action.Target2 = NULL;
+		}
 	}
 	// Set new action
-
 	SetProperty(P_Action, C4VPropList(Act));
 	Action.Phase=Action.PhaseDelay=0;
 	// Set target if specified
@@ -2915,7 +2925,7 @@ bool C4Object::SetAction(C4PropList * Act, C4Object *pTarget, C4Object *pTarget2
 				C4Def *pOldDef = Def;
 				if (pLastTarget && !pLastTarget->Status) pLastTarget = NULL;
 				if (pLastTarget2 && !pLastTarget2->Status) pLastTarget2 = NULL;
-				Call(LastAction->GetPropertyStr(P_AbortCall)->GetCStr(), &C4AulParSet(C4VInt(iLastPhase), C4VObj(pLastTarget), C4VObj(pLastTarget2)));
+				Call(LastAction->GetPropertyStr(P_AbortCall)->GetCStr(), &C4AulParSet(iLastPhase, pLastTarget, pLastTarget2));
 				// abort exeution if def changed
 				if (Def != pOldDef || !Status) return true;
 			}
@@ -2934,7 +2944,7 @@ bool C4Object::SetAction(C4PropList * Act, C4Object *pTarget, C4Object *pTarget2
 		}
 
 	C4Def *pOldDef = Def;
-	Call(PSF_OnActionChanged, &C4AulParSet(C4VString(LastAction ? LastAction->GetName() : "Idle")));
+	Call(PSF_OnActionChanged, &C4AulParSet(LastAction ? LastAction->GetName() : "Idle"));
 	if (Def != pOldDef || !Status) return true;
 
 	return true;
@@ -3012,12 +3022,10 @@ int32_t C4Object::GetProcedure() const
 	return pActionDef->GetPropertyP(P_Procedure);
 }
 
-void GrabLost(C4Object *cObj)
+void GrabLost(C4Object *cObj, C4Object *prev_target)
 {
 	// Grab lost script call on target (quite hacky stuff...)
-	cObj->Action.Target->Call(PSF_GrabLost);
-	// Also, delete the target from the clonk's action (Newton)
-	cObj->Action.Target = NULL;
+	if (prev_target && prev_target->Status) prev_target->Call(PSF_GrabLost);
 	// Clear commands down to first PushTo (if any) in command stack
 	for (C4Command *pCom=cObj->Command; pCom; pCom=pCom->Next)
 		if (pCom->Next && pCom->Next->Command==C4CMD_PushTo)
@@ -3035,6 +3043,7 @@ void C4Object::NoAttachAction()
 	if (GetAction())
 	{
 		int32_t iProcedure = GetProcedure();
+		C4Object *prev_target = Action.Target;
 		// Scaling upwards: corner scale
 		if (iProcedure == DFA_SCALE && Action.ComDir != COMD_Stop && ComDirLike(Action.ComDir, COMD_Up))
 			if (ObjectActionCornerScale(this)) return;
@@ -3051,7 +3060,7 @@ void C4Object::NoAttachAction()
 				{ if (ObjectActionJump(this,itofix(-1),Fix0,false)) return; }
 		}
 		// Pushing: grab loss
-		if (iProcedure==DFA_PUSH) GrabLost(this);
+		if (iProcedure==DFA_PUSH) GrabLost(this, prev_target);
 		// Else jump
 		ObjectActionJump(this,xdir,ydir,false);
 	}
@@ -3345,7 +3354,7 @@ bool DoBridge(C4Object *clk)
 			clk->Action.Time = 0;
 			if (fWall && clk->Action.ComDir==COMD_Up)
 			{
-				// special for roof above Clonk: The nonmoving roof is started at bridgelength before the Clonkl
+				// special for roof above Clonk: The nonmoving roof is started at bridgelength before the Clonk
 				// so, when interrupted, an action time halfway through the action must be set
 				clk->Action.Time = iBridgeTime;
 				iBridgeTime += iBridgeTime;
@@ -3372,8 +3381,18 @@ static void DoGravity(C4Object *cobj)
 		if (cobj->xdir>+FloatFriction) cobj->xdir-=FloatFriction;
 		if (cobj->rdir<-FloatFriction) cobj->rdir+=FloatFriction;
 		if (cobj->rdir>+FloatFriction) cobj->rdir-=FloatFriction;
-		if (!GBackLiquid(cobj->GetX(),cobj->GetY()-1+ cobj->Def->Float*cobj->GetCon()/FullCon -1 ))
-			if (cobj->ydir<0) cobj->ydir=0;
+		// Reduce upwards speed when about to leave liquid to prevent eternal moving up and down.
+		// Check both for no liquid one and two pixels above the surface, because the object could
+		// skip one pixel as its speed can be more than 100.
+		int32_t y_float = cobj->GetY() - 1 + cobj->Def->Float * cobj->GetCon() / FullCon;
+		if (!GBackLiquid(cobj->GetX(), y_float - 1) || !GBackLiquid(cobj->GetX(), y_float - 2))
+			if (cobj->ydir < 0)
+			{
+				// Reduce the upwards speed and set to zero for small values to prevent fluctuations.
+				cobj->ydir /= 2;
+				if (Abs(cobj->ydir) < C4REAL100(10))
+					cobj->ydir = 0;
+			}
 	}
 	// Free fall gravity
 	else if (~cobj->Category & C4D_StaticBack)
@@ -3756,10 +3775,11 @@ void C4Object::ExecAction()
 		if (!Inside(GetX()-sax,-iPushRange,sawdt-1+iPushRange)
 		    || !Inside(GetY()-say,-iPushRange,sahgt-1+iPushRange))
 		{
+			C4Object *prev_target = Action.Target;
 			// Wait command (why, anyway?)
 			StopActionDelayCommand(this);
 			// Grab lost action
-			GrabLost(this);
+			GrabLost(this, prev_target);
 			// Done
 			return;
 		}
@@ -3830,10 +3850,12 @@ void C4Object::ExecAction()
 		if (!Inside(GetX()-sax,-iPushRange,sawdt-1+iPushRange)
 		    || !Inside(GetY()-say,-iPushRange,sahgt-1+iPushRange))
 		{
+			// Remember target. Will be lost on changing action.
+			C4Object *prev_target = Action.Target;
 			// Wait command (why, anyway?)
 			StopActionDelayCommand(this);
 			// Grab lost action
-			GrabLost(this);
+			GrabLost(this, prev_target);
 			// Lose target
 			Action.Target=NULL;
 			// Done
@@ -3983,7 +4005,7 @@ void C4Object::ExecAction()
 			if (!Action.Target2 || (Action.Target2->Con<FullCon)) fBroke=true;
 			if (fBroke)
 			{
-				Call(PSF_LineBreak,&C4AulParSet(C4VBool(true)));
+				Call(PSF_LineBreak,&C4AulParSet(true));
 				AssignRemoval();
 				return;
 			}
@@ -4132,7 +4154,7 @@ bool C4Object::SetOwner(int32_t iOwner)
 	// this automatically updates controller
 	Controller = Owner;
 	// script callback
-	Call(PSF_OnOwnerChanged, &C4AulParSet(C4VInt(Owner), C4VInt(iOldOwner)));
+	Call(PSF_OnOwnerChanged, &C4AulParSet(Owner, iOldOwner));
 	// done
 	return true;
 }
@@ -4304,7 +4326,7 @@ bool C4Object::Collect(C4Object *pObj)
 	// Cancel attach (hacky)
 	ObjectComCancelAttach(pObj);
 	// Container Collection call
-	Call(PSF_Collection,&C4AulParSet(C4VObj(pObj)));
+	Call(PSF_Collection,&C4AulParSet(pObj));
 	// Object Hit call
 	if (pObj->Status && pObj->OCF & OCF_HitSpeed1) pObj->Call(PSF_Hit);
 	if (pObj->Status && pObj->OCF & OCF_HitSpeed2) pObj->Call(PSF_Hit2);
@@ -4379,12 +4401,12 @@ void C4Object::DirectComContents(C4Object *pTarget, bool fDoCalls)
 	if (Contents.GetObject() == pTarget) return;
 	// select object via script?
 	if (fDoCalls)
-		if (Call("~ControlContents", &C4AulParSet(C4VPropList(pTarget))))
+		if (Call("~ControlContents", &C4AulParSet(pTarget)))
 			return;
 	// default action
 	if (!(Contents.ShiftContents(pTarget))) return;
 	// Selection sound
-	if (fDoCalls) if (!Contents.GetObject()->Call("~Selection", &C4AulParSet(C4VObj(this)))) StartSoundEffect("Grab",false,100,this);
+	if (fDoCalls) if (!Contents.GetObject()->Call("~Selection", &C4AulParSet(this))) StartSoundEffect("Clonk::Action::Grab",false,100,this);
 	// update menu with the new item in "put" entry
 	if (Menu && Menu->IsActive() && Menu->IsContextMenu())
 	{
@@ -4431,7 +4453,7 @@ bool C4Object::DoSelect()
 	// selection allowed?
 	if (CrewDisabled) return false;
 	// do callback
-	Call(PSF_CrewSelection, &C4AulParSet(C4VBool(false)));
+	Call(PSF_CrewSelection, &C4AulParSet(false));
 	// done
 	return true;
 }
@@ -4439,7 +4461,7 @@ bool C4Object::DoSelect()
 void C4Object::UnSelect()
 {
 	// do callback
-	Call(PSF_CrewSelection, &C4AulParSet(C4VBool(true)));
+	Call(PSF_CrewSelection, &C4AulParSet(true));
 }
 
 bool C4Object::GetDrawPosition(const C4TargetFacet & cgo,
@@ -4523,7 +4545,7 @@ bool C4Object::PutAwayUnusedObject(C4Object *pToMakeRoomForObject)
 	C4Object *pUnusedObject;
 	C4AulFunc *pFnObj2Drop = GetFunc(PSF_GetObject2Drop);
 	if (pFnObj2Drop)
-		pUnusedObject = pFnObj2Drop->Exec(this, pToMakeRoomForObject ? &C4AulParSet(C4VObj(pToMakeRoomForObject)) : NULL).getObj();
+		pUnusedObject = pFnObj2Drop->Exec(this, &C4AulParSet(pToMakeRoomForObject)).getObj();
 	else
 	{
 		// is there any unused object to put away?
@@ -4759,6 +4781,53 @@ bool C4Object::AdjustWalkRotation(int32_t iRangeX, int32_t iRangeY, int32_t iSpe
 	return true;
 }
 
+static void BubbleOut(int32_t tx, int32_t ty)
+{
+	// No bubbles from nowhere
+	if (!GBackSemiSolid(tx,ty)) return;
+	// Enough bubbles out there already
+	if (::Objects.ObjectCount(C4ID::Bubble) >= 150) return;
+	// Create bubble
+	Game.CreateObject(C4ID::Bubble,NULL,NO_OWNER,tx,ty);
+}
+
+void C4Object::Splash()
+{
+	int32_t tx = GetX(); int32_t ty = GetY()+1;
+	int32_t amt = std::min(Shape.Wdt*Shape.Hgt/10,20);
+	// Splash only if there is free space above
+	if (GBackSemiSolid(tx, ty - 15)) return;
+	// get back mat
+	int32_t iMat = GBackMat(tx, ty);
+	// check liquid
+	if (MatValid(iMat))
+		if (DensityLiquid(::MaterialMap.Map[iMat].Density) && ::MaterialMap.Map[iMat].Instable)
+		{
+			int32_t sy = ty;
+			while (GBackLiquid(tx, sy) && sy > ty - 20 && sy >= 0) sy--;
+			// Splash bubbles and liquid
+			for (int32_t cnt=0; cnt<amt; cnt++)
+			{
+				int32_t bubble_x = tx+Random(16)-8;
+				int32_t bubble_y = ty+Random(16)-6;
+				BubbleOut(bubble_x,bubble_y);
+				if (GBackLiquid(tx,ty) && !GBackSemiSolid(tx, sy))
+				{
+					C4Real xdir = C4REAL100(Random(151)-75);
+					C4Real ydir = C4REAL100(-Random(200));
+					::PXS.Create(::Landscape.ExtractMaterial(tx,ty,false),
+					             itofix(tx),itofix(sy),
+					             xdir,
+					             ydir);
+				}
+			}
+		}
+	// Splash sound
+	if (amt>=20)
+		StartSoundEffect("Liquids::Splash2", false, 50, this);
+	else if (amt>1) StartSoundEffect("Liquids::Splash1", false, 50, this);
+}
+
 void C4Object::UpdateInLiquid()
 {
 	// InLiquid check
@@ -4766,8 +4835,8 @@ void C4Object::UpdateInLiquid()
 	{
 		if (!InLiquid) // Enter liquid
 		{
-			if (OCF & OCF_HitSpeed2) if (Mass>3)
-					Splash(GetX(),GetY()+1,std::min(Shape.Wdt*Shape.Hgt/10,20),this);
+			if (OCF & OCF_HitSpeed2)
+				if (Mass>3) Splash();
 			InLiquid=1;
 		}
 	}
@@ -4943,7 +5012,7 @@ void C4Object::SetPropertyByS(C4String * k, const C4Value & to)
 		switch(k - &Strings.P[0])
 		{
 			case P_Plane:
-				if (!to.getInt()) throw new C4AulExecError("invalid Plane 0");
+				if (!to.getInt()) throw C4AulExecError("invalid Plane 0");
 				SetPlane(to.getInt());
 				return;
 		}

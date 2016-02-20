@@ -25,7 +25,6 @@
 #include <C4StartupNetDlg.h>
 #include <C4ComponentHost.h>
 #include <C4Components.h>
-#include <C4RTF.h>
 #include <C4Log.h>
 #include <C4Game.h>
 #include <C4GameDialogs.h>
@@ -513,9 +512,7 @@ bool C4ScenarioListLoader::Entry::Load(C4Group *pFromGrp, const StdStrBuf *psFil
 		C4ComponentHost DefDesc;
 		if (C4Language::LoadComponentHost(&DefDesc, Group, C4CFN_ScenarioDesc, Config.General.LanguageEx))
 		{
-			C4RTFFile rtf;
-			rtf.Load(StdBuf(DefDesc.GetData(), SLen(DefDesc.GetData())));
-			sDesc.Take(rtf.GetPlainText());
+			sDesc.Copy(DefDesc.GetData());
 		}
 		// load title
 		fctTitle.Load(Group, C4CFN_ScenarioTitle,C4FCT_Full,C4FCT_Full,false,true);
@@ -1847,7 +1844,7 @@ bool C4StartupScenSelDlg::KeyDelete()
 	if (!pSel) return false;
 	C4ScenarioListLoader::Entry *pEnt = pSel->GetEntry();
 	StdStrBuf sWarning;
-	sWarning.Format(LoadResStr("IDS_MSG_PROMPTDELETE"), FormatString("%s %s", pEnt->GetTypeName().getData(), pEnt->GetName().getData()).getData());
+	sWarning.Format(LoadResStr("IDS_MSG_PROMPTDELETE"), FormatString("%s %s", pEnt->GetTypeName().getData(), pEnt->GetName().getData()).getData(), pEnt->GetEntryFilename().getData());
 	GetScreen()->ShowRemoveDlg(new C4GUI::ConfirmationDialog(sWarning.getData(), LoadResStr("IDS_MNU_DELETE"),
 	                           new C4GUI::CallbackHandlerExPar<C4StartupScenSelDlg, ScenListItem *>(this, &C4StartupScenSelDlg::DeleteConfirm, pSel), C4GUI::MessageDialog::btnYesNo));
 	return true;
@@ -1929,7 +1926,7 @@ void C4StartupScenSelDlg::OnButtonScenario(C4GUI::Control *pEl)
 void C4StartupScenSelDlg::DeselectAll()
 {
 	// Deselect all so current folder info is displayed
-	if (GetFocus()) C4GUI::GUISound("ArrowHit");
+	if (GetFocus()) C4GUI::GUISound("UI::Tick");
 	SetFocus(NULL, true);
 	if (pMapData) pMapData->ResetSelection();
 	UpdateSelection();

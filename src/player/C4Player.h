@@ -154,8 +154,6 @@ public:
 
 public:
 	void Eliminate();
-	void Default();
-	void Clear();
 	void ClearPointers(C4Object *tptr, bool fDeath);
 	void Execute();
 	void ExecuteControl();
@@ -172,8 +170,6 @@ public:
 	void DrawHostility(C4Facet &cgo, int32_t iIndex);
 	void AdjustCursorCommand();
 
-	bool ObjectCommand(int32_t iCommand, C4Object *pTarget, int32_t iTx, int32_t iTy, C4Object *pTarget2=NULL, C4Value iData=C4VNull, int32_t iAddMode=C4P_Command_Set);
-	void ObjectCommand2Obj(C4Object *cObj, int32_t iCommand, C4Object *pTarget, int32_t iX, int32_t iY, C4Object *pTarget2, C4Value iData, int32_t iMode);
 	bool DoScore(int32_t iChange);
 	bool Init(int32_t iNumber, int32_t iAtClient, const char *szAtClientName, const char *szFilename, bool fScenarioInit, class C4PlayerInfo *pInfo, C4ValueNumbers *);
 	bool ScenarioAndTeamInit(int32_t idTeam);
@@ -188,6 +184,7 @@ public:
 	bool ObjectInCrew(C4Object *tobj);
 	bool DoWealth(int32_t change);
 	bool SetWealth(int32_t val);
+	bool SetKnowledge(C4ID id, bool fRemove);
 	bool SetHostility(int32_t iOpponent, int32_t iHostility, bool fSilent=false);
 	bool IsHostileTowards(const C4Player *opponent) const;
 	void CompileFunc(StdCompiler *pComp, C4ValueNumbers *);

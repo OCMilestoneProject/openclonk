@@ -22,6 +22,9 @@
 
 #include <C4FacetEx.h>
 
+class C4ViewportWindow;
+class C4FoWRegion;
+
 class C4Viewport
 {
 	friend class C4MouseControl;
@@ -41,8 +44,6 @@ public:
 	float GetZoom() { return Zoom; }
 	void SetZoom(float zoomValue);
 	float GetGUIZoom() const { return Clamp<float>(float(ViewWdt)/1280,0.5f,1.0f); }
-	void Default();
-	void Clear();
 	void Execute();
 	void ClearPointers(C4Object *pObj);
 	void SetOutputSize(int32_t iDrawX, int32_t iDrawY, int32_t iOutX, int32_t iOutY, int32_t iOutWdt, int32_t iOutHgt);
@@ -101,10 +102,10 @@ protected:
 	int32_t OutX,OutY;
 	bool ResetMenuPositions;
 	C4Viewport *Next;
-	class C4ViewportWindow * pWindow;
-	class C4FoWRegion *pFoW;
+	std::unique_ptr<C4ViewportWindow> pWindow;
+	std::unique_ptr<C4FoWRegion> pFoW;
 	void DrawPlayerStartup(C4TargetFacet &cgo);
-	void Draw(C4TargetFacet &cgo, bool fDrawOverlay);
+	void Draw(C4TargetFacet &cgo, bool fDrawGame, bool fDrawOverlay);
 	void DrawOverlay(C4TargetFacet &cgo, const ZoomData &GameZoom);
 	void DrawMenu(C4TargetFacet &cgo);
 	void DrawPlayerInfo(C4TargetFacet &cgo);
@@ -113,7 +114,7 @@ protected:
 	void AdjustZoomAndPosition();
 public:
 	void AdjustPosition(bool immediate = false);
-	C4ViewportWindow* GetWindow() {return pWindow;}
+	C4ViewportWindow* GetWindow() {return pWindow.get();}
 	bool UpdateOutputSize();
 	bool ViewPositionByScrollBars();
 	bool ScrollBarsByViewPosition();
@@ -123,7 +124,6 @@ public:
 	friend class C4ViewportWindow;
 	friend class C4ViewportList;
 	friend class C4GraphicsSystem;
-	friend class C4Video;
 };
 
 class C4ViewportList {

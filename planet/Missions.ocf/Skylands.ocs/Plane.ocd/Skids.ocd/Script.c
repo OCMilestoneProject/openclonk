@@ -10,7 +10,7 @@
 
 private func Hit()
 {
-	Sound("WoodHit");
+	Sound("Hits::Materials::Wood::WoodHit*");
 }
 
 public func Definition(proplist def)
@@ -22,6 +22,5 @@ public func IsPlanePart() { return true; }
 local Collectible = false;
 local Name = "$Name$";
 local Description = "$Description$";
-local Rebuy = true;
 local Touchable = 1;
 local HitPoints = 20;

@@ -97,7 +97,6 @@ public:
 	int32_t ShowStartupMessages;
 	int32_t VerboseObjectLoading;
 	int32_t HighResLandscape;
-	int32_t VideoModule;
 	int32_t MenuTransparency;
 	int32_t UpperBoard;
 	int32_t ShowClock;
@@ -107,11 +106,9 @@ public:
 	int32_t Windowed; // 0: fullscreen, 1: windowed, 2: fullscreen in game, windowed in menu
 	int32_t ShowCrewNames; // show player name above clonks?
 	int32_t ShowCrewCNames; // show clonk names above clonks?
-	int32_t BitDepth; // used bit depth for newgfx
 	int32_t PXSGfx;     // show PXS-graphics (instead of sole pixels)
 	int32_t Gamma; // gamma value
 	int32_t Currency;   // default wealth symbolseb
-	int32_t RenderInactiveEM; // draw vieports even if inactive in CPEM
 	int32_t Monitor;    // monitor index to play on
 	int32_t FireParticles; // draw extended fire particles if enabled (default on)
 	int32_t MaxRefreshDelay; // minimum time after which graphics should be refreshed (ms)
@@ -155,12 +152,12 @@ public:
 	int32_t LeagueServerSignUp;
 	int32_t UseAlternateServer;
 	int32_t PortTCP,PortUDP,PortDiscovery,PortRefServer;
+	int32_t EnableUPnP;
 	int32_t ControlMode;
 	ValidatedStdCopyStrBuf<C4InVal::VAL_NameAllowEmpty> Nick;
 	int32_t MaxLoadFileSize;
 	char LastPassword[CFG_MaxString+1];
 	char AlternateServerAddress[CFG_MaxString+1];
-	char PuncherAddress[CFG_MaxString+1];
 	StdCopyStrBuf LastLeagueServer, LastLeaguePlayerName, LastLeagueAccount, LastLeagueLoginToken;
 #ifdef WITH_AUTOMATIC_UPDATE
 	char UpdateServerAddress[CFG_MaxString+1];

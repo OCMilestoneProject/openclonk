@@ -9,9 +9,12 @@
 //Uses the extra slot library
 #include Library_HasExtraSlot
 
+// Initial velocity of the bomb
+local shooting_strength = 75;
+
 func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 }
 
 local fAiming;
@@ -62,7 +65,7 @@ protected func HoldingEnabled() { return true; }
 
 public func RejectUse(object clonk)
 {
-	return !clonk->HasHandAction();
+	return !clonk->HasHandAction(false, false, true);
 }
 
 func ControlUseStart(object clonk, int x, int y)
@@ -103,7 +106,8 @@ func ControlUseStart(object clonk, int x, int y)
 // Callback from the clonk when loading is finished
 public func FinishedLoading(object clonk)
 {
-	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(500,1000,-000),Trans_Rotate(130,0,1,0),Trans_Rotate(20,0,0,1)));
+	// Change picture to indicate being loaded.
+	this.PictureTransformation = Trans_Mul(Trans_Translate(-3000, 3000, 4000),Trans_Rotate(-45,0,0,1),Trans_Rotate(130,0,1,0));
 	loaded = true;
 	if(holding) clonk->StartAim(this);
 	return holding; // false means stop here and reset the clonk
@@ -116,6 +120,13 @@ func ControlUseHolding(object clonk, ix, iy)
 
 	clonk->SetAimPosition(angle);
 	
+	// Show and update trajectory preview only when loaded.
+	if (loaded)
+	{
+		var shot_x = Sin(180 - angle, MuzzleFront);
+		var shot_y = Cos(180 - angle, MuzzleUp) + MuzzleOffset;
+		Trajectory->Create(clonk, GetX() + shot_x, GetY() + shot_y, Cos(angle - 90, shooting_strength), Sin(angle - 90, shooting_strength));
+	}
 	return true;
 }
 
@@ -134,6 +145,7 @@ public func FinishedAiming(object clonk, int angle)
 	// Fire
 	if(Contents(0) && Contents(0)->~IsGrenadeLauncherAmmo())
 		FireWeapon(clonk, angle);
+	Trajectory->Remove(clonk);
 	clonk->StartShoot(this);
 	return true;
 }
@@ -141,6 +153,7 @@ public func FinishedAiming(object clonk, int angle)
 protected func ControlUseCancel(object clonk, int x, int y)
 {
 	clonk->CancelAiming(this);
+	Trajectory->Remove(clonk);
 	return true;
 }
 
@@ -156,14 +169,15 @@ private func FireWeapon(object clonk, int angle)
 	var IX=Sin(180-angle,MuzzleFront);
 	var IY=Cos(180-angle,MuzzleUp)+MuzzleOffset;
 
-	shot->LaunchProjectile(angle, 0, 75, IX, IY);
+	shot->LaunchProjectile(angle, 0, shooting_strength, IX, IY);
 	shot->~Fuse(true);
 	shot->SetController(clonk->GetController());
 
 	loaded = false;
-	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(1500,0,-1500),Trans_Rotate(170,0,1,0),Trans_Rotate(30,0,0,1)));
+	// Reset transformation to indicate empty grenade launcher.
+	this.PictureTransformation = this.Prototype.PictureTransformation;
 
-	Sound("GunShoot?");
+	Sound("Objects::Weapons::Musket::GunShoot?");
 
 	// Muzzle Flash & gun smoke
 	if(Abs(Normalize(angle,-180)) > 90)
@@ -188,12 +202,12 @@ public func IsArmoryProduct() { return true; }
 
 
 
-func Definition(def) {
-	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(1500,0,-1500),Trans_Rotate(170,0,1,0),Trans_Rotate(30,0,0,1)),def);
+func Definition(def)
+{
+	def.PictureTransformation = Trans_Mul(Trans_Translate(-3000, 1000, 1500),Trans_Rotate(170,0,1,0),Trans_Rotate(30,0,0,1));
 }
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = 1;
-local Rebuy = true;
+local ForceFreeHands = true;

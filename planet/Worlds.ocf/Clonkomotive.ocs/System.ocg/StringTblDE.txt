@@ -1,0 +1,4 @@
+# Intro sequence messages
+MsgDriveTrain=Dieser Zug muss zum Dorf auf der anderen Seite des Canyons.
+MsgOutOfFuel=Ist der Treibstoff etwa wieder alle?
+MsgBridgesGone=Ja, aber die Brücken über die Schluchten sind sowieso zerstört worden.

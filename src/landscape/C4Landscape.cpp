@@ -473,11 +473,11 @@ void C4Landscape::PostFreeShape(C4ValueArray *dig_objects, C4Object *by_object)
 				if (dig_object != by_object)
 					if (!dig_object->Contained && dig_object->Status)
 					{
-						C4AulParSet pars(C4VObj(by_object));
+						C4AulParSet pars(by_object);
 						dig_object->Call(PSF_OnDugOut, &pars);
 						if (dig_object->Status && by_object->Status)
 						{
-							C4AulParSet pars(C4VObj(dig_object));
+							C4AulParSet pars(dig_object);
 							by_object->Call(PSF_DigOutObject, &pars);
 						}
 					}
@@ -602,7 +602,7 @@ void C4Landscape::BlastMaterial2Objects(int32_t tx, int32_t ty, C4MaterialList *
 
 void C4Landscape::DigMaterial2Objects(int32_t tx, int32_t ty, C4MaterialList *mat_list, C4Object *pCollect)
 {
-	C4AulParSet pars(C4VObj(pCollect));
+	C4AulParSet pars(pCollect);
 	for (int32_t mat=0; mat< ::MaterialMap.Num; mat++)
 	{
 		if (mat_list->Amount[mat])
@@ -614,6 +614,9 @@ void C4Landscape::DigMaterial2Objects(int32_t tx, int32_t ty, C4MaterialList *ma
 						mat_list->Amount[mat] -= ::MaterialMap.Map[mat].Dig2ObjectRatio;
 						C4Object *pObj = Game.CreateObject(::MaterialMap.Map[mat].Dig2Object, NULL, NO_OWNER, tx, ty);
 						if (!pObj || !pObj->Status) continue;
+						// Set controller to the controller of the object responsible for digging out
+						if (pCollect && pCollect->Status)
+							pObj->Controller = pCollect->Controller;
 						// Do callbacks to dug object and digger
 						pObj->Call(PSF_OnDugOut, &pars);
 						if (!pObj->Status || !pCollect || !pCollect->Status || pObj->Contained) continue;
@@ -884,6 +887,14 @@ int32_t C4Landscape::ExtractMaterial(int32_t fx, int32_t fy, bool distant_first)
 	return mat;
 }
 
+bool C4Landscape::InsertMaterialOutsideLandscape(int32_t tx, int32_t ty, int32_t mdens)
+{
+	// Out-of-bounds insertion considered successful if inserted into same or lower density
+	// This ensures pumping out of map works
+	// Do allow insertion into same density because it covers the case of e.g. pumping water into the upper ocean of an underwater scenario
+	return GetDensity(tx, ty) <= mdens;
+}
+
 bool C4Landscape::InsertMaterial(int32_t mat, int32_t *tx, int32_t *ty, int32_t vx, int32_t vy, bool query_only)
 {
 	assert(tx); assert(ty);
@@ -893,7 +904,7 @@ bool C4Landscape::InsertMaterial(int32_t mat, int32_t *tx, int32_t *ty, int32_t 
 	if (!mdens) return true;
 
 	// Bounds
-	if (!Inside<int32_t>(*tx,0,Width-1) || !Inside<int32_t>(*ty,0,Height)) return false;
+	if (!Inside<int32_t>(*tx, 0, Width - 1) || !Inside<int32_t>(*ty, 0, Height)) return InsertMaterialOutsideLandscape(*tx, *ty, mdens);
 
 	if (Game.C4S.Game.Realism.LandscapePushPull)
 	{
@@ -927,7 +938,7 @@ bool C4Landscape::InsertMaterial(int32_t mat, int32_t *tx, int32_t *ty, int32_t 
 	{
 		// since tx and ty changed, we need to re-check the bounds here
 		// if we really inserted it, the check is made again in InsertDeadMaterial
-		if (!Inside<int32_t>(*tx,0,Width-1) || !Inside<int32_t>(*ty,0,Height)) return false;
+		if (!Inside<int32_t>(*tx,0,Width-1) || !Inside<int32_t>(*ty,0,Height)) return InsertMaterialOutsideLandscape(*tx, *ty, mdens);
 		return true;		
 	}
 
@@ -956,7 +967,7 @@ bool C4Landscape::InsertDeadMaterial(int32_t mat, int32_t tx, int32_t ty)
 {
 	// Check bounds
 	if (tx < 0 || ty < 0 || tx >= Width || ty >= Height)
-		return false;
+		return InsertMaterialOutsideLandscape(tx, ty, std::min(MatDensity(mat), C4M_Solid));
 
 	// Save back original material so we can insert it later
 	int omat = 0;
@@ -1276,6 +1287,9 @@ void C4Landscape::Clear(bool fClearMapCreator, bool fClearSky, bool fClearRender
 	delete [] pInitial; pInitial = NULL;
 	delete [] pInitialBkg; pInitialBkg = NULL;
 	delete pFoW; pFoW = NULL;
+	// clear relight array
+	for (int32_t i = 0; i < C4LS_MaxRelights; ++i)
+		Relights[i].Default();
 	// clear scan
 	ScanX=0;
 	Mode=C4LSC_Undefined;
@@ -2698,8 +2712,7 @@ bool FindLevelGround(int32_t &rx, int32_t &ry, int32_t width, int32_t hrange)
 
 // Starting from rx/ry, searches for a width of solid level ground with
 // structure clearance (category). Returns bottom center of surface found.
-bool FindConSiteSpot(int32_t &rx, int32_t &ry, int32_t wdt, int32_t hgt,
-                     int32_t Plane, int32_t hrange)
+bool FindConSiteSpot(int32_t &rx, int32_t &ry, int32_t wdt, int32_t hgt, int32_t hrange)
 {
 	bool fFound=false;
 
@@ -2751,10 +2764,10 @@ bool FindConSiteSpot(int32_t &rx, int32_t &ry, int32_t wdt, int32_t hgt,
 
 		// Check runs & object overlap
 		if (rl1>=wdt) if (cx1>0)
-				if (!Game.OverlapObject(cx1,cy1-hgt-10,wdt,hgt+40,Plane))
+				if (!Game.FindConstuctionSiteBlock(cx1,cy1-hgt-10,wdt,hgt+40))
 					{ rx=cx1+wdt/2; ry=cy1; fFound=true; break; }
 		if (rl2>=wdt) if (cx2<GBackWdt)
-				if (!Game.OverlapObject(cx2-wdt,cy2-hgt-10,wdt,hgt+40,Plane))
+				if (!Game.FindConstuctionSiteBlock(cx2-wdt,cy2-hgt-10,wdt,hgt+40))
 					{ rx=cx2-wdt/2; ry=cy2; fFound=true; break; }
 	}
 
@@ -2981,7 +2994,7 @@ bool ConstructionCheck(C4PropList * PropList, int32_t iX, int32_t iY, C4Object *
 	}
 	// Check other structures
 	C4Object *other;
-	if ((other=Game.OverlapObject(rtx,rty,wdt,hgt,ndef->GetPlane())))
+	if ((other=Game.FindConstuctionSiteBlock(rtx,rty,wdt,hgt)))
 	{
 		if (pByObj) GameMsgObjectError(FormatString(LoadResStr("IDS_OBJ_NOOTHER"),other->GetName ()).getData(),pByObj);
 		return false;
@@ -3278,7 +3291,6 @@ bool C4Landscape::DrawBrush(int32_t iX, int32_t iY, int32_t iGrade, const char *
 	if (!GetMapColorIndex(szMaterial,szTexture,byCol)) return false;
 	if (!GetMapColorIndex(szBackMaterial,szBackTexture,byColBkg)) return false;
 	// Get material shape size
-	int32_t mat = PixCol2Mat(byCol);
 	C4Texture *texture = ::TextureMap.GetTexture(szTexture);
 	int32_t shape_wdt=0, shape_hgt=0;
 	if (texture && texture->GetMaterialShape())

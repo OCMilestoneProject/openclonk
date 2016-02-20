@@ -63,7 +63,7 @@ public func FindByName(string name)
 
 public func HasName(string name)
 {
-	return name = dlg_name;
+	return name == dlg_name;
 }
 
 /*-- Dialogue properties --*/
@@ -182,14 +182,18 @@ public func SetDialogueStatus(int status)
 	return;
 }
 
+public func GetDialogueTarget()
+{
+	return dlg_target;
+}
+
 // to be called from within dialogue after the last message
 public func StopDialogue()
 {
 	// clear remembered positions
 	dlg_last_opt_sel = nil;
 	// put on wait for a while; then reenable
-	SetDialogueStatus(DLG_Status_Wait);
-	ScheduleCall(this, this.SetDialogueStatus, 30, 1, DLG_Status_Stop);
+	SetDialogueStatus(DLG_Status_Stop);
 	return true;
 }
 
@@ -240,7 +244,8 @@ public func Interact(object clonk)
 	if (dlg_status == DLG_Status_Stop)
 	{
 		clonk->CloseMenu();
-		dlg_status = DLG_Status_Active;
+		dlg_status = DLG_Status_Wait;
+		ScheduleCall(this, this.SetDialogueStatus, 30, 0, DLG_Status_Active);
 		// Do a call on a closed dialogue as well.
 		var fn_closed = Format("~Dlg_%s_Closed", dlg_name);
 		if (!Call(fn_closed, clonk, dlg_target))

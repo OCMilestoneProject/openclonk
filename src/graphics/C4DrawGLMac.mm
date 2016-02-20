@@ -206,13 +206,22 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 	mouse.y = fmin(fmax(mouse.y, 0), actualSizeY);
 	int x = mouse.x;
 	int y = actualSizeY - mouse.y;
-	
+
 	C4Viewport* viewport = self.controller.viewport;
 	if (::MouseControl.IsViewport(viewport) && Console.EditCursor.GetMode() == C4CNS_ModePlay)
 	{	
 		DWORD keyMask = flags;
 		if ([event type] == NSScrollWheel)
-			keyMask |= (int)[event deltaY] << 16;
+		{
+			// TODO: We could evaluate the full smooth scrolling
+			// information, but zoom and inventory scrolling don't
+			// do very well with that at the moment.
+			if ([event deltaY] > 0)
+				keyMask |= (+32) << 16;
+			else
+				keyMask |= (-32) << 16;
+		}
+
 		::C4GUI::MouseMove(button, x, y, keyMask, Application.isEditor ? viewport : NULL);
 	}
 	else if (viewport)
@@ -294,6 +303,15 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 		[event modifierFlags] & NSShiftKeyMask,
 		false, NULL
 	);
+
+	C4Window* stdWindow = self.controller.stdWindow;
+	if (stdWindow->eKind == C4ConsoleGUI::W_Viewport)
+	{
+		if (type == KEYEV_Down)
+			Console.EditCursor.KeyDown([event keyCode]+CocoaKeycodeOffset, [event modifierFlags]);
+		else
+			Console.EditCursor.KeyUp([event keyCode]+CocoaKeycodeOffset, [event modifierFlags]);
+	}
 }
 
 - (void)keyDown:(NSEvent*)event
@@ -305,6 +323,31 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 - (void)keyUp:(NSEvent*)event
 {
 	[self keyEvent:event withKeyEventType:KEYEV_Up];
+}
+
+- (void)flagsChanged:(NSEvent*)event
+{
+	// Send keypress/release events for relevant modifier keys
+	// keyDown() is not called for modifier keys.
+	C4KeyCode key = (C4KeyCode)([event keyCode] + CocoaKeycodeOffset);
+	int modifier = 0;
+	if (key == K_SHIFT_L || key == K_SHIFT_R)
+		modifier = NSShiftKeyMask;
+	if (key == K_CONTROL_L || key == K_CONTROL_R)
+		modifier = NSControlKeyMask;
+	if (key == K_COMMAND_L || key == K_COMMAND_R)
+		modifier = NSCommandKeyMask;
+	if (key == K_ALT_L || key == K_ALT_R)
+		modifier = NSAlternateKeyMask;
+
+	if (modifier != 0)
+	{
+		int modifierMask = [event modifierFlags];
+		if (modifierMask & modifier)
+			[self keyEvent:event withKeyEventType:KEYEV_Down];
+		else
+			[self keyEvent:event withKeyEventType:KEYEV_Up];
+	}
 }
 
 - (NSDragOperation) draggingEntered:(id<NSDraggingInfo>)sender
@@ -349,22 +392,23 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 
 - (void) scrollWheel:(NSEvent *)event
 {
-	if (!Application.isEditor)
-		[self mouseEvent:event];
+	// Scroll viewport in editor mode
+	C4Viewport* viewport = self.controller.viewport;
+	if (Application.isEditor && viewport && !viewport->GetPlayerLock())
+	{
+		NSScrollView* scrollView = self.controller.scrollView;
+		NSPoint p = NSMakePoint(2*-[event deltaX]/abs(GBackWdt-viewport->ViewWdt), 2*-[event deltaY]/abs(GBackHgt-viewport->ViewHgt));
+		[scrollView.horizontalScroller setDoubleValue:scrollView.horizontalScroller.doubleValue+p.x];
+		[scrollView.verticalScroller setDoubleValue:scrollView.verticalScroller.doubleValue+p.y];
+		viewport->ViewPositionByScrollBars();
+		[self display];
+	}
 	else
 	{
-		C4Viewport* viewport = self.controller.viewport;
-		if (viewport)
-		{
-			NSScrollView* scrollView = self.controller.scrollView;
-			NSPoint p = NSMakePoint(2*-[event deltaX]/abs(GBackWdt-viewport->ViewWdt), 2*-[event deltaY]/abs(GBackHgt-viewport->ViewHgt));
-			[scrollView.horizontalScroller setDoubleValue:scrollView.horizontalScroller.doubleValue+p.x];
-			[scrollView.verticalScroller setDoubleValue:scrollView.verticalScroller.doubleValue+p.y];
-			viewport->ViewPositionByScrollBars();
-			[self display];
-		}
+		// If player lock is enabled or fullscreen: handle scroll
+		// event in-game.
+		[self mouseEvent:event];
 	}
-
 }
 
 - (void) mouseDown:        (NSEvent *)event {[self mouseEvent:event];}
@@ -434,6 +478,8 @@ static NSOpenGLContext* MainContext;
 + (NSOpenGLContext*) createContext:(CStdGLCtx*) pMainCtx
 {
 	std::vector<NSOpenGLPixelFormatAttribute> attribs;
+	attribs.push_back(NSOpenGLPFAOpenGLProfile);
+	attribs.push_back(NSOpenGLProfileVersion3_2Core);
 	attribs.push_back(NSOpenGLPFADepthSize);
 	attribs.push_back(16);
 	if (!Application.isEditor && Config.Graphics.MultiSampling > 0)
@@ -451,10 +497,9 @@ static NSOpenGLContext* MainContext;
 	}
 	attribs.push_back(NSOpenGLPFANoRecovery);
 	//attribs.push_back(NSOpenGLPFADoubleBuffer);
-	attribs.push_back(NSOpenGLPFAWindow);
+	//attribs.push_back(NSOpenGLPFAWindow); // cannot create a core profile with this
 	attribs.push_back(0);
 	NSOpenGLPixelFormat* format = [[NSOpenGLPixelFormat alloc] initWithAttributes:&attribs[0]];
-
 	NSOpenGLContext* result = [[NSOpenGLContext alloc] initWithFormat:format shareContext:pMainCtx ? pMainCtx->objectiveCObject<NSOpenGLContext>() : nil];
 	if (!MainContext)
 		MainContext = result;
@@ -511,13 +556,19 @@ static NSOpenGLContext* MainContext;
 
 #pragma mark CStdGLCtx: Initialization
 
-CStdGLCtx::CStdGLCtx(): pWindow(0) {}
+CStdGLCtx::CStdGLCtx(): pWindow(0), this_context(contexts.end()) {}
 
-void CStdGLCtx::Clear()
+void CStdGLCtx::Clear(bool multisample_change)
 {
 	Deselect();
 	setObjectiveCObject(nil);
 	pWindow = 0;
+
+	if (this_context != contexts.end())
+	{
+		contexts.erase(this_context);
+		this_context = contexts.end();
+	}
 }
 
 void C4Window::EnumerateMultiSamples(std::vector<int>& samples) const
@@ -538,6 +589,7 @@ bool CStdGLCtx::Init(C4Window * pWindow, C4AbstractApp *)
 	// No luck at all?
 	if (!Select(true)) return pGL->Error("  gl: Unable to select context");
 	// init extensions
+	glewExperimental = GL_TRUE; // Init GL 3.0+ function pointers
 	GLenum err = glewInit();
 	if (GLEW_OK != err)
 	{
@@ -550,6 +602,8 @@ bool CStdGLCtx::Init(C4Window * pWindow, C4AbstractApp *)
 	{
 		[controller.openGLView setContext:ctx];
 	}
+
+	this_context = contexts.insert(contexts.end(), this);
 	return true;
 }
 

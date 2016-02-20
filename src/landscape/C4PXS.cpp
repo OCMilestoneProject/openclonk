@@ -26,6 +26,7 @@
 #include <C4Random.h>
 #include <C4Weather.h>
 #include <C4Record.h>
+#include "lib/StdColors.h"
 
 static const C4Real WindDrift_Factor = itofix(1, 800);
 
@@ -354,7 +355,7 @@ void C4PXSSystem::Draw(C4TargetFacet &cgo)
 	for(std::map<int, std::vector<C4BltVertex> >::const_iterator iter = bltVtx.begin(); iter != bltVtx.end(); ++iter)
 	{
 		C4Material *pMat = &::MaterialMap.Map[iter->first];
-		pDraw->PerformMultiTris(cgo.Surface, &iter->second[0], iter->second.size(), NULL, &pMat->PXSFace.Surface->textures[0], NULL, NULL, 0, NULL);
+		pDraw->PerformMultiTris(cgo.Surface, &iter->second[0], iter->second.size(), NULL, pMat->PXSFace.Surface->texture.get(), NULL, NULL, 0, NULL);
 	}
 }
 

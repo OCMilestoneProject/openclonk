@@ -58,7 +58,6 @@ public func IsAnimalFood()
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = true;
 local BlastIncinerate = 5;
 local ContactIncinerate = 1;

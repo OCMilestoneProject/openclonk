@@ -28,17 +28,22 @@ func Fuse(bool explode_on_hit)
 	AddEffect("FuseBurn", this, 1,1, this);
 }
 
-func FxFuseBurnTimer(object bomb, int num, int timer)
+public func OnCannonShot(object cannon)
+{
+	Fuse(true);
+}
+
+func FxFuseBurnTimer(object bomb, proplist effect, int timer)
 {
 	var i = 3;
 	var x = +Sin(GetR(), i);
 	var y = -Cos(GetR(), i);
 	CreateParticle("Smoke", x, y, x, y, PV_Random(18, 36), Particles_Smoke(), 2);
 
-	if(timer == 1) Sound("FuseLoop",nil,nil,nil,+1);
+	if(timer == 1) Sound("Fire::FuseLoop",nil,nil,nil,+1);
 	if(timer >= 90)
 	{
-		Sound("FuseLoop",nil,nil,nil,-1);
+		Sound("Fire::FuseLoop",nil,nil,nil,-1);
 		DoExplode();
 		return -1;
 	}
@@ -57,9 +62,9 @@ func DoExplode()
 		i--;
 	}
 	if(GBackLiquid())
-		Sound("BlastLiquid2");
+		Sound("Fire::BlastLiquid2");
 	else
-		Sound("BlastMetal");
+		Sound("Fire::BlastMetal");
 	CreateParticle("Smoke", PV_Random(-30, 30), PV_Random(-30, 30), 0, 0, PV_Random(40, 60), Particles_Smoke(), 60);
 	Explode(30);
 }
@@ -96,8 +101,6 @@ public func IsGrenadeLauncherAmmo() { return true; }
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = 1;
-local Rebuy = true;
 local BlastIncinerate = 1;
 local ContactIncinerate = 1;

@@ -19,7 +19,7 @@ public func ControlUseStart(object clonk)
 	balloon->SetParent(this);
 
 	// Sound.
-	Sound("BalloonInflate");
+	Sound("Objects::Balloon::Inflate");
 
 	// Make the clonk ride the balloon.
 	clonk->SetAction("Ride", balloon);
@@ -44,7 +44,7 @@ public func QueryRejectDeparture(object clonk)
 
 public func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 }
 
 public func IsInventorProduct() { return true; }
@@ -55,5 +55,3 @@ public func IsInventorProduct() { return true; }
 local Collectible = true;
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
-local Rebuy = true;

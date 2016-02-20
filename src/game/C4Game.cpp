@@ -100,20 +100,16 @@ C4Game::C4Game():
 		RoundResults(GameRoundResults),
 		Input(Control.Input),
 		KeyboardInput(C4KeyboardInput_Init()),
-		pFileMonitor(NULL),
 		pSec1Timer(new C4GameSec1Timer()),
 		fPreinited(false), StartupLogPos(0), QuitLogPos(0),
 		fQuitWithError(false),
-		GlobalSoundModifier(GameGlobalSoundModifier),
-		ScriptGuiRoot(0)
+		GlobalSoundModifier(GameGlobalSoundModifier)
 {
 	Default();
 }
 
 C4Game::~C4Game()
 {
-	// remove timer
-	delete pSec1Timer; pSec1Timer = NULL;
 	// make sure no startup gfx remain loaded
 	C4Startup::Unload();
 }
@@ -379,7 +375,7 @@ bool C4Game::Init()
 		{
 			// By reference
 			bool fSuccess = InitNetworkFromReference(*pJoinReference);
-			delete pJoinReference; pJoinReference = NULL;
+			pJoinReference.reset();
 			if (!fSuccess)
 				return false;
 		}
@@ -492,7 +488,7 @@ bool C4Game::Init()
 	FullScreen.CloseMenu();
 
 	// start statistics (always for now. Make this a config?)
-	pNetworkStatistics = new C4Network2Stats();
+	pNetworkStatistics.reset(new C4Network2Stats);
 
 	// clear loader screen
 	if (GraphicsSystem.pLoaderScreen)
@@ -534,7 +530,7 @@ void C4Game::SetScenarioFilename(const char * c4sfile)
 
 void C4Game::Clear()
 {
-	delete pFileMonitor; pFileMonitor = NULL;
+	pFileMonitor.reset();
 	// fade out music
 	Application.MusicSystem.FadeOut(2000);
 	// game no longer running
@@ -551,7 +547,7 @@ void C4Game::Clear()
 	}
 
 	// stop statistics
-	if (pNetworkStatistics) { delete pNetworkStatistics; pNetworkStatistics = NULL; }
+	pNetworkStatistics.reset();
 	C4AulProfiler::Abort();
 
 	// exit gui
@@ -579,7 +575,7 @@ void C4Game::Clear()
 	Landscape.Clear();
 	PXS.Clear();
 	if (pGlobalEffects) { delete pGlobalEffects; pGlobalEffects=NULL; }
-	if (ScriptGuiRoot) { delete ScriptGuiRoot; ScriptGuiRoot = nullptr; }
+	ScriptGuiRoot.reset();
 	Particles.Clear();
 	::MaterialMap.Clear();
 	TextureMap.Clear(); // texture map *MUST* be cleared after the materials, because of the patterns!
@@ -637,7 +633,7 @@ void C4Game::Clear()
 	*DefinitionFilenames = *DirectJoinAddress = *ScenarioFilename = *PlayerFilenames = 0;
 
 	// join reference
-	delete pJoinReference; pJoinReference=NULL;
+	pJoinReference.reset();
 
 	// okay, game cleared now. Remember log section
 	QuitLogPos = GetLogPos();
@@ -774,7 +770,7 @@ void C4Game::InitFullscreenComponents(bool fRunning)
 	// fullscreen message board
 	C4Facet cgo;
 	cgo.Set(FullScreen.pSurface, 0, 0, C4GUI::GetScreenWdt(), C4GUI::GetScreenHgt());
-	GraphicsSystem.MessageBoard.Init(cgo, !fRunning);
+	GraphicsSystem.MessageBoard->Init(cgo, !fRunning);
 	if (fRunning)
 	{
 		// running game: Message board upper board and viewports
@@ -1013,7 +1009,7 @@ C4Object* C4Game::NewObject( C4PropList *pDef, C4Object *pCreator,
 	if (!Objects.Add(pObj)) { delete pObj; return NULL; }
 	// ---- From now on, object is ready to be used in scripts!
 	// Construction callback
-	C4AulParSet pars(C4VObj(pCreator));
+	C4AulParSet pars(pCreator);
 	pObj->Call(PSF_Construction, &pars);
 	// AssignRemoval called? (Con 0)
 	if (!pObj->Status) { return NULL; }
@@ -1117,7 +1113,8 @@ C4Object* C4Game::CreateObjectConstruction(C4PropList * PropList,
 	return pObj;
 }
 
-C4Object* C4Game::OverlapObject(int32_t tx, int32_t ty, int32_t wdt, int32_t hgt, int32_t Plane)
+// Finds an object (OCF_Exclusive) that blocks a potential construction site in the given rectangle 
+C4Object* C4Game::FindConstuctionSiteBlock(int32_t tx, int32_t ty, int32_t wdt, int32_t hgt)
 {
 	C4Rect rect1,rect2;
 	rect1.x=tx; rect1.y=ty; rect1.Wdt=wdt; rect1.Hgt=hgt;
@@ -1125,7 +1122,7 @@ C4Object* C4Game::OverlapObject(int32_t tx, int32_t ty, int32_t wdt, int32_t hgt
 	for (C4ObjectList *pObjs = Area.FirstObjectShapes(&pSector); pSector; pObjs = Area.NextObjectShapes(pObjs, &pSector))
 		for (C4Object *cObj : *pObjs)
 			if (cObj->Status && !cObj->Contained)
-				if (cObj->GetPlane() == Plane)
+				if (cObj->OCF & OCF_Exclusive)
 				{
 					rect2=cObj->Shape; rect2.x+=cObj->GetX(); rect2.y+=cObj->GetY();
 					if (rect1.Overlap(rect2)) return cObj;
@@ -1469,14 +1466,14 @@ void C4Game::Default()
 	*CurrentScenarioSection=0;
 	pGlobalEffects=NULL;
 	fResortAnyObject=false;
-	pNetworkStatistics = NULL;
+	pNetworkStatistics.reset();
 	::Application.MusicSystem.ClearGame();
 	DebugPort = 0;
 	DebugPassword.Clear();
 	DebugHost.Clear();
 	DebugWait = false;
 	assert(!ScriptGuiRoot);
-	ScriptGuiRoot = nullptr;
+	ScriptGuiRoot.reset();
 }
 
 void C4Game::Evaluate()
@@ -1793,27 +1790,20 @@ bool C4Game::SaveData(C4Group &hGroup, bool fSaveSection, bool fSaveExact, bool 
 		// Decompile (without players for scenario sections)
 		DecompileToBuf_Log<StdCompilerINIWrite>(mkParAdapt(*this, CompileSettings(fSaveSection, !fSaveSection && fSaveExact, fSaveExact, fSaveSync), numbers), &Buf, "Game");
 
-		// Clear alternate saving method
-		hGroup.Delete(C4CFN_ScenarioObjectsScript);
-
-		// Empty? All default; just remove from group then
-		if (!Buf.getLength())
-		{
-			hGroup.Delete(C4CFN_Game);
-			return true;
-		}
+		// Empty? All default save a Game.txt anyway because it is used to signal the engine to not load Objects.c
+		if (!Buf.getLength()) Buf.Copy(" ");
 
 		// Save
 		return hGroup.Add(C4CFN_Game,Buf,false,true);
 	}
 	else
 	{
-		// Clear alternate saving method
+		// Clear any exact game data in case scenario is saved from savegame resume
 		hGroup.Delete(C4CFN_Game);
 
 		// Save objects to file using system scripts
 		int32_t objects_file_handle = ::ScriptEngine.CreateUserFile();
-		C4AulParSet pars(C4VInt(objects_file_handle));
+		C4AulParSet pars(objects_file_handle);
 		C4Value result_c4v(::ScriptEngine.GetPropList()->Call(PSF_SaveScenarioObjects, &pars));
 		bool result = !!result_c4v;
 		if (result_c4v.GetType() == C4V_Nil)
@@ -1884,7 +1874,7 @@ bool C4Game::SaveGameTitle(C4Group &hGroup)
 
 bool C4Game::DoKeyboardInput(C4KeyCode vk_code, C4KeyEventType eEventType, bool fAlt, bool fCtrl, bool fShift, bool fRepeated, class C4GUI::Dialog *pForDialog, bool fPlrCtrlOnly, int32_t iStrength)
 {
-#ifdef USE_X11
+#ifdef USE_GTK
 	static std::map<C4KeyCode, bool> PressedKeys;
 	// Keyrepeats are send as down, down, ..., down, up, where all downs are not distinguishable from the first.
 	if (eEventType == KEYEV_Down)
@@ -1989,7 +1979,7 @@ bool C4Game::QuickSave(const char *strFilename, const char *strTitle, bool fForc
 	// Must not be the scenario file that is currently open
 	if (ItemIdentical(ScenarioFilename, strSavePath.getData()))
 	{
-		StartSoundEffect("Error");
+		StartSoundEffect("UI::Error");
 		::GraphicsSystem.FlashMessage(LoadResStr("IDS_GAME_NOSAVEONCURR"));
 		Log(LoadResStr("IDS_GAME_FAILSAVEGAME"));
 		return false;
@@ -1997,7 +1987,7 @@ bool C4Game::QuickSave(const char *strFilename, const char *strTitle, bool fForc
 
 	// Wait message
 	Log(LoadResStr("IDS_HOLD_SAVINGGAME"));
-	GraphicsSystem.MessageBoard.EnsureLastMessage();
+	GraphicsSystem.MessageBoard->EnsureLastMessage();
 
 	// Save to target scenario file
 	C4GameSave *pGameSave;
@@ -2032,9 +2022,9 @@ bool C4Game::ReloadFile(const char *szFile)
 	if ((pDef = ::Definitions.GetByPath(szRelativePath)))
 		return ReloadDef(pDef->id);
 	// script?
-	if (ScriptEngine.ReloadScript(szRelativePath, &::Definitions, Config.General.LanguageEx))
+	if (ScriptEngine.ReloadScript(szRelativePath, Config.General.LanguageEx))
 	{
-		return true;
+		ReLinkScriptEngine();
 	}
 	return true;
 }
@@ -2061,6 +2051,8 @@ bool C4Game::ReloadDef(C4ID id)
 	// Reload def
 	if (::Definitions.Reload(pDef,C4D_Load_RX,Config.General.LanguageEx,&Application.SoundSystem))
 	{
+		// update script engine - this will also do include callbacks and Freeze() pDef
+		ReLinkScriptEngine();
 		// Success, update all concerned object faces
 		// may have been done by graphics-update already - but not for objects using graphics of another def
 		// better update everything :)
@@ -2140,7 +2132,7 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 
 		// file monitor
 		if (Config.Developer.AutoFileReload && Application.isEditor && !pFileMonitor)
-			pFileMonitor = new C4FileMonitor(FileMonitorCallback);
+			pFileMonitor.reset(new C4FileMonitor(FileMonitorCallback));
 
 		// system scripts
 		if (!InitScriptEngine())
@@ -2214,11 +2206,11 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 
 		// prepare script menus
 		assert(!ScriptGuiRoot);
-		ScriptGuiRoot = new C4ScriptGuiWindow();
+		ScriptGuiRoot.reset(new C4ScriptGuiWindow);
 	}
 
 	// Load section sounds
-	Application.SoundSystem.LoadEffects(hGroup);
+	Application.SoundSystem.LoadEffects(hGroup, NULL, true);
 
 	// determine startup player and team count, which may be used for initial map generation
 	if (!FrameCounter)
@@ -2415,6 +2407,9 @@ bool C4Game::InitScriptEngine()
 	// Prepare host for Objects.c script
 	pScenarioObjectsScript = new C4ScenarioObjectsScriptHost();
 	pScenarioObjectsScript->Reg2List(&::ScriptEngine);
+	C4Value scen_obj_script_val;
+	scen_obj_script_val.SetPropList(pScenarioObjectsScript->GetPropList());
+	::ScriptEngine.RegisterGlobalConstant("ScenarioObjects", scen_obj_script_val);
 
 	// load standard clonk names
 	Names.Load(File, C4CFN_Names);
@@ -2427,8 +2422,14 @@ bool C4Game::LinkScriptEngine()
 	// Link script engine (resolve includes/appends, generate code)
 	ScriptEngine.Link(&::Definitions);
 
-	// Set name list for globals
-	ScriptEngine.GlobalNamed.SetNameList(&ScriptEngine.GlobalNamedNames);
+	// display errors
+	LogF("C4AulScriptEngine linked - %d line%s, %d warning%s, %d error%s",
+		ScriptEngine.lineCnt, (ScriptEngine.lineCnt != 1 ? "s" : ""),
+		ScriptEngine.warnCnt, (ScriptEngine.warnCnt != 1 ? "s" : ""),
+		ScriptEngine.errCnt, (ScriptEngine.errCnt != 1 ? "s" : ""));
+
+	// update material pointers
+	::MaterialMap.UpdateScriptPointers();
 	
 	if (C4AulDebug *pDebug = C4AulDebug::GetDebugger())
 		if (!pDebug->Listen(DebugPort, !!DebugWait))
@@ -2437,6 +2438,18 @@ bool C4Game::LinkScriptEngine()
 	return true;
 }
 
+bool C4Game::ReLinkScriptEngine()
+{
+	::ScriptEngine.ReLink(&::Definitions);
+
+	// update effect pointers
+	::Objects.UpdateScriptPointers();
+
+	// update material pointers
+	::MaterialMap.UpdateScriptPointers();
+
+	return true;
+}
 
 bool C4Game::InitPlayers(C4ValueNumbers * numbers)
 {
@@ -2941,20 +2954,11 @@ bool C4Game::InitKeyboard()
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F5                ), "ZoomIn",                 KEYSCOPE_Generic,    new C4KeyCB  <C4ViewportList>  (::Viewports, &C4ViewportList::ViewportZoomIn)));
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F6                ), "ZoomOut",                KEYSCOPE_Generic,    new C4KeyCB  <C4ViewportList>  (::Viewports, &C4ViewportList::ViewportZoomOut)));
 
-	// messageboard
-	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_UP,     KEYS_Shift), "MsgBoardScrollUp",       KEYSCOPE_Fullscreen, new C4KeyCB  <C4MessageBoard>  (GraphicsSystem.MessageBoard, &C4MessageBoard::ControlScrollUp)));
-	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_DOWN,   KEYS_Shift), "MsgBoardScrollDown",     KEYSCOPE_Fullscreen, new C4KeyCB  <C4MessageBoard>  (GraphicsSystem.MessageBoard, &C4MessageBoard::ControlScrollDown)));
-
 	// debug mode & debug displays
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F5,   KEYS_Control), "DbgModeToggle",          KEYSCOPE_Generic,    new C4KeyCB  <C4Game>          (*this, &C4Game::ToggleDebugMode)));
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F6,   KEYS_Control), "DbgShowVtxToggle",       KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShowVertices)));
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F7,   KEYS_Control), "DbgShowActionToggle",    KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShowAction)));
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_F8,   KEYS_Control), "DbgShow8BitSurface", KEYSCOPE_Generic,    new C4KeyCB  <C4GraphicsSystem>(GraphicsSystem, &C4GraphicsSystem::ToggleShow8BitSurface)));
-
-	// video recording - improve...
-	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_ADD,      KEYS_Alt), "VideoEnlarge",           KEYSCOPE_Generic,    new C4KeyCB  <C4Video>         (GraphicsSystem.Video, &C4Video::Enlarge)));
-	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_SUBTRACT, KEYS_Alt), "VideoReduce",            KEYSCOPE_Generic,    new C4KeyCB  <C4Video>         (GraphicsSystem.Video, &C4Video::Reduce)));
-	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_MULTIPLY, KEYS_Alt), "VideoToggle",            KEYSCOPE_Generic,    new C4KeyCB  <C4Video>         (GraphicsSystem.Video, &C4Video::Toggle)));
 
 	// playback speed - improve...
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_ADD,      KEYS_Shift), "GameSpeedUp",          KEYSCOPE_Generic,    new C4KeyCB  <C4Game>          (*this, &C4Game::SpeedUp)));
@@ -3093,7 +3097,7 @@ bool C4Game::DoGameOver()
 	// Flag, log, call
 	GameOver=true;
 	Log(LoadResStr("IDS_PRC_GAMEOVER"));
-	::GameScript.GRBroadcast(PSF_OnGameOver);
+	GRBroadcast(PSF_OnGameOver);
 	// Flag all surviving players as winners
 	for (C4Player *pPlayer = Players.First; pPlayer; pPlayer = pPlayer->Next)
 		if (!pPlayer->Eliminated)
@@ -3369,7 +3373,7 @@ void C4Game::SetInitProgress(float fToProgress)
 	if (InitProgress > LastInitProgress)
 	{
 		LastInitProgress=InitProgress;
-		GraphicsSystem.MessageBoard.LogNotify();
+		GraphicsSystem.MessageBoard->LogNotify();
 	}
 	// Cheap hack to get the Console window updated while loading
 	Application.FlushMessages();
@@ -3739,6 +3743,16 @@ bool C4Game::SlowDown()
 bool C4Game::ToggleChat()
 {
 	return C4ChatDlg::ToggleChat();
+}
+
+C4Value C4Game::GRBroadcast(const char *szFunction, C4AulParSet *pPars, bool fPassError, bool fRejectTest)
+{
+	// call objects first - scenario script might overwrite hostility, etc...
+	C4Value vResult = ::Objects.GRBroadcast(szFunction, pPars, fPassError, fRejectTest);
+	// rejection tests abort on first nonzero result
+	if (fRejectTest) if (!!vResult) return vResult;
+	// scenario script call
+	return ::GameScript.Call(szFunction, pPars, fPassError);
 }
 
 void C4Game::SetDefaultGamma()

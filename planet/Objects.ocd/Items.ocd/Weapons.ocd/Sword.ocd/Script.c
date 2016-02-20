@@ -4,9 +4,11 @@
 
 static const Sword_Standard_StrikingLength = 15; // in frames
 
+local movement_effect;
+
 func Hit()
 {
-	Sound("LightMetalHit?");
+	Sound("Hits::Materials::Metal::LightMetalHit?");
 }
 
 public func Initialize()
@@ -53,7 +55,7 @@ public func ControlUse(object clonk, int x, int y)
 	if(clonk->IsWalking())
 	{
 		if(!GetEffect("SwordStrikeStop", clonk))
-			AddEffect("SwordStrikeStop", clonk, 2, length, nil, GetID());
+			movement_effect = AddEffect("SwordStrikeStop", clonk, 2, length, nil, GetID());
 	}
 	else
 	if(clonk->IsJumping())
@@ -106,7 +108,7 @@ public func ControlUse(object clonk, int x, int y)
 	magic_number = ObjectNumber();
 	StartWeaponHitCheckEffect(clonk, length, 1);
 	
-	this->Sound("WeaponSwing?");
+	this->Sound("Objects::Weapons::WeaponSwing?");
 	return true;
 }
 
@@ -196,7 +198,7 @@ func CheckStrike(iTime)
 							   Find_Exclude(Contained()),
 							   Find_Layer(GetObjectLayer())))
 	{
-		if (obj->~IsProjectileTarget(this, Contained()) || obj->GetOCF() & OCF_Alive)
+		if (obj->~IsProjectileTarget(this, Contained()))
 		{
 			var effect_name=Format("HasBeenHitBySwordEffect%d", magic_number);
 			var sword_name=Format("HasBeenHitBySword%d", this->ObjectNumber());
@@ -224,7 +226,7 @@ func CheckStrike(iTime)
 					continue;
 					
 				// Sound before damage to prevent null pointer access if callbacks delete this
-				Sound("WeaponHit?", false);
+				Sound("Objects::Weapons::WeaponHit?", false);
 				
 				// fixed damage (9)
 				var damage = SwordDamage(shield);
@@ -276,6 +278,7 @@ func FxSwordStrikeStopStop(pTarget, effect, iCause, iTemp)
 {
 	if(iTemp) return;
 	pTarget->PopActionSpeed("Walk");
+	if (this) movement_effect = nil;
 }
 
 func FxSwordStrikeStopTimer(pTarget, effect)
@@ -322,6 +325,16 @@ func FxSwordStrikeSlowStop(pTarget, effect, iCause, iTemp)
 	pTarget->PopActionSpeed("Walk");
 }
 
+private func Departure(object container)
+{
+	// Always end the movement impairing effect when exiting
+	if (movement_effect)
+	{
+		RemoveEffect(nil, container, movement_effect);
+		movement_effect = nil;
+	}
+}
+
 public func IsWeapon() { return true; }
 public func IsArmoryProduct() { return true; }
 
@@ -331,6 +344,4 @@ func Definition(def) {
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = 1;
-local Rebuy = true;

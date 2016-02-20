@@ -13,12 +13,12 @@ func Intro_Init()
 	
 	this.pilot = npc_pyrit = CreateObjectAbove(Clonk, 100, 100, NO_OWNER);
 	this.pilot->MakeInvincible();
-	this.pilot->SetSkin(2);
 	this.pilot->Enter(this.plane);
 	this.pilot->SetAction("Walk");
 
 	this.pilot->SetName("Pyrit");
 	this.pilot->SetColor(0xff0000);
+	this.pilot->SetAlternativeSkin("MaleBrownHair");
 	this.pilot->SetDir(DIR_Left);
 	this.pilot->SetObjectLayer(this.pilot);
 	this.pilot->AttachMesh(Hat, "skeleton_head", "main", Trans_Translate(5500, 0, 0));
@@ -27,6 +27,7 @@ func Intro_Init()
 	this.dialogue->SetInteraction(false);
 
 	this.plane->FaceRight();
+	this.plane.PlaneDeath = this.Intro_PlaneDeath;
 }
 
 func Intro_Start(object hero)
@@ -97,6 +98,9 @@ func Intro_5()
 	return ScheduleNext(5);
 }
 
+// Don't explode. Plane death handled in sequence.
+func Intro_PlaneDeath() { return true; }
+
 func Intro_6()
 {
 	// Wait for hit
@@ -160,7 +164,7 @@ func Intro_Stop()
 func Intro_PlaneHit()
 {
 	// Plane hit ground! Continue sequence.
-	Sound("PlaneCrash", true);
+	Sound("Objects::Plane::PlaneCrash", true);
 	var particles = Particles_Smoke(true);
 	particles.Size = PV_Linear(PV_Random(20, 60), PV_Random(50, 100));
 	CreateParticle("Smoke", PV_Random(-30,30), PV_Random(-30,30), PV_Random(-60, 60), PV_Random(-20,0), PV_Random(200, 500), particles, 20);

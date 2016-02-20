@@ -453,7 +453,7 @@ bool C4MessageInput::ProcessCommand(const char *szCommand)
 			C4GameLobby::LobbyError(FormatString(LoadResStr("IDS_MSG_CMD_JOINPLR_NOFILE"), plrPath.getData()).getData());
 		}
 		else
-			::Network.Players.JoinLocalPlayer(plrPath.getData(), true);
+			::Network.Players.JoinLocalPlayer(plrPath.getData());
 		return true;
 	}
 	if (!Game.IsRunning && SEqualNoCase(szCmdName, "plrclr"))
@@ -661,8 +661,8 @@ bool C4MessageInput::ProcessCommand(const char *szCommand)
 			pLobby->ClearLog();
 		}
 		// fullscreen
-		else if (::GraphicsSystem.MessageBoard.Active)
-			::GraphicsSystem.MessageBoard.ClearLog();
+		else if (::GraphicsSystem.MessageBoard)
+			::GraphicsSystem.MessageBoard->ClearLog();
 		else
 		{
 			// EM mode
@@ -784,8 +784,16 @@ bool C4MessageInput::ProcessCommand(const char *szCommand)
 			StdCopyStrBuf todo_filename(todo_filenames[i]);
 			todo_filename.Replace("{USERPATH}", Config.General.UserDataPath);
 			int replacements = todo_filename.Replace("{SCENARIO}", Game.ScenarioFile.GetFullName().getData());
-			// sanity check if entered in editor with no file open
-			if (replacements && !Game.ScenarioFile.IsOpen()) continue;
+			// sanity checks for writing scenario TODO file
+			if (replacements)
+			{
+				// entered in editor with no file open?
+				if (!::Game.ScenarioFile.IsOpen()) continue;
+				// not into packed
+				if (::Game.ScenarioFile.IsPacked()) continue;
+				// not into temp network file
+				if (::Control.isNetwork() && !::Control.isCtrlHost()) continue;
+			}
 			// try to append. May fail e.g. on packed scenario file, name getting too long, etc. Then fallback to alternate location.
 			CStdFile todo_file;
 			if (!todo_file.Append(todo_filename.getData())) continue;

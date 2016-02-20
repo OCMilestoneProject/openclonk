@@ -1,57 +1,76 @@
 
 uniform mat3x2 lightTransform;
 
+#ifdef OC_MESH
+//uniform vec4 materialAmbient;
+uniform vec4 materialDiffuse;
+uniform vec4 materialEmission;
+uniform vec4 materialSpecular;
+#endif
+
 #ifdef OC_WITH_NORMALMAP
+uniform mat3 normalMatrix;
 uniform sampler2D normalTex;
 #endif
 
-#ifdef OC_MESH
-varying vec3 normalDir;
-#endif
-
 uniform vec4 clrMod;
-
-#ifdef OC_HAVE_BASE
-uniform sampler2D baseTex;
-#endif
 
 #ifdef OC_HAVE_OVERLAY
 uniform vec4 overlayClr;
 uniform sampler2D overlayTex;
 #endif
 
+#ifdef OC_MESH
+in vec3 vtxNormal;
+in vec2 texcoord;
+#endif
+
+#ifndef OC_MESH
+in vec4 vtxColor;
+#ifdef OC_HAVE_BASE
+uniform sampler2D baseTex;
+in vec2 texcoord;
+#endif
+#endif
+
+out vec4 fragColor;
+
 slice(material)
 {
-	// Default material properties. TODO: Populate them?
-	vec3 matEmit = vec3(0.0,0.0,0.0);
-	vec3 matSpot = vec3(1.0,1.0,1.0);
+	// Default material properties.
+#ifdef OC_MESH
+	vec3 matEmit = vec3(0.0, 0.0, 0.0);//materialEmission.rgb;
+	vec3 matSpot = vec3(1.0, 1.0, 1.0);//materialSpecular.rgb;
+#else
+	vec3 matEmit = vec3(0.0, 0.0, 0.0);
+	vec3 matSpot = vec3(1.0, 1.0, 1.0);
+#endif
 	float matAngle = 1.0;
 }
 
 slice(texture)
 {
-#define color gl_FragColor
-
 #ifdef OC_MESH
 	// TODO: Add emission part of the material. Note we cannot just
 	// add this to the color, but it would need to be handled separately,
 	// such that it is independent from the incident light direction.
-	color = gl_FrontMaterial.diffuse;
+	fragColor = materialDiffuse;
 #else
-	vec4 baseColor = gl_Color;
-	color = baseColor;
-#endif
 
 #ifdef OC_HAVE_BASE
-	color = baseColor * texture2D(baseTex, texcoord.xy);
-#endif
-
+	// Texturing: Use color from texture, modulated with vertex color
+	fragColor = vtxColor * texture(baseTex, texcoord);
 #ifdef OC_HAVE_OVERLAY
 	// Get overlay color from overlay texture
-	vec4 overlay = baseColor * overlayClr * texture2D(overlayTex, texcoord.xy);
+	vec4 overlay = vtxColor * overlayClr * texture(overlayTex, texcoord);
 	// Mix overlay with texture
-	float alpha0 = 1.0 - (1.0 - color.a) * (1.0 - overlay.a);
-	color = vec4(mix(color.rgb, overlay.rgb, overlay.a / alpha0), alpha0);
+	float alpha0 = 1.0 - (1.0 - fragColor.a) * (1.0 - overlay.a);
+	fragColor = vec4(mix(fragColor.rgb, overlay.rgb, overlay.a / alpha0), alpha0);
+#endif
+#else
+	// No texturing: Just use color assigned to vertex
+	fragColor = vtxColor;
+#endif
 #endif
 }
 
@@ -67,12 +86,12 @@ slice(texture+4)
 slice(normal)
 {
 #ifdef OC_WITH_NORMALMAP
-	vec4 normalPx = texture2D(normalTex, texcoord.xy);
+	vec4 normalPx = texture(normalTex, texcoord);
 	vec3 normalPxDir = 2.0 * (normalPx.xyz - vec3(0.5, 0.5, 0.5));
-	vec3 normal = normalize(gl_NormalMatrix * normalPxDir);
+	vec3 normal = normalize(normalMatrix * normalPxDir);
 #else
 #ifdef OC_MESH
-	vec3 normal = normalDir; // Normal matrix is already applied in vertex shader
+	vec3 normal = vtxNormal; // Normal matrix is already applied in vertex shader
 #else
 	vec3 normal = vec3(0.0, 0.0, 1.0);
 #endif
@@ -91,8 +110,8 @@ slice(color)
 	// out = (color, clrmod, 1) * (A,B,C,D,E,F,0,0,G) * (color, clrmod, 1)
 
 #ifdef OC_CLRMOD_MOD2
-	color = vec4(clamp(color.rgb + clrMod.rgb - 0.5, 0.0, 1.0), color.a * clrMod.a);
+	fragColor = vec4(clamp(fragColor.rgb + clrMod.rgb - 0.5, 0.0, 1.0), fragColor.a * clrMod.a);
 #else
-	color = color * clrMod;
+	fragColor = fragColor * clrMod;
 #endif
 }

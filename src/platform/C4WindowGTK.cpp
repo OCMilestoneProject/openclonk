@@ -39,17 +39,12 @@
 #include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
 
-#ifdef USE_X11
+#ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #include <X11/Xlib.h>
 #include <GL/glx.h>
-#endif
-
-#include "C4AppGTKImpl.h"
 
 // Some helper functions for choosing a proper visual
-
-#ifndef USE_CONSOLE
 
 namespace {
 static const std::map<int, int> base_attrib_map {
@@ -117,8 +112,11 @@ GLXFBConfig PickGLXFBConfig(Display* dpy, int multisampling)
 	return config;
 }
 }
+#elif defined(GDK_WINDOWING_WIN32)
+#include <C4windowswrapper.h>
+#include <gdk/gdkwin32.h>
+#endif // GDK_WINDOWING_X11
 
-#endif // #ifndef USE_CONSOLE
 static void OnDestroyStatic(GtkWidget* widget, gpointer data)
 {
 	C4Window* wnd = static_cast<C4Window*>(data);
@@ -132,21 +130,31 @@ static gboolean OnDelete(GtkWidget* widget, GdkEvent* event, gpointer data)
 	return true;
 }
 
+#ifdef GDK_WINDOWING_X11
+static constexpr int x11scancodeoffset = 8;
+#else
+static constexpr int x11scancodeoffset = 0;
+#endif
+
 static gboolean OnKeyPress(GtkWidget* widget, GdkEventKey* event, gpointer data)
 {
 	C4Window* wnd = static_cast<C4Window*>(data);
-	// keycode = scancode + 8
-	if (event->hardware_keycode <= 8) return false;
-	Game.DoKeyboardInput(event->hardware_keycode-8, KEYEV_Down, !!(event->state & GDK_MOD1_MASK), !!(event->state & GDK_CONTROL_MASK), !!(event->state & GDK_SHIFT_MASK), false, NULL);
+	if (event->hardware_keycode <= x11scancodeoffset) return false;
+	Game.DoKeyboardInput(event->hardware_keycode - x11scancodeoffset, KEYEV_Down,
+	                     !!(event->state & GDK_MOD1_MASK),
+	                     !!(event->state & GDK_CONTROL_MASK),
+	                     !!(event->state & GDK_SHIFT_MASK), false, NULL);
 	wnd->CharIn(event->string); // FIXME: Use GtkIMContext somehow
 	return true;
 }
 
 static gboolean OnKeyRelease(GtkWidget* widget, GdkEventKey* event, gpointer user_data)
 {
-	// keycode = scancode + 8
-	if (event->hardware_keycode <= 8) return false;
-	Game.DoKeyboardInput(event->hardware_keycode-8, KEYEV_Up, !!(event->state & GDK_MOD1_MASK), !!(event->state & GDK_CONTROL_MASK), !!(event->state & GDK_SHIFT_MASK), false, NULL);
+	if (event->hardware_keycode <= x11scancodeoffset) return false;
+	Game.DoKeyboardInput(event->hardware_keycode - x11scancodeoffset, KEYEV_Up,
+	                     !!(event->state & GDK_MOD1_MASK),
+	                     !!(event->state & GDK_CONTROL_MASK),
+	                     !!(event->state & GDK_SHIFT_MASK), false, NULL);
 	return true;
 }
 
@@ -194,15 +202,15 @@ static gboolean OnKeyPressStatic(GtkWidget* widget, GdkEventKey* event, gpointer
 		static_cast<C4ViewportWindow*>(user_data)->cvp->TogglePlayerLock();
 		return true;
 	}
-	if (event->hardware_keycode <= 8) return false;
-	Console.EditCursor.KeyDown(event->hardware_keycode - 8, event->state);
+	if (event->hardware_keycode <= x11scancodeoffset) return false;
+	Console.EditCursor.KeyDown(event->hardware_keycode - x11scancodeoffset, event->state);
 	return false;
 }
 
 static gboolean OnKeyReleaseStatic(GtkWidget* widget, GdkEventKey* event, gpointer user_data)
 {
-	if (event->hardware_keycode <= 8) return false;
-	Console.EditCursor.KeyUp(event->hardware_keycode - 8, event->state);
+	if (event->hardware_keycode <= x11scancodeoffset) return false;
+	Console.EditCursor.KeyUp(event->hardware_keycode - x11scancodeoffset, event->state);
 	return false;
 }
 
@@ -365,7 +373,7 @@ static bool fullscreen_needs_restore = false;
 static gboolean fullscreen_restore(gpointer data)
 {
 	if (fullscreen_needs_restore)
-		Application.SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, Application.FullScreenMode());
+		Application.SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.RefreshRate, Config.Graphics.Monitor, Application.FullScreenMode());
 	fullscreen_needs_restore = false;
 	return FALSE;
 }
@@ -442,18 +450,13 @@ static gboolean OnScroll(GtkWidget* widget, GdkEventScroll* event, gpointer user
 	C4GUI::DialogWindow * window = static_cast<C4GUI::DialogWindow*>(user_data);
 	C4GUI::Dialog *pDlg = ::pGUI->GetDialog(window);
 	int idy;
-	gdouble dx, dy;
-	if (gdk_event_get_scroll_deltas((GdkEvent*)event, &dx, &dy))
+	switch (event->direction)
 	{
-		idy = short(round(dy));
+	case GDK_SCROLL_UP: idy = 32; break;
+	case GDK_SCROLL_DOWN: idy = -32; break;
+	default: return false;
 	}
-	else
-	{
-		if (event->direction == GDK_SCROLL_UP)
-			idy = 32;
-		if (event->direction == GDK_SCROLL_DOWN)
-			idy = -32;
-	}
+
 	// FIXME: make the GUI api less insane here
 	if (pDlg)
 		::pGUI->MouseInput(C4MC_Button_Wheel, event->x, event->y, event->state + (idy << 16), pDlg, NULL);
@@ -538,7 +541,8 @@ static gboolean OnConfigureGD(GtkWidget* widget, GdkEventConfigure* event, gpoin
 }
 
 C4Window::C4Window ():
-		Active(false), pSurface(0), wnd(0), renderwnd(0), Info(0), window(NULL)
+		Active(false), pSurface(0),
+		renderwnd(0), Info(0), window(NULL)
 {
 }
 
@@ -547,9 +551,9 @@ C4Window::~C4Window ()
 	Clear();
 }
 
+#ifdef GDK_WINDOWING_X11
 bool C4Window::FindFBConfig(int samples, GLXFBConfig *info)
 {
-#ifndef USE_CONSOLE
 	Display * const dpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
 	GLXFBConfig config = PickGLXFBConfig(dpy, samples);
 	if (info)
@@ -557,16 +561,14 @@ bool C4Window::FindFBConfig(int samples, GLXFBConfig *info)
 		*info = config;
 	}
 	return config != NULL;
-#else
-	// TODO: Do we need to handle this case?
-#endif // #ifndef USE_CONSOLE
 
 	return false;
 }
+#endif
 
 void C4Window::EnumerateMultiSamples(std::vector<int>& samples) const
 {
-#ifndef USE_CONSOLE
+#ifdef GDK_WINDOWING_X11
 	Display * const dpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
 	std::map<int, int> attribs = base_attrib_map;
 	attribs[GLX_SAMPLE_BUFFERS_ARB] = 1;
@@ -584,6 +586,9 @@ void C4Window::EnumerateMultiSamples(std::vector<int>& samples) const
 
 	XFree(configs);
 	samples.assign(multisamples.cbegin(), multisamples.cend());
+#else
+	if(pGL && pGL->pMainCtx)
+		samples = pGL->pMainCtx->EnumerateMultiSamples();
 #endif
 }
 
@@ -600,10 +605,15 @@ void C4Window::FlashWindow()
 	//FIXME - how is this reset? gtk_window_set_urgency_hint(window, true);
 }
 
+void C4Window::GrabMouse(bool grab)
+{
+	// TODO
+}
+
 C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char * Title, const C4Rect * size)
 {
 	Active = true;
-
+#ifdef GDK_WINDOWING_X11
 	if(!FindFBConfig(Config.Graphics.MultiSampling, &Info))
 	{
 		// Disable multisampling if we don't find a visual which
@@ -611,6 +621,7 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 		if(!FindFBConfig(0, &Info)) return NULL;
 		Config.Graphics.MultiSampling = 0;
 	}
+#endif
 
 	assert(!window);
 
@@ -621,12 +632,15 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 
 		// Cannot just use ScrolledWindow because this would just move
 		// the GdkWindow of the DrawingArea.
-		GtkWidget* table;
-
+		GtkWidget* table = gtk_grid_new();
 		render_widget = gtk_drawing_area_new();
-		vw->h_scrollbar = gtk_hscrollbar_new(NULL);
-		vw->v_scrollbar = gtk_vscrollbar_new(NULL);
-		table = gtk_table_new(2, 2, false);
+		gtk_widget_set_hexpand(GTK_WIDGET(render_widget), true);
+		gtk_widget_set_vexpand(GTK_WIDGET(render_widget), true);
+		gtk_grid_attach(GTK_GRID(table), GTK_WIDGET(render_widget), 0, 0, 1, 1);
+		vw->h_scrollbar = gtk_scrollbar_new(GTK_ORIENTATION_HORIZONTAL, NULL);
+		gtk_grid_attach(GTK_GRID(table), vw->h_scrollbar, 0, 1, 1, 1);
+		vw->v_scrollbar = gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL, NULL);
+		gtk_grid_attach(GTK_GRID(table), vw->v_scrollbar, 1, 0, 1, 1);
 
 		GtkAdjustment* adjustment = gtk_range_get_adjustment(GTK_RANGE(vw->h_scrollbar));
 
@@ -645,10 +659,6 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 		  G_CALLBACK(OnVScrollStatic),
 		  this
 		);
-
-		gtk_table_attach(GTK_TABLE(table), GTK_WIDGET(render_widget), 0, 1, 0, 1, static_cast<GtkAttachOptions>(GTK_EXPAND | GTK_FILL), static_cast<GtkAttachOptions>(GTK_EXPAND | GTK_FILL), 0, 0);
-		gtk_table_attach(GTK_TABLE(table), vw->v_scrollbar, 1, 2, 0, 1, GTK_SHRINK, static_cast<GtkAttachOptions>(GTK_FILL | GTK_EXPAND), 0, 0);
-		gtk_table_attach(GTK_TABLE(table), vw->h_scrollbar, 0, 1, 1, 2, static_cast<GtkAttachOptions>(GTK_EXPAND | GTK_FILL), GTK_SHRINK, 0, 0);
 
 		gtk_container_add(GTK_CONTAINER(window), table);
 
@@ -670,11 +680,15 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 
 		g_signal_connect_after(G_OBJECT(render_widget), "configure-event", G_CALLBACK(OnConfigureDareaStatic), this);
 
+#if !GTK_CHECK_VERSION(3,10,0)
 		// do not draw the default background
 		gtk_widget_set_double_buffered (GTK_WIDGET(render_widget), false);
+#endif
 
 		gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(Console.window));
+#if !GTK_CHECK_VERSION(3,14,0)
 		gtk_window_set_has_resize_grip(GTK_WINDOW(window), false);
+#endif
 	}
 	else if (windowKind == W_Fullscreen)
 	{
@@ -692,7 +706,9 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 		g_signal_connect(G_OBJECT(window), "key-release-event", G_CALLBACK(OnKeyRelease), this);
 		g_signal_connect(G_OBJECT(window), "scroll-event", G_CALLBACK(OnScroll), this);
 		gtk_widget_add_events(GTK_WIDGET(window), GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+#if !GTK_CHECK_VERSION(3,10,0)
 		gtk_widget_set_double_buffered (GTK_WIDGET(render_widget), false);
+#endif
 
 		GValue val = {0,{{0}}};
 		g_value_init (&val, G_TYPE_BOOLEAN);
@@ -700,7 +716,9 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 		g_object_set_property (G_OBJECT (render_widget), "can-focus", &val);
 		g_object_set_property (G_OBJECT (window), "can-focus", &val);
 		g_value_unset (&val);
+#if !GTK_CHECK_VERSION(3,14,0)
 		gtk_window_set_has_resize_grip(GTK_WINDOW(window), false);
+#endif
 	}
 	else if (windowKind == W_GuiWindow)
 	{
@@ -712,7 +730,9 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 		g_signal_connect(G_OBJECT(window), "scroll-event", G_CALLBACK(OnScroll), this);
 
 		gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(Console.window));
+#if !GTK_CHECK_VERSION(3,14,0)
 		gtk_window_set_has_resize_grip(GTK_WINDOW(window), false);
+#endif
 	}
 	else if (windowKind == W_Console)
 	{
@@ -727,8 +747,17 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 	g_signal_connect(G_OBJECT(window), "delete-event", G_CALLBACK(OnDelete), this);
 	handlerDestroy = g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(OnDestroyStatic), this);
 	gtk_widget_add_events(GTK_WIDGET(window), GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_SCROLL_MASK);
-	gtk_widget_add_events(GTK_WIDGET(window), GDK_SMOOTH_SCROLL_MASK);
 
+	// TODO: It would be nice to support GDK_SCROLL_SMOOTH_MASK and
+	// smooth scrolling for scrolling in menus, however that should not
+	// change the scroll wheel behaviour ingame for zooming or
+	// inventory change. Note that when both GDK_SCROLL_MASK and
+	// GDK_SMOOTH_SCROLL_MASK are enabled, both type of scroll events
+	// are reported, so one needs to make sure to not double-process them.
+	// It would be nice to have smooth scrolling also e.g. for zooming
+	// ingame, but it probably requires the notion of smooth scrolling
+	// other parts of the engine as well.
+#ifdef GDK_WINDOWING_X11
 	GdkScreen * scr = gtk_widget_get_screen(GTK_WIDGET(render_widget));
 	Display * const dpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
 	XVisualInfo *vis_info = glXGetVisualFromFBConfig(dpy, Info);
@@ -736,6 +765,7 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 	GdkVisual * vis = gdk_x11_screen_lookup_visual(scr, vis_info->visualid);
 	XFree(vis_info);
 	gtk_widget_set_visual(GTK_WIDGET(render_widget),vis);
+#endif
 	gtk_widget_show_all(GTK_WIDGET(window));
 
 //  XVisualInfo vitmpl; int blub;
@@ -751,31 +781,26 @@ C4Window* C4Window::Init(WindowKind windowKind, C4AbstractApp * pApp, const char
 
 	SetTitle(Title);
 
-	GdkWindow* window_wnd = gtk_widget_get_window(GTK_WIDGET(window));
-
 	// Wait until window is mapped to get the window's XID
 	gtk_widget_show_now(GTK_WIDGET(window));
-	wnd = GDK_WINDOW_XID(window_wnd);
-
+	GdkWindow* render_gdk_wnd;
 	if (GTK_IS_LAYOUT(render_widget))
-	{
-		GdkWindow* bin_wnd = gtk_layout_get_bin_window(GTK_LAYOUT(render_widget));
-
-		renderwnd = GDK_WINDOW_XID(bin_wnd);
-	}
+		render_gdk_wnd = gtk_layout_get_bin_window(GTK_LAYOUT(render_widget));
 	else
-	{
-		GdkWindow* render_wnd = gtk_widget_get_window(GTK_WIDGET(render_widget));
+		render_gdk_wnd = gtk_widget_get_window(GTK_WIDGET(render_widget));
 
-		renderwnd = GDK_WINDOW_XID(render_wnd);
-	}
-
+#ifdef GDK_WINDOWING_X11
+	renderwnd = GDK_WINDOW_XID(render_gdk_wnd);
+#elif defined(GDK_WINDOWING_WIN32)
+	renderwnd = reinterpret_cast<HWND>(gdk_win32_window_get_handle(render_gdk_wnd));
+#endif
 	// Make sure the window is shown and ready to be rendered into,
 	// this avoids an async X error.
 	gdk_flush();
 
 	if (windowKind == W_Fullscreen)
-		gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(render_widget)), gdk_cursor_new(GDK_BLANK_CURSOR));
+		gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(render_widget)),
+		                      gdk_cursor_new_for_display(gdk_display_get_default(), GDK_BLANK_CURSOR));
 	return this;
 }
 
@@ -783,14 +808,12 @@ bool C4Window::ReInit(C4AbstractApp* pApp)
 {
 	// Check whether multisampling settings was changed. If not then we
 	// don't need to ReInit anything.
-#ifndef USE_CONSOLE
+#ifdef GDK_WINDOWING_X11
 	int value;
 	Display * const dpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
 	glXGetFBConfigAttrib(dpy, Info, GLX_SAMPLES, &value);
 	if(value == Config.Graphics.MultiSampling) return true;
-#else
-	return true;
-#endif
+
 	// Check whether we have a visual with the requested number of samples
 	GLXFBConfig new_info;
 	if(!FindFBConfig(Config.Graphics.MultiSampling, &new_info)) return false;
@@ -805,7 +828,9 @@ bool C4Window::ReInit(C4AbstractApp* pApp)
 	// remains hidden afterwards. So we re-create it from scratch.
 	gtk_widget_destroy(GTK_WIDGET(render_widget));
 	render_widget = gtk_drawing_area_new();
+#if !GTK_CHECK_VERSION(3,10,0)
 	gtk_widget_set_double_buffered (GTK_WIDGET(render_widget), false);
+#endif
 	g_object_set(G_OBJECT(render_widget), "can-focus", TRUE, NULL);
 	
 	gtk_widget_set_visual(GTK_WIDGET(render_widget),vis);
@@ -828,8 +853,10 @@ bool C4Window::ReInit(C4AbstractApp* pApp)
 	}
 
 	gdk_flush();
-	gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(render_widget)), gdk_cursor_new(GDK_BLANK_CURSOR));
+	gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(render_widget)),
+	                      gdk_cursor_new_for_display(gdk_display_get_default(), GDK_BLANK_CURSOR));
 	return true;
+#endif
 }
 
 void C4Window::Clear()
@@ -842,7 +869,7 @@ void C4Window::Clear()
 	}
 
 	// Avoid that the base class tries to free these
-	wnd = renderwnd = 0;
+	renderwnd = 0;
 
 	window = NULL;
 	Active = false;
@@ -871,38 +898,4 @@ void C4Window::RequestUpdate()
 {
 	// just invoke directly
 	PerformUpdate();
-}
-
-bool OpenURL(const char *szURL)
-{
-	GError *error = 0;
-	if (gtk_show_uri(NULL, szURL, GDK_CURRENT_TIME, &error))
-		return true;
-	if (error != NULL)
-	{
-		fprintf (stderr, "Unable to open URL: %s\n", error->message);
-		g_error_free (error);
-	}
-	const char * argv[][3] =
-	{
-		{ "xdg-open", szURL, 0 },
-		{ "sensible-browser", szURL, 0 },
-		{ "firefox", szURL, 0 },
-		{ "mozilla", szURL, 0 },
-		{ "konqueror", szURL, 0 },
-		{ "epiphany", szURL, 0 },
-		{ 0, 0, 0 }
-	};
-	for (int i = 0; argv[i][0]; ++i)
-	{
-		error = 0;
-		if (g_spawn_async (g_get_home_dir(), const_cast<char**>(argv[i]), 0, G_SPAWN_SEARCH_PATH, 0, 0, 0, &error))
-			return true;
-		else
-		{
-			fprintf(stderr, "%s\n", error->message);
-			g_error_free (error);
-		}
-	}
-	return false;
 }

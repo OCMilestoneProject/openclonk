@@ -109,7 +109,7 @@ func FxPyritHammeringTimer(object c, proplist fx, int time)
 		var anim_idx = Random(4);
 		var anim_name = ["SwordSlash1.L", "SwordSlash1.R", "SwordSlash2.L", "SwordSlash2.R"][anim_idx];
 		var anim_len = c->GetAnimationLength(anim_name);
-		this.anim = c->PlayAnimation(anim_name, CLONK_ANIM_SLOT_Arms, Anim_Linear(0,0,anim_len, Pyrit_Hammer_SwingTime, ANIM_Remove), Anim_Const(1000));
+		this.anim = c->PlayAnimation(anim_name, CLONK_ANIM_SLOT_Arms, Anim_Linear(0,0,anim_len, Pyrit_Hammer_SwingTime, ANIM_Remove));
 		// Schedule effect when hammer hits object
 		var hit_delay = [50,50,30,30][anim_idx] * Pyrit_Hammer_SwingTime / 100;
 		ScheduleCall(c, Dialogue.Pyrit_HitFx, hit_delay, 1);
@@ -122,7 +122,7 @@ func Pyrit_HitFx()
 	var x = (GetDir()*2-1) * 14;
 	var y = 4;
 	CreateParticle("StarSpark", x*9/10,y*9/10, PV_Random(-20, 20), PV_Random(-20, 20), PV_Random(10, 20), Particles_Glimmer(), 10);
-	Sound("Clang?");
+	Sound("Objects::Pickaxe::Clang?");
 	return true;
 }
 

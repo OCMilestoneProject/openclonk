@@ -147,11 +147,20 @@ func FxIntCheckObjectsStart(target, effect fx, temp)
 
 func FxIntCheckObjectsTimer(target, effect fx)
 {
-	var new_objects = FindObjects(Find_AtRect(target->GetX() - 5, target->GetY() - 10, 10, 20), Find_NoContainer(), Find_Layer(target->GetObjectLayer()),
+	// If contained, leave the search area intact, because otherwise we'd have to pass a "nil" parameter to FindObjects (which needs additional hacks).
+	// This is a tiny bit slower (because the area AND the container have to be checked), but the usecase of contained Clonks is rare anyway.
+	var container_restriction = Find_NoContainer();
+	var container = target->Contained();
+	if (container)
+	{
+		container_restriction = Find_Or(Find_Container(container), Find_InArray([container]));
+	}
+	
+	var new_objects = FindObjects(Find_AtRect(target->GetX() - 5, target->GetY() - 10, 10, 20), container_restriction, Find_Layer(target->GetObjectLayer()),
 		// Find all containers and objects with a custom menu.
 		Find_Or(Find_Func("IsContainer"), Find_Func("HasInteractionMenu")),
-		// Do not show objects with an extra slot though - even if they are containers. They count as items here.
-		Find_Not(Find_And(Find_Category(C4D_Object), Find_Func("HasExtraSlots"))),
+		// Do not show objects with an extra slot though - even if they are containers. They count as items here and can be accessed via the surroundings tab.
+		Find_Not(Find_And(Find_Property("Collectible"), Find_Func("HasExtraSlot"))),
 		// Show only objects that the player can see.
 		Find_Func("CheckVisibility", GetOwner()),
 		// Normally sorted by z-order. But some objects may have a lower priority.
@@ -412,9 +421,14 @@ func OpenMenuForObject(object obj, int slot, bool forced)
 	
 	// Show "put/take all items" buttons if applicable. Also update tooltip.
 	var show_grab_all = current_menus[0] && current_menus[1];
+	// Both objects have to be containers.
 	show_grab_all = show_grab_all 
 					&& (current_menus[0].target->~IsContainer())
 					&& (current_menus[1].target->~IsContainer());
+	// And neither must disallow interaction.
+	show_grab_all = show_grab_all
+					&& !current_menus[0].target->~RejectInteractionMenu(cursor)
+					&& !current_menus[1].target->~RejectInteractionMenu(cursor);
 	if (show_grab_all)
 	{
 		current_center_column_target.Visibility = VIS_Owner;
@@ -517,7 +531,7 @@ public func OnMoveAllToClicked(int menu_id)
 	for (obj in contents)
 	{
 		// Sanity, can actually happen if an item merges with others during the transfer etc.
-		if (!obj) continue;
+		if (!obj || !target) continue;
 		
 		var collected = target->Collect(obj, true);
 		if (collected)
@@ -526,12 +540,12 @@ public func OnMoveAllToClicked(int menu_id)
 	
 	if (transfered > 0)
 	{
-		Sound("SoftTouch*", true, nil, GetOwner());
+		Sound("Hits::SoftTouch*", true, nil, GetOwner());
 		return;
 	}
 	else
 	{
-		Sound("BalloonPop", true, nil, GetOwner());
+		Sound("Objects::Balloon::Pop", true, nil, GetOwner());
 		return;
 	}
 }
@@ -664,14 +678,13 @@ func CreateMainMenu(object obj, int slot)
 		big_menu.Right = "100%";
 	}
 	
-	// Do virtually nothing if the building is not ready to be interacted with. This can be caused by several things.
-	var error_message = nil;
-	if (obj->GetCon() < 100) error_message = Format("$MsgNotFullyConstructed$", obj->GetName());
-	else if (Hostile(cursor->GetOwner(), obj->GetOwner())) error_message = Format("$MsgHostile$", obj->GetName(), GetTaggedPlayerName(obj->GetOwner()));
-	else if (obj->~IsClonk() && !obj->~GetAlive()) error_message = Format("$MsgDeadClonk$", obj->GetName());
+	// Do virtually nothing if the building/object is not ready to be interacted with. This can be caused by several things.
+	var error_message = obj->~RejectInteractionMenu(cursor);
 	
 	if (error_message)
 	{
+		if (GetType(error_message) != C4V_String)
+			error_message = "$NoInteractionsPossible$";
 		container.Style = GUI_TextVCenter | GUI_TextHCenter;
 		container.Text = error_message;
 		current_menus[slot].menus = [];
@@ -681,7 +694,7 @@ func CreateMainMenu(object obj, int slot)
 	var menus = obj->~GetInteractionMenus(cursor) ?? [];
 	// get all interaction info from the object and put it into a menu
 	// contents first
-	if (obj->~IsContainer())
+	if (obj->~IsContainer() && !obj->~RejectContentsMenu())
 	{
 		var info =
 		{
@@ -737,7 +750,7 @@ func CreateMainMenu(object obj, int slot)
 			{
 				Priority = 1,
 				Style = GUI_TextVCenter | GUI_TextHCenter,
-				Bottom = "+0.75em",
+				Bottom = "+1em",
 				Text = menu.title,
 				BackgroundColor = 0xa0000000,
 				//Decoration = menu.decoration
@@ -858,11 +871,13 @@ private func OnContentsSelection(symbol, extra_data)
 	var other_target = current_menus[1 - extra_data.slot].target;
 	if (!other_target) return;
 	
+	// Only if the object wants to be interacted with (hostility etc.)
+	if (other_target->~RejectInteractionMenu(cursor)) return;
+	
 	// Allow transfer only into containers.
 	if (!other_target->~IsContainer())
 	{
-		// Todo: other sound for "nope".
-		Sound("LightMetalHit*", nil, 10, GetController(), nil, nil, -50);
+		cursor->~PlaySoundDoubt(true, nil, cursor->GetOwner());
 		return;
 	}
 	
@@ -889,6 +904,8 @@ private func OnContentsSelection(symbol, extra_data)
 	for (var obj in to_transfer)
 	{
 		if (!obj) continue;
+		// Our target might have disappeared (e.g. a construction site completing after the first item).
+		if (!other_target) break;
 		
 		var handled = false;
 		// Does the object not want to leave the other container anyway?
@@ -909,7 +926,7 @@ private func OnContentsSelection(symbol, extra_data)
 			// More special handling for Stackable items..
 			handled = obj->~TryPutInto(other_target);
 			// Try to normally collect the object otherwise.
-			if (!handled)
+			if (!handled && other_target && obj)
 				handled = other_target->Collect(obj, true);
 		}
 		if (handled)
@@ -919,12 +936,12 @@ private func OnContentsSelection(symbol, extra_data)
 	// Did we at least transfer one item?
 	if (successful_transfers > 0)
 	{
-		Sound("SoftTouch*", true, nil, GetOwner());
+		Sound("Hits::SoftTouch*", true, nil, GetOwner());
 		return true;
 	}
 	else
 	{
-		Sound("BalloonPop", true, nil, GetOwner());
+		Sound("Hits::Materials::Wood::DullWoodHit*", true, nil, GetOwner());
 		return false;
 	}
 }

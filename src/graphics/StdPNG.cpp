@@ -225,7 +225,7 @@ bool CPNGFile::SetPix(int iX, int iY, DWORD dwValue)
 		pPix[2] = GetRedValue(dwValue);
 		return true;
 	case PNG_COLOR_TYPE_RGB_ALPHA: // RGBA: simply set in mem
-		*(unsigned long *) pPix = dwValue;
+		*(DWORD *) pPix = dwValue;
 		return true;
 	}
 	return false;
@@ -368,10 +368,8 @@ void CPNGFile::WaitForSaves()
 		first = false;
 #ifdef HAVE_WINTHREAD
 		Sleep(100);
-#elif defined (__APPLE__)
+#else
 		sched_yield();
-#elif defined(HAVE_PTHREAD)
-		pthread_yield();
 #endif
 	}
 }

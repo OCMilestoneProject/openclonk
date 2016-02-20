@@ -27,36 +27,6 @@
 #include <pthread.h>
 #endif
 
-#if defined(USE_X11)
-// from X.h:
-//#define ShiftMask   (1<<0)
-//#define ControlMask   (1<<2)
-#define MK_CONTROL (1<<2)
-#define MK_SHIFT (1<<0)
-#define MK_ALT (1<<3)
-#elif defined(USE_SDL_MAINLOOP)
-#include <SDL.h>
-#define MK_SHIFT (KMOD_LSHIFT | KMOD_RSHIFT)
-#define MK_CONTROL (KMOD_LCTRL | KMOD_RCTRL)
-#define MK_ALT (KMOD_LALT | KMOD_RALT)
-#elif defined(USE_CONSOLE)
-#ifndef _WIN32
-#define MK_SHIFT 0
-#define MK_CONTROL 0
-#endif
-#define MK_ALT 0
-#elif defined(USE_COCOA)
-// declare as extern variables and initialize them in StdMacWindow.mm so as to not include objc headers
-extern int MK_SHIFT;
-extern int MK_CONTROL;
-extern int MK_ALT;
-#elif defined(USE_WIN32_WINDOWS)
-#include <C4windowswrapper.h>
-#ifndef MK_ALT
-#define MK_ALT 0x20 // as defined in oleidl.h
-#endif
-#endif
-
 #ifdef USE_WIN32_WINDOWS
 class CStdMessageProc : public StdSchedulerProc
 {
@@ -92,7 +62,7 @@ public:
 	virtual void Quit();
 
 	bool GetIndexedDisplayMode(int32_t iIndex, int32_t *piXRes, int32_t *piYRes, int32_t *piBitDepth, int32_t *piRefreshRate, uint32_t iMonitor);
-	bool SetVideoMode(int iXRes, int iYRes, unsigned int iColorDepth, unsigned int iRefreshRate, unsigned int iMonitor, bool fFullScreen);
+	bool SetVideoMode(int iXRes, int iYRes, unsigned int iRefreshRate, unsigned int iMonitor, bool fFullScreen);
 	void RestoreVideoMode();
 
 	virtual bool DoScheduleProcs(int iTimeout);
@@ -148,7 +118,7 @@ public:
 	pthread_t MainThread;
 #endif
 
-#if defined(USE_X11)
+#if defined(USE_GTK)
 protected:
 	class C4X11AppImpl * Priv;
 
@@ -156,34 +126,24 @@ protected:
 public:
 	void HandleSDLEvent(SDL_Event& event);
 
-#elif defined(USE_COCOA)
-public:
-	StdStrBuf GetGameDataPath();
-
 #elif defined(USE_CONSOLE)
 protected:
 	C4StdInProc InProc;
+#endif
+
+#ifdef __APPLE__
+public:
+	StdStrBuf GetGameDataPath();
 #endif
 
 #ifdef USE_WIN32_WINDOWS
 private:
 	CStdMessageProc MessageProc;
 public:
-/*	bool IsShiftDown() { return GetKeyState(VK_SHIFT) < 0; }
-	bool IsControlDown() { return GetKeyState(VK_CONTROL) < 0; }
-	bool IsAltDown() { return GetKeyState(VK_MENU) < 0; }*/
-	PIXELFORMATDESCRIPTOR &GetPFD() { return pfd; }
 	HMONITOR hMon; // monitor handle of used monitor
 	RECT MonitorRect;     // output window rect
 protected:
-	PIXELFORMATDESCRIPTOR pfd;  // desired pixel format
 	DEVMODEW dspMode, OldDspMode;// display mode for fullscreen
-#else
-public:
-/*	bool IsShiftDown() { return KeyMask & MK_SHIFT; }
-	bool IsControlDown() { return KeyMask & MK_CONTROL; }
-	bool IsAltDown() { return KeyMask & MK_ALT; }
-	unsigned int KeyMask;*/
 #endif
 
 protected:

@@ -74,7 +74,7 @@ public func DrawCavern(proplist map)
     map->DrawMaterial("Brick", cavern_ground, 3, 80);
 
     // Draw the left tunnel.
-    var tunnel_left = {Algo = MAPALGO_Polygon, X = [0, wdt / 2 - 30], Y = [cavern_hgt, cavern_hgt], Wdt = -5, Open = 1, Empty = 1};
+    var tunnel_left = {Algo = MAPALGO_Polygon, X = [0, wdt / 2 - 30], Y = [cavern_hgt, cavern_hgt], Wdt = -6, Open = 1, Empty = 1};
     tunnel_left = {Algo = MAPALGO_Or, Op = [tunnel_left, {Algo = MAPALGO_Turbulence, Amplitude = 6, Scale = 8, Iterations = 4, Seed = Random(65536), Op = tunnel_left}]};
     tunnel_left = {Algo = MAPALGO_And, Op = [tunnel_left, map_top]};
     map->Draw("Tunnel", tunnel_left);
@@ -173,8 +173,8 @@ public func DrawGemVeins(proplist map, int size, int difficulty)
 		if (node.conn_count == 0)
 			continue;
 		var tunnel = node.tunnels[0];
-		var gem_border = {Algo = MAPALGO_And, Op = [{Algo = MAPALGO_Border, Left = 1, Right = 1, Op = tunnel}, {Algo = MAPALGO_Rect, X = 0, Y = node.Y - 4, Wdt = wdt, Hgt = 10}]};
-		var granite_border = {Algo = MAPALGO_And, Op = [{Algo = MAPALGO_Border, Left = 2, Right = 2, Op = tunnel}, {Algo = MAPALGO_Rect, X = 0, Y = node.Y - 6, Wdt = wdt, Hgt = 2}]};
+		var gem_border = {Algo = MAPALGO_And, Op = [{Algo = MAPALGO_Border, Left = 2, Right = 2, Op = tunnel}, {Algo = MAPALGO_Rect, X = 0, Y = node.Y - 3, Wdt = wdt, Hgt = 9}]};
+		var granite_border = {Algo = MAPALGO_And, Op = [{Algo = MAPALGO_Border, Left = 2, Right = 2, Op = tunnel}, {Algo = MAPALGO_Rect, X = 0, Y = node.Y - 5, Wdt = wdt, Hgt = 2}]};
 		map->Draw(["Ruby", "Amethyst"][Random(2)], gem_border);
 		map->Draw("Granite", granite_border);
 		cnt++;

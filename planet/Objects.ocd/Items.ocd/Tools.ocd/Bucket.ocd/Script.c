@@ -21,7 +21,7 @@ public func GetCarryTransform()
 
 public func RejectUse(object clonk)
 {
-	return !clonk->HasHandAction();
+	return !clonk->HasHandAction(false, false, true);
 }
 
 public func ControlUse(object clonk, int iX, int iY)
@@ -113,7 +113,7 @@ private func Spill(int angle)
 
 protected func Hit()
 {
-	Sound("DullWoodHit?");
+	Sound("Hits::BucketHit?");
 }
 
 // Can collect IsBucketMaterial?
@@ -152,5 +152,5 @@ protected func Definition(def)
 
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
 local Collectible = true;
+local ForceFreeHands = true;

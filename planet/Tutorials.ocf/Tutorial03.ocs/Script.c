@@ -1,5 +1,5 @@
 /** 
-	Tutorial 03: 
+	Tutorial 03: Carry & Construct
 	Author: Maikel
 	
 	Construct sawmill and flagpole: explains contents menu, dynamite, chopping, foundry and construction site.
@@ -58,10 +58,11 @@ private func InitVillageEntrance()
 	CreateObjectAbove(Tree_Coniferous, 188, 384);
 	
 	// Wind generator and sawmill construction site for wood production.
-	CreateObjectAbove(WindGenerator, 224, 384);
+	CreateObjectAbove(WindGenerator, 224, 384)->MakeInvincible();
 	var site = CreateObjectAbove(ConstructionSite, 264, 386);
 	site.MeshTransformation = Trans_Mul(Trans_Rotate(RandomX(-30, 30), 0, 1, 0), Trans_Rotate(RandomX(-10, 10), 1, 0, 0));
 	site->Set(Sawmill);
+	site->MakeUncancellable();
 	site->CreateContents(Wood, 1);
 	site->CreateContents(Rock, 1);	
 	
@@ -70,12 +71,14 @@ private func InitVillageEntrance()
 	
 	// A wooden cabin ruin on fire.
 	var cabin = CreateObjectAbove(Ruin_WoodenCabin, 370, 352);
+	cabin.Plane = -400;
 	for (var x = -20; x <= 20; x += 10)
 		CreateObjectAbove(Flame, cabin->GetX() + x, cabin->GetY());
 	cabin->AddScorch(-30, 15, 45, 32, 1200);
 	cabin->AddScorch(15, 0, -45, 50, 1500);
 	var chest = CreateObjectAbove(Chest, 410, 352);
 	chest->CreateContents(Hammer);
+	chest->MakeInvincible();
 	return;
 }
 
@@ -83,6 +86,7 @@ private func InitOreMine()
 {
 	// A foundry halfway down.
 	var foundry = CreateObjectAbove(Foundry, 456, 488);
+	foundry->MakeInvincible();
 	var lantern = foundry->CreateContents(Lantern);
 	lantern->TurnOn();
 	
@@ -97,6 +101,7 @@ private func InitVillageMain()
 	// Elevator, and grain production on the right.
 	var elevator = CreateObjectAbove(Elevator, 601, 392);
 	elevator->CreateShaft(264);
+	elevator->MakeInvincible();
 	var mill = CreateObjectAbove(Ruin_Windmill, 816, 392);
 	mill->AddScorch(-15, 42, 90, 50, 1200);
 	CreateObjectAbove(Kitchen, 904, 376);
@@ -112,22 +117,22 @@ private func InitVillageMain()
 	wheel->SetStoneDoor(door);
 	
 	// A tree is blocking the path down in this round.
-	CreateObject(MovingBrick, 870, 396);
+	CreateObject(MovingBrick, 870, 396).Plane = 200;
 	var tree = CreateObjectAbove(Tree_Coniferous, 890, 422);
 	tree->SetR(90);
 	tree.Plane = 450;
 	
 	// Tools and armory down below.	
-	CreateObjectAbove(ToolsWorkshop, 698, 504);
-	CreateObjectAbove(Armory, 772, 504);
-	CreateObjectAbove(Flagpole, 828, 496);
+	CreateObjectAbove(ToolsWorkshop, 698, 504)->MakeInvincible();
+	CreateObjectAbove(Armory, 772, 504)->MakeInvincible();
+	CreateObjectAbove(Flagpole, 828, 496)->MakeInvincible();
 	return;
 }
 
 private func InitVillageUnderground()
 {
 	// A wooden cabin ruin.
-	var cabin = CreateObjectAbove(Ruin_WoodenCabin, 574, 568);
+	var cabin = CreateObjectAbove(Ruin_WoodenCabin, 562, 568);
 	cabin->AddScorch(-20, 12, 45, 50, 1500);
 	cabin->AddScorch(15, 10, -45, 50, 1500);
 	
@@ -139,6 +144,7 @@ private func InitVillageUnderground()
 	// Steam engine for power supply below.
 	var engine = CreateObjectAbove(SteamEngine, 780, 752);
 	engine->CreateContents(Coal, 5);
+	engine->MakeInvincible();
 	
 	// Lorry with materials down below, the materials are only added in tutorial 4.
 	CreateObjectAbove(Lorry, 954, 670);	
@@ -147,11 +153,11 @@ private func InitVillageUnderground()
 
 private func InitVegetation()
 {
-	PlaceGrass(85);
-	PlaceObjects(Firestone, 25 + Random(5), "Earth");
-	PlaceObjects(Loam, 15 + Random(5), "Earth");
-	
+	Grass->Place(85);
+	PlaceObjects(Firestone, 10 + Random(5), "Earth");
+	PlaceObjects(Rock, 25 + Random(5), "Earth");
 	Branch->Place(20, nil, {underground = true});
+	Flower->Place(10);
 	return;
 }
 
@@ -162,6 +168,8 @@ private func InitAnimals()
 	wipf->SetMeshMaterial("WipfSkin");
 	wipf->SetObjectLayer(wipf);
 	wipf->EnableTutorialControl(true);
+	wipf.Name = "$WipfName$";
+	wipf.Description = "$WipfDescription$";
 		
 	// Some wipfs near the grain field.
 	var wipfs = Wipf->Place(4, Rectangle(640, 352, 180, 40));
@@ -172,8 +180,7 @@ private func InitAnimals()
 	}
 	
 	// Some butterflies as atmosphere.
-	for (var i = 0; i < 25; i++)
-		PlaceAnimal(Butterfly);
+	Butterfly->Place(25);
 	return;
 }
 
@@ -191,23 +198,22 @@ private func InitAI()
 
 	// A fireman NPC who extinguishes a burning cabin.	
 	var npc_fireman = CreateObjectAbove(Clonk, 200, 384);
-	npc_fireman->SetColor(0xff0000);
 	npc_fireman->SetName("Hubert");
 	var barrel = npc_fireman->CreateContents(Barrel);
 	barrel->SetFilled("Water", 300);
 	npc_fireman->SetObjectLayer(npc_fireman);
-	npc_fireman->SetSkin(2);
 	npc_fireman->SetDir(DIR_Left);
-	npc_fireman->SetDialogue("Fireman", true);	
+	npc_fireman->SetDialogue("Fireman", false);
+	npc_fireman->SetAlternativeSkin("MaleDarkHair");
 	
 	// A builder which tells you where to place the flagpole.
 	var npc_builder = CreateObjectAbove(Clonk, 504, 376);
-	npc_builder->SetColor(0x440088);
 	npc_builder->SetName("Kummerog");
 	npc_builder->CreateContents(Hammer);
 	npc_builder->SetObjectLayer(npc_builder);
 	npc_builder->SetDir(DIR_Left);
-	npc_builder->SetDialogue("Builder", true);		
+	npc_builder->SetDialogue("Builder", false);
+	npc_builder->SetAlternativeSkin("Carpenter");
 	
 	// A farmer near the grain field.
 	var npc_farmer = CreateObjectAbove(Clonk, 720, 392);
@@ -216,11 +222,25 @@ private func InitAI()
 	npc_farmer->SetObjectLayer(npc_farmer);
 	npc_farmer->SetSkin(1);
 	npc_farmer->SetDir(DIR_Left);
-	npc_farmer->SetDialogue("Farmer", true);
+	npc_farmer->SetDialogue("Farmer", false);
 	
 	// Lookout.
+	var npc_lookout = CreateObjectAbove(Clonk, 992, 296);
+	npc_lookout->SetName("Larry");
+	npc_lookout->SetObjectLayer(npc_lookout);
+	npc_lookout->SetDir(DIR_Left);
+	npc_lookout->SetDialogue("Lookout", false);
+	npc_lookout->SetAlternativeSkin("Guard");
 
 	// Village head.
+	var npc_head = CreateObjectAbove(Clonk, 840, 736);
+	npc_head->SetName("Archibald");
+	npc_head->SetObjectLayer(npc_head);
+	npc_head->SetDir(DIR_Right);
+	npc_head->SetDialogue("VillageHead", false);
+	var lantern = npc_head->CreateContents(Lantern);
+	lantern->TurnOn();
+	npc_head->SetAlternativeSkin("Sage");
 	return;
 }
 
@@ -241,7 +261,7 @@ protected func InitializePlayer(int plr)
 		structure->SetOwner(plr);
 	
 	// Add an effect to the clonk to track the goal.
-	AddEffect("TrackGoal", clonk, 100, 2);
+	AddEffect("TrackGoal", nil, 100, 2);
 
 	// Standard player zoom for tutorials.
 	SetPlayerViewLock(plr, true);
@@ -256,9 +276,9 @@ protected func InitializePlayer(int plr)
 
 	// Create tutorial guide, add messages, show first.
 	guide = CreateObject(TutorialGuide, 0, 0, plr);
-	var interact = GetPlayerControlAssignment(plr, CON_Interact, true);
+	var interact = GetPlayerControlAssignment(plr, CON_Interact, true, true);
 	guide->AddGuideMessage(Format("$MsgTutorialWipfville$", interact));
-	guide->ShowGuideMessage(0);
+	guide->ShowGuideMessage();
 	var effect = AddEffect("TutorialTalkedToLumberjack", nil, 100, 5);
 	effect.plr = plr;
 	return;
@@ -283,7 +303,7 @@ global func FxGoalOutroStart(object target, proplist effect, int temp)
 		
 	// Show guide message congratulating.
 	guide->AddGuideMessage("$MsgTutorialCompleted$");
-	guide->ShowGuideMessage(13);
+	guide->ShowGuideMessage();
 	return FX_OK;
 }
 
@@ -323,7 +343,7 @@ global func FxTutorialTalkedToLumberjackStop(object target, proplist effect, int
 	if (temp)
 		return FX_OK;
 	guide->AddGuideMessage("$MsgTutorialFindRock$");
-	guide->ShowGuideMessage(1);
+	guide->ShowGuideMessage();
 	var new_effect = AddEffect("TutorialFoundLorry", nil, 100, 5);
 	new_effect.plr = effect.plr;
 	return FX_OK;
@@ -333,8 +353,9 @@ global func FxTutorialFoundLorryTimer(object target, proplist effect)
 {
 	if (FindObject(Find_OCF(OCF_CrewMember), Find_Owner(effect.plr), Find_InRect(168, 576, 104, 72)))
 	{
-		guide->AddGuideMessage(Format("$MsgTutorialDynamiteLorry$", GetPlayerControlAssignment(effect.plr, CON_Contents, true)));
-		guide->ShowGuideMessage(2);
+		var interaction_menu = GetPlayerControlAssignment(effect.plr, CON_Contents, true, true);
+		guide->AddGuideMessage(Format("$MsgTutorialDynamiteLorry$", interaction_menu));
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialObtainedDynamite", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -348,7 +369,7 @@ global func FxTutorialObtainedDynamiteTimer(object target, proplist effect)
 	if (clonk && FindObject(Find_ID(Dynamite), Find_Container(clonk)))
 	{
 		guide->AddGuideMessage("$MsgTutorialBlastRock$");
-		guide->ShowGuideMessage(3);
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialBlastedRock", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -361,7 +382,7 @@ global func FxTutorialBlastedRockTimer(object target, proplist effect)
 	if (FindObject(Find_ID(Rock), Find_InRect(180, 592, 100, 64)))
 	{
 		guide->AddGuideMessage("$MsgTutorialPickUpRock$");
-		guide->ShowGuideMessage(4);
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialObtainedRock", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -372,10 +393,14 @@ global func FxTutorialBlastedRockTimer(object target, proplist effect)
 global func FxTutorialObtainedRockTimer(object target, proplist effect)
 {
 	var clonk = FindObject(Find_OCF(OCF_CrewMember), Find_Owner(effect.plr));
-	if (clonk && ObjectCount(Find_ID(Rock), Find_Container(clonk)) >= 3)
+	var has_three_rocks = clonk && ObjectCount(Find_ID(Rock), Find_Container(clonk)) >= 3; 
+	var finished_sawmill = FindObject(Find_ID(Sawmill));
+	// Also progress if the sawmill has been finished without the three rocks at the same time.
+	if (has_three_rocks || finished_sawmill)
 	{
-		guide->AddGuideMessage(Format("$MsgTutorialSawmill$",  GetPlayerControlAssignment(effect.plr, CON_Contents, true)));
-		guide->ShowGuideMessage(5);
+		var interaction_menu = GetPlayerControlAssignment(effect.plr, CON_Contents, true, true);
+		guide->AddGuideMessage(Format("$MsgTutorialSawmill$", interaction_menu));
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialSawmillFinished", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -386,19 +411,27 @@ global func FxTutorialObtainedRockTimer(object target, proplist effect)
 global func FxTutorialSawmillFinishedTimer(object target, proplist effect)
 {
 	if (FindObject(Find_ID(Sawmill)))
-	{
-		guide->AddGuideMessage("$MsgTutorialTalkToFireman$");
-		guide->ShowGuideMessage(6);
-		var new_effect = AddEffect("TutorialTalkedForFlagpole", nil, 100, 5);
-		new_effect.plr = effect.plr;
-		// Notify lumberjack the sawmill is done.
-		var dialogue_lumberjack = Dialogue->FindByName("Lumberjack");
-		if (dialogue_lumberjack)
-			dialogue_lumberjack->SetDialogueProgress(5, nil, true);
 		return FX_Execute_Kill;
-	}
 	return FX_OK;
 }
+
+global func FxTutorialSawmillFinishedStop(object target, proplist effect, int reason, bool temp)
+{
+	if (temp)
+		return FX_OK;
+	guide->AddGuideMessage("$MsgTutorialTalkToFireman$");
+	guide->ShowGuideMessage();
+	var new_effect = AddEffect("TutorialTalkedForFlagpole", nil, 100, 5);
+	new_effect.plr = effect.plr;
+	// Notify lumberjack the sawmill is done.
+	var dialogue_lumberjack = Dialogue->FindByName("Lumberjack");
+	if (dialogue_lumberjack)
+		dialogue_lumberjack->SetDialogueProgress(5, nil, false);
+	Dialogue->FindByName("Fireman")->AddAttention();
+	Dialogue->FindByName("Builder")->AddAttention();
+	return FX_OK;
+}
+
 
 public func OnHasTalkedToFireman()
 {
@@ -421,7 +454,7 @@ global func FxTutorialTalkedForFlagpoleTimer(object target, proplist effect)
 	if (effect.talked_to_fireman && effect.talked_to_builder)
 	{
 		guide->AddGuideMessage("$MsgTutorialConstructFlagpole$");
-		guide->ShowGuideMessage(7);
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialPlacedFlagpole", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -434,9 +467,13 @@ global func FxTutorialPlacedFlagpoleTimer(object target, proplist effect)
 	if (FindObject(Find_ID(ConstructionSite), Find_AtRect(480, 356, 32, 20)))
 	{
 		guide->AddGuideMessage("$MsgTutorialFlagpoleMaterials$");
-		guide->ShowGuideMessage(8);
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialTalkedToLumberjack2", nil, 100, 5);
 		new_effect.plr = effect.plr;
+		// Notify lumberjack that player talked to other npc's.
+		var dialogue_lumberjack = Dialogue->FindByName("Lumberjack");
+		if (dialogue_lumberjack)
+			dialogue_lumberjack->SetDialogueProgress(6, nil, true);
 		return FX_Execute_Kill;
 	}
 	return FX_OK;
@@ -452,7 +489,7 @@ global func FxTutorialTalkedToLumberjack2Stop(object target, proplist effect, in
 	if (temp)
 		return FX_OK;
 	guide->AddGuideMessage("$MsgTutorialAxeChopping$");
-	guide->ShowGuideMessage(9);
+	guide->ShowGuideMessage();
 	var new_effect = AddEffect("TutorialWoodInSite", nil, 100, 5);
 	new_effect.plr = effect.plr;
 	return FX_OK;
@@ -464,7 +501,7 @@ global func FxTutorialWoodInSiteTimer(object target, proplist effect)
 	if (site && ObjectCount(Find_ID(Wood), Find_Container(site)) >= 3)
 	{
 		guide->AddGuideMessage("$MsgTutorialOreMining$");
-		guide->ShowGuideMessage(10);
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialHasOreCoal", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -477,8 +514,9 @@ global func FxTutorialHasOreCoalTimer(object target, proplist effect)
 	var clonk = FindObject(Find_OCF(OCF_CrewMember), Find_Owner(effect.plr));
 	if (FindObject(Find_ID(Ore), Find_Container(clonk)) && FindObject(Find_ID(Coal), Find_Container(clonk)))
 	{
-		guide->AddGuideMessage(Format("$MsgTutorialProduceMetal$", GetPlayerControlAssignment(effect.plr, CON_Contents, true)));
-		guide->ShowGuideMessage(11);
+		var interaction_menu = GetPlayerControlAssignment(effect.plr, CON_Contents, true, true);
+		guide->AddGuideMessage(Format("$MsgTutorialProduceMetal$", interaction_menu));
+		guide->ShowGuideMessage();
 		var new_effect = AddEffect("TutorialMetalFinished", nil, 100, 5);
 		new_effect.plr = effect.plr;
 		return FX_Execute_Kill;
@@ -491,7 +529,7 @@ global func FxTutorialMetalFinishedTimer(object target, proplist effect)
 	if (FindObject(Find_ID(Metal)))
 	{
 		guide->AddGuideMessage("$MsgTutorialMetalToSite$");
-		guide->ShowGuideMessage(12);
+		guide->ShowGuideMessage();
 		return FX_Execute_Kill;
 	}
 	return FX_OK;
@@ -519,7 +557,7 @@ protected func OnGuideMessageShown(int plr, int index)
 	if (index == 4)
 	{
 		var clonk = FindObject(Find_OCF(OCF_CrewMember), Find_Owner(plr));
-		var rock = FindObject(Find_ID(Rock), Sort_Distance(clonk->GetX(), clonk->GetY()));
+		var rock = FindObject(Find_ID(Rock), Find_NoContainer(), Find_OCF(OCF_InFree), Find_Distance(60, clonk->GetX(), clonk->GetY()), Sort_Distance(clonk->GetX(), clonk->GetY()));
 		TutArrowShowTarget(rock);
 	}
 	// Show the sawmill construction site.
@@ -598,6 +636,7 @@ global func FxClonkRestoreStop(object target, effect, int reason, bool  temporar
 		var plr = target->GetOwner();
 		var clonk = CreateObject(Clonk, 0, 0, plr);
 		clonk->GrabObjectInfo(target);
+		Rule_BaseRespawn->TransferInventory(target, clonk);
 		SetCursor(plr, clonk);
 		clonk->DoEnergy(100000);
 		restorer->SetRestoreObject(clonk, nil, to_x, to_y, 0, "ClonkRestore");

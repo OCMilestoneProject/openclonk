@@ -10,7 +10,6 @@ local rdir;
 local thrust;
 local dir;
 local propanim;
-local health;
 local clonkmesh;
 
 public func IsVehicle() { return true; }
@@ -22,14 +21,13 @@ protected func Construction(object byobj)
 
 protected func Initialize()
 {
-	propanim = PlayAnimation("Propellor", 15,  Anim_Const(0),Anim_Const(1000));
+	propanim = PlayAnimation("Propellor", 15,  Anim_Const(0));
 	AddEffect("IntPlane",this,1,1,this);
 	SetAction("Land");
 	throttle = 0;
 	thrust = 0;
 	rdir = 0;
 	dir = 0;
-	health = 50;
 	return;
 }
 
@@ -94,7 +92,7 @@ private func FireBullet(object ammo)
 	var shot = ammo->TakeObject();
 	var angle = this->GetR();
 	shot->Launch(this, angle, 35, 200);
-	Sound("GunShoot?");
+	Sound("Objects::Weapons::Musket::GunShoot?");
 
 	// Muzzle Flash & gun smoke
 	var IX = Sin(GetR(), 30);
@@ -193,10 +191,6 @@ protected func FxIntControlRocketTimer(object target, proplist effect, int time)
 
 public func ContainedUp(object clonk)
 {
-	//plane is broken?
-	if(GetDamage() > health)
-		return;
-
 	//engine start
 	if(GetAction() == "Land")
 	{
@@ -207,10 +201,6 @@ public func ContainedUp(object clonk)
 
 public func ContainedDown(object clonk)
 {
-	//plane is broken?
-	if(GetDamage() > health)
-		return;
-
 	//engine shutoff
 	if(GetAction() == "Fly")
 	{
@@ -358,8 +348,7 @@ public func RollPlane(int rolldir, bool instant)
 	{
 		var i = 36;
 		if(instant) i = 1;
-		if(newrot) StopAnimation(newrot);
-		newrot = PlayAnimation(Format("Roll%d",rolldir), 10, Anim_Linear(0, 0, GetAnimationLength(Format("Roll%d",rolldir)), i, ANIM_Hold), Anim_Const(1000));
+		newrot = PlayAnimation(Format("Roll%d",rolldir), 10, Anim_Linear(0, 0, GetAnimationLength(Format("Roll%d",rolldir)), i, ANIM_Hold));
 		dir = rolldir;
 	}
 }
@@ -379,13 +368,12 @@ public func FaceLeft()
 
 public func IsProjectileTarget(target,shooter) { return true; }
 
-public func Damage()
+public func Damage(int change, int cause, int by_player)
 {
-	if(GetDamage() >= health)
+	if (GetDamage() >= this.HitPoints)
 	{
-		if(Random(2)) PlaneDeath();
-		else
-			CancelFlight();
+		SetController(by_player);
+		this->~PlaneDeath();
 	}
 }
 
@@ -393,12 +381,7 @@ private func PlaneDeath()
 {
 	while(Contents(0))
 		Contents(0)->Exit();
-	Explode(50);
-}
-
-public func Hit()
-{
-	if(GetDamage() >= health) PlaneDeath();
+	Explode(36);
 }
 
 public func ActivateEntrance(object clonk)
@@ -488,9 +471,9 @@ private func PropellerSpeedTimer()
 private func SetPropellerSound(int speed)
 {
 	if (speed <= 0)
-		return Sound("PropellerLoop",0,100,nil,-1);
+		return Sound("Objects::Plane::PropellerLoop",0,100,nil,-1);
 	else
-		return Sound("PropellerLoop",0,100,nil,1,0,(speed-100)*2/3);
+		return Sound("Objects::Plane::PropellerLoop",0,100,nil,1,0,(speed-100)*2/3);
 }
 
 /* Properties */
@@ -538,4 +521,6 @@ func Definition(def)
 
 local Name="$Name$";
 local Description="$Description$";
-local Rebuy = true;
+local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
+local HitPoints = 50;
+

@@ -102,7 +102,7 @@ public func OnInteractionControl(id symbol, string action, object clonk)
 	if (action == "abort")
 	{
 		if (!Deconstruct())
-			Sound("Click*", false, nil, clonk->GetOwner());
+			Sound("UI::Click*", false, nil, clonk->GetOwner());
 	}
 }
 
@@ -133,13 +133,19 @@ public func Set(id def, int dir, object stick)
 	definition = def;
 	direction = dir;
 	stick_to = stick;
+	
+	// Set the shape of the construction site.
+	var w = def->~GetSiteWidth(direction, stick_to) ?? def->GetDefWidth();
+	var h = def->~GetSiteHeight(direction, stick_to) ?? def->GetDefHeight();
+	// Height of construction site needs to exceed 12 pixels for the clonk to be able to add materials.
+	var site_h = Max(12, h);
+	SetShape(-w/2, -site_h, w, site_h);
+	// Increase shape for below surface constructions to allow for adding materials.
+	if (definition->~IsBelowSurfaceConstruction())
+		SetShape(-w/2, -2 * site_h, w, 2 * site_h);
 
-	var xw = (1 - dir * 2) * 1000;
-	var w, h;
-	w = def->GetDefWidth();
-	h = def->GetDefHeight();
 	// Draw the building with a wired frame and large alpha unless site graphics is overloaded by definition
-	if (!def->~SetConstructionSiteOverlay(this, direction, stick_to))
+	if (!definition->~SetConstructionSiteOverlay(this, direction, stick_to))
 	{
 		SetGraphics(nil, nil, 0);
 		SetGraphics(nil, def, 1, GFXOV_MODE_Base);
@@ -151,22 +157,14 @@ public func Set(id def, int dir, object stick)
 			SetClrModulation(RGBa(255, 255, 255, 50), 1);
 			SetGraphics(nil, def, 2, GFXOV_MODE_Base, nil, GFX_BLIT_Wireframe);
 		}
-		SetGraphics("", GetID(), 3, GFXOV_MODE_ExtraGraphics);
+		SetObjDrawTransform((1 - dir * 2) * 1000, 0, 0, 0, 1000, -h * 500, 1);
+		SetObjDrawTransform((1 - dir * 2) * 1000, 0, 0, 0, 1000, -h * 500, 2);
 	}
-	SetObjDrawTransform(xw,0,0,0,1000, -h*500,1);
-	SetObjDrawTransform(xw,0,0,0,1000, -h*500,2);
-	// Height of construction site needs to exceed 12 pixels for the clonk to be able to add materials.
-	h = Max(12, h);
-	SetShape(-w/2, -h, w, h);
-	// Increase shape for below surface constructions to allow for adding materials.
-	if (definition->~IsBelowSurfaceConstruction())
-		SetShape(-w/2, -2 * h, w, 2 * h);
-	
-	SetName(Format(Translate("TxtConstruction"),def->GetName()));
-	
-	this.visibility = VIS_Owner | VIS_Allies;
-	
+
+	SetName(Format(Translate("TxtConstruction"), def->GetName()));
+	this.visibility = VIS_Owner | VIS_Allies;	
 	ShowMissingComponents();
+	return;
 }
 
 // Scenario saving
@@ -220,21 +218,20 @@ public func Ejection(object obj) { return Collection2(nil); }
 
 private func ShowMissingComponents()
 {
-	if(definition == nil)
+	if (definition == nil)
 	{
 		Message("");
 		return;
 	}
 		
 	var stuff = GetMissingComponents();
-	//var msg = "Construction Needs:";
 	var msg = "@";
-	for(var s in stuff)
-		if(s.count > 0)
+	for (var s in stuff)
+		if (s.count > 0)
 			msg = Format("%s %dx{{%i}}", msg, s.count, s.id);
-	
-	//Message("@%s",msg);
-	CustomMessage(msg, this, NO_OWNER, 0, 23);
+	// Ensure that the message is not below the bottom of the map.
+	var dy = 23 - Max(23 + GetY() - LandscapeHeight(), 0) / 2;
+	CustomMessage(msg, this, NO_OWNER, 0, dy);
 }
 
 private func GetMissingComponents()
@@ -282,7 +279,7 @@ private func StartConstructing()
 	// find all objects on the bottom of the area that are not stuck
 	var wdt = GetObjWidth();
 	var hgt = GetObjHeight();
-	var lying_around = FindObjects(Find_Or(Find_Category(C4D_Vehicle), Find_Category(C4D_Object), Find_Category(C4D_Living)),Find_InRect(-wdt/2 - 2, -hgt, wdt + 2, hgt + 12), Find_Not(Find_OCF(OCF_InFree)),Find_NoContainer());
+	var lying_around = FindObjects(Find_Category(C4D_Vehicle | C4D_Object | C4D_Living), Find_AtRect(-wdt/2 - 2, -hgt, wdt + 2, hgt + 12), Find_OCF(OCF_InFree), Find_NoContainer());
 	
 	// create the construction, below surface constructions don't perform any checks.
 	// uncancellable sites (for special game goals) are forced and don't do checks either
@@ -311,6 +308,7 @@ private func StartConstructing()
 		// If not: Autoconstruct 2.0!
 		Schedule(site, "DoCon(2)",1,50);
 		Schedule(this,"RemoveObject()",1);
+		site->Sound("Structures::FinishBuilding");
 	}
 	
 	// clean up stuck objects

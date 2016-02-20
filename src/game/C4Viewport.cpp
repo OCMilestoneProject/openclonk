@@ -50,7 +50,7 @@ bool C4Viewport::UpdateOutputSize()
 	// Output size
 	C4Rect rect;
 
-#ifdef WITH_DEVELOPER_MODE
+#ifdef USE_GTK
 	GtkAllocation allocation;
 	gtk_widget_get_allocation(GTK_WIDGET(pWindow->render_widget), &allocation);
 
@@ -78,25 +78,28 @@ bool C4Viewport::UpdateOutputSize()
 
 C4Viewport::C4Viewport()
 {
-	Default();
+	Player = 0;
+	viewX = viewY = 0;
+	targetViewX = targetViewY = 0;
+	ViewWdt = ViewHgt = 0;
+	BorderLeft = BorderTop = BorderRight = BorderBottom = 0;
+	OutX = OutY = ViewWdt = ViewHgt = 0;
+	DrawX = DrawY = 0;
+	Zoom = 1.0;
+	ZoomTarget = 0.0;
+	ViewportOpenFrame = 0;
+	ZoomLimitMin = ZoomLimitMax = 0; // no limit
+	Next = NULL;
+	PlayerLock = true;
+	ResetMenuPositions = false;
+	viewOffsX = viewOffsY = 0;
+	fIsNoOwnerViewport = false;
 }
 
 C4Viewport::~C4Viewport()
 {
-	Clear();
-}
-
-void C4Viewport::Clear()
-{
 	DisableFoW();
-	if (pWindow) { delete pWindow->pSurface; pWindow->Clear(); delete pWindow; pWindow = NULL; }
-	Player=NO_OWNER;
-	viewX=viewY=0;
-	targetViewX=targetViewY=0;
-	ViewWdt=ViewHgt=0;
-	OutX=OutY=ViewWdt=ViewHgt=0;
-	DrawX=DrawY=0;
-	viewOffsX = viewOffsY = 0;
+	if (pWindow) { delete pWindow->pSurface; pWindow->Clear(); }
 }
 
 void C4Viewport::DrawOverlay(C4TargetFacet &cgo, const ZoomData &GameZoom)
@@ -184,7 +187,7 @@ void C4Viewport::DrawMenu(C4TargetFacet &cgo0)
 	pDraw->SetZoom(cgo0.X, cgo0.Y, cgo0.Zoom);
 }
 
-void C4Viewport::Draw(C4TargetFacet &cgo0, bool fDrawOverlay)
+void C4Viewport::Draw(C4TargetFacet &cgo0, bool fDrawGame, bool fDrawOverlay)
 {
 #ifdef USE_CONSOLE
 	// No drawing in console mode
@@ -215,61 +218,87 @@ void C4Viewport::Draw(C4TargetFacet &cgo0, bool fDrawOverlay)
 
 	last_game_draw_cgo = cgo;
 
-	// --- activate FoW here ---
-
-	// Render FoW only if active for player
-	C4FoWRegion* pFoW = NULL;
-	if (Player != NO_OWNER)
+	if (fDrawGame)
 	{
-		C4Player *pPlr = ::Players.Get(Player);
-		assert(pPlr != NULL);
+		// --- activate FoW here ---
 
-		if(pPlr->fFogOfWar) pFoW = this->pFoW;
+		// Render FoW only if active for player
+		C4FoWRegion* pFoW = NULL;
+		if (Player != NO_OWNER)
+		{
+			C4Player *pPlr = ::Players.Get(Player);
+			assert(pPlr != NULL);
+
+			if (pPlr->fFogOfWar) pFoW = this->pFoW.get();
+		}
+
+		// Update FoW
+		if (pFoW)
+		{
+			// Viewport region in landscape coordinates
+			const FLOAT_RECT vpRect = { cgo.TargetX, cgo.TargetX + cgo.Wdt, cgo.TargetY, cgo.TargetY + cgo.Hgt };
+			// Region in which the light is calculated
+			// At the moment, just choose integer coordinates to surround the viewport
+			const C4Rect lightRect(vpRect);
+			if (!lightRect.Wdt || !lightRect.Hgt)
+			{
+				// Do not bother initializing FoW on empty region; would cause errors in drawing proc
+				pFoW = NULL;
+			}
+			else
+			{
+				pFoW->Update(lightRect, vpRect);
+
+				if (!pFoW->Render())
+				{
+					// If FoW init fails, do not set it for further drawing
+					pFoW = NULL;
+				}
+			}
+		}
+
+		pDraw->SetFoW(pFoW);
+
+		C4ST_STARTNEW(SkyStat, "C4Viewport::Draw: Sky")
+			::Landscape.Sky.Draw(cgo);
+		C4ST_STOP(SkyStat)
+
+			::Objects.Draw(cgo, Player, -2147483647 - 1 /* INT32_MIN */, 0);
+
+		// Draw Landscape
+		C4ST_STARTNEW(LandStat, "C4Viewport::Draw: Landscape")
+			::Landscape.Draw(cgo, pFoW);
+		C4ST_STOP(LandStat)
+
+			// draw PXS (unclipped!)
+			C4ST_STARTNEW(PXSStat, "C4Viewport::Draw: PXS")
+			::PXS.Draw(cgo);
+		C4ST_STOP(PXSStat)
+
+		// Draw objects which are behind the particle plane.
+		const int particlePlane = 900;
+		C4ST_STARTNEW(ObjStat, "C4Viewport::Draw: Objects (1)")
+			::Objects.Draw(cgo, Player, 1, particlePlane);
+		C4ST_STOP(ObjStat)
+
+		// Draw global dynamic particles on a specific Plane
+		// to enable scripters to put objects both behind and in front of particles.
+		C4ST_STARTNEW(PartStat, "C4Viewport::Draw: Dynamic Particles")
+			::Particles.DrawGlobalParticles(cgo);
+		C4ST_STOP(PartStat)
+
+		// Now the remaining objects in front of the particles (e.g. GUI elements)
+		C4ST_STARTNEW(Obj2Stat, "C4Viewport::Draw: Objects (2)")
+			::Objects.Draw(cgo, Player, particlePlane + 1, 2147483647 /* INT32_MAX */);
+		C4ST_STOP(Obj2Stat)
+
+			// Draw everything else without FoW
+			pDraw->SetFoW(NULL);
 	}
-
-	// Update FoW
-	if (pFoW)
+	else
 	{
-		// Viewport region in landscape coordinates
-		const FLOAT_RECT vpRect = { cgo.TargetX, cgo.TargetX + cgo.Wdt, cgo.TargetY, cgo.TargetY + cgo.Hgt };
-		// Region in which the light is calculated
-		// At the moment, just choose integer coordinates to surround the viewport
-		const C4Rect lightRect(vpRect);
-		pFoW->Update(lightRect, vpRect);
-
-		pFoW->Render();
+		pDraw->DrawBoxDw(cgo.Surface, cgo.X, cgo.Y, cgo.X + cgo.Wdt, cgo.Y + cgo.Hgt, 0xff000000);
 	}
-
-	pDraw->SetFoW(pFoW);
-
-	C4ST_STARTNEW(SkyStat, "C4Viewport::Draw: Sky")
-	::Landscape.Sky.Draw(cgo);
-	C4ST_STOP(SkyStat)
-
-	::Objects.Draw(cgo, Player, -2147483647 - 1 /* INT32_MIN */, 0);
-
-	// Draw Landscape
-	C4ST_STARTNEW(LandStat, "C4Viewport::Draw: Landscape")
-	::Landscape.Draw(cgo, pFoW);
-	C4ST_STOP(LandStat)
-
-	// draw PXS (unclipped!)
-	C4ST_STARTNEW(PXSStat, "C4Viewport::Draw: PXS")
-	::PXS.Draw(cgo);
-	C4ST_STOP(PXSStat)
-
-	// draw objects
-	C4ST_STARTNEW(ObjStat, "C4Viewport::Draw: Objects")
-	::Objects.Draw(cgo, Player, 1, 2147483647 /* INT32_MAX */);
-	C4ST_STOP(ObjStat)
-
-	// draw global dynamic particles
-	C4ST_STARTNEW(PartStat, "C4Viewport::Draw: Dynamic Particles")
-	::Particles.DrawGlobalParticles(cgo);
-	C4ST_STOP(PartStat)
-
-	// Draw everything else without FoW
-	pDraw->SetFoW(NULL);
 
 	// Draw PathFinder
 	if (::GraphicsSystem.ShowPathfinder) Game.PathFinder.Draw(cgo);
@@ -349,16 +378,18 @@ void C4Viewport::Execute()
 	AdjustZoomAndPosition();
 	// Current graphics output
 	C4TargetFacet cgo;
-	C4Window * w = pWindow;
-	if (!w) w = &FullScreen;
-	cgo.Set(w->pSurface,DrawX,DrawY,float(ViewWdt)/Zoom,float(ViewHgt)/Zoom,GetViewX(),GetViewY(),Zoom);
-	pDraw->PrepareRendering(w->pSurface);
+	C4Surface *target = pWindow ? pWindow->pSurface : FullScreen.pSurface;
+	cgo.Set(target,DrawX,DrawY,float(ViewWdt)/Zoom,float(ViewHgt)/Zoom,GetViewX(),GetViewY(),Zoom);
+	pDraw->PrepareRendering(target);
+	// Do not spoil game contents on owner-less viewport
+	bool draw_game = true;
+	if (Player == NO_OWNER)
+		if (!::Application.isEditor && !::Game.DebugMode)
+			if (!::Network.isEnabled() || !::Network.Clients.GetLocal() || !::Network.Clients.GetLocal()->isObserver())
+				if (::Game.PlayerInfos.GetJoinIssuedPlayerCount() > 0) // free scrolling allowed if the scenario was started explicitely without players to inspect the landscape
+					draw_game = false;
 	// Draw
-	Draw(cgo, true);
-	// Video record & status (developer mode, first player viewport)
-	if (Application.isEditor)
-		if (Player==0 && (this==::Viewports.GetViewport((int32_t) 0)))
-			::GraphicsSystem.Video.Execute();
+	Draw(cgo, draw_game, true);
 	// Blit output
 	BlitOutput();
 }
@@ -595,30 +626,6 @@ void C4Viewport::UpdateBordersY()
 	BorderBottom = std::max(ViewHgt - GBackHgt * Zoom + GetViewY() * Zoom, 0.0f);
 }
 
-void C4Viewport::Default()
-{
-	pWindow=NULL;
-	pFoW = NULL;
-	Player=0;
-	viewX=viewY=0;
-	targetViewX=targetViewY=0;
-	ViewWdt=ViewHgt=0;
-	BorderLeft=BorderTop=BorderRight=BorderBottom=0;
-	OutX=OutY=ViewWdt=ViewHgt=0;
-	DrawX=DrawY=0;
-	Zoom = 1.0;
-	ZoomTarget = 0.0;
-	ViewportOpenFrame = 0;
-	ZoomLimitMin=ZoomLimitMax=0; // no limit
-	Next=NULL;
-	PlayerLock=true;
-	ResetMenuPositions=false;
-	viewOffsX = viewOffsY = 0;
-	fIsNoOwnerViewport = false;
-	last_game_draw_cgo.Default();
-	last_gui_draw_cgo.Default();
-}
-
 void C4Viewport::DrawPlayerInfo(C4TargetFacet &cgo)
 {
 	C4Facet ccgo;
@@ -639,7 +646,7 @@ bool C4Viewport::Init(int32_t iPlayer, bool fSetTempOnly)
 	{
 		// Console viewport initialization
 		// Create window
-		pWindow = new C4ViewportWindow(this);
+		pWindow.reset(new C4ViewportWindow(this));
 		if (!pWindow->Init(Player))
 			return false;
 		UpdateOutputSize();
@@ -661,16 +668,19 @@ bool C4Viewport::Init(int32_t iPlayer, bool fSetTempOnly)
 
 void C4Viewport::DisableFoW()
 {
-	delete pFoW;
-	pFoW = NULL;
+	pFoW.reset();
 }
 
 void C4Viewport::EnableFoW()
 {
-	DisableFoW();
-
 	if (::Landscape.pFoW && Player != NO_OWNER)
-		pFoW = new C4FoWRegion(::Landscape.pFoW, ::Players.Get(Player));
+	{
+		pFoW.reset(new C4FoWRegion(::Landscape.pFoW, ::Players.Get(Player)));
+	}
+	else
+	{
+		DisableFoW();
+	}
 }
 
 extern int32_t DrawMessageOffset;
@@ -860,7 +870,7 @@ bool C4ViewportList::CloseViewport(C4Viewport * cvp)
 	{
 		FirstViewport = cvp->Next;
 		delete cvp;
-		StartSoundEffect("CloseViewport");
+		StartSoundEffect("UI::CloseViewport");
 	}
 	// Take out of the chain
 	else for (C4Viewport * prev = FirstViewport; prev; prev = prev->Next)
@@ -869,7 +879,7 @@ bool C4ViewportList::CloseViewport(C4Viewport * cvp)
 			{
 				prev->Next = cvp->Next;
 				delete cvp;
-				StartSoundEffect("CloseViewport");
+				StartSoundEffect("UI::CloseViewport");
 			}
 		}
 	// Recalculate viewports
@@ -909,7 +919,7 @@ bool C4ViewportList::CreateViewport(int32_t iPlayer, bool fSilent)
 	}
 	// Action sound
 	if (GetViewportCount()!=iLastCount) if (!fSilent)
-			StartSoundEffect("CloseViewport");
+			StartSoundEffect("UI::CloseViewport");
 	return true;
 }
 
@@ -953,7 +963,7 @@ bool C4ViewportList::CloseViewport(int32_t iPlayer, bool fSilent)
 		// Recalculate viewports
 		RecalculateViewports();
 		// Action sound
-		if (!fSilent) StartSoundEffect("CloseViewport");
+		if (!fSilent) StartSoundEffect("UI::CloseViewport");
 	}
 	return true;
 }

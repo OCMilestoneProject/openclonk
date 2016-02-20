@@ -16,6 +16,8 @@ func InitializeObjects()
 
 	CreateObject(Rule_TeamAccount);
 
+	CreateObject(Rule_Restart);
+
 	CreateObjectAbove(EnvPack_Scarecrow, 1218, 440);
 
 	CreateObjectAbove(EnvPack_Guidepost, 835, 369);
@@ -350,8 +352,10 @@ func InitializeObjects()
 	Crate001->CreateContents(Hammer);
 	ToolsWorkshop001->CreateContents(Hammer, 2);
 
-	Foundry002->CreateContents(Bucket, 3);
 	CreateObjectAbove(Bucket, 435, 1271);
+	CreateObjectAbove(Bucket, 943, 775);
+	CreateObjectAbove(Bucket, 944, 775);
+	CreateObjectAbove(Bucket, 946, 775);
 
 	CreateObjectAbove(Crate, 2849, 607);
 	CreateObjectAbove(Crate, 444, 1271);

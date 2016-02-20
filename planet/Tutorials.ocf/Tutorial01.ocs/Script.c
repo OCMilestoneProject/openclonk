@@ -34,7 +34,7 @@ protected func Initialize()
 	
 	// Environment.
 	var time = CreateObject(Time);
-	time->SetTime(18*60 + 30);
+	time->SetTime(18 * 60 + 30);
 	time->SetCycleSpeed(0);
 
 	// Dialogue options -> repeat round.
@@ -69,11 +69,7 @@ private func InitStartLake()
 	CreateObjectAbove(Tree_Coconut, 105, 620);
 	
 	// Ropebridge over the lake.
-	var post1 = CreateObjectAbove(Ropebridge_Post, 144, 616);
-	var post2 = CreateObjectAbove(Ropebridge_Post, 232, 616);
-	post2->SetObjDrawTransform(-1000, 0, 0, 0, 1000);
-	post2.Double->SetObjDrawTransform(-1000, 0, 0, 0, 1000);
-	CreateObjectAbove(Ropebridge, 186, 616)->MakeBridge(post1, post2);
+	Ropebridge->Create(144, 616, 232, 616);
 	
 	// Small sink hole for the water to flow through, cover by a trunk.
 	DrawMaterialQuad("Tunnel", 231, 631, 231, 633, 251, 615, 249, 615, DMQ_Sub);
@@ -168,7 +164,7 @@ private func InitCaveCenter()
 private func InitGoldMine()
 {
 	// Foundry with a lorry and some metal.
-	CreateObjectAbove(Foundry, 980, 486);
+	CreateObjectAbove(Foundry, 980, 486)->MakeInvincible();
 	CreateObjectAbove(Metal, 950, 474);
 	
 	// Pickaxe + ore near ore field.
@@ -204,7 +200,8 @@ private func InitCaveExit()
 	// A small settlement.
 	var elevator = CreateObjectAbove(Elevator, 872, 328);
 	elevator->CreateShaft(248);
-	CreateObjectAbove(WoodenCabin, 968, 328);
+	elevator->MakeInvincible();
+	CreateObjectAbove(WoodenCabin, 968, 328)->MakeInvincible();
 	
 	// Some vegetation / rocks on top of the cave.
 	SproutBerryBush->Place(1 + Random(2), Rectangle(420, 200, 160, 70));
@@ -234,6 +231,8 @@ private func InitAnimals()
 	var wipf = CreateObjectAbove(Wipf, 76, 616);
 	wipf->EnableTutorialControl();
 	wipf->SetMeshMaterial("WipfSkin");
+	wipf.Name = "$WipfName$";
+	wipf.Description = "$WipfDescription$";
 	
 	// Some butterflies as atmosphere.
 	for (var i = 0; i < 25; i++)
@@ -259,7 +258,7 @@ protected func InitializePlayer(int plr)
 	DisablePlrControls(plr);
 	
 	// Add an effect to the clonk to track the goal.
-	var track_goal = AddEffect("TrackGoal", clonk, 100, 2);
+	var track_goal = AddEffect("TrackGoal", nil, 100, 2);
 	track_goal.plr = plr;
 
 	// Standard player zoom for tutorials, player is not allowed to zoom in/out.
@@ -297,11 +296,12 @@ private func OnFinishedTutorialIntro(int plr)
 
 global func FxTrackGoalTimer(object target, proplist effect, int time)
 {
-	if (Inside(target->GetX(), 980, 996) && Inside(target->GetY(), 314, 324))
+	var crew = GetCrew(effect.plr);
+	if (Inside(crew->GetX(), 980, 996) && Inside(crew->GetY(), 314, 324))
 	{
-		if (FindObject(Find_ID(Wipf), Find_Distance(15, target->GetX(), target->GetY())))
+		if (FindObject(Find_ID(Wipf), Find_Distance(15, crew->GetX(), crew->GetY())))
 		{
-			var outro = AddEffect("GoalOutro", target, 100, 5);
+			var outro = AddEffect("GoalOutro", crew, 100, 5);
 			outro.plr = effect.plr;
 			return FX_Execute_Kill;	
 		}		
@@ -316,7 +316,7 @@ global func FxGoalOutroStart(object target, proplist effect, int temp)
 		
 	// Show guide message congratulating.
 	guide->AddGuideMessage("$MsgTutorialCompleted$");
-	guide->ShowGuideMessage(8);
+	guide->ShowGuideMessage();
 		
 	// Halt clonk and disable player controls.	
 	DisablePlrControls(effect.plr);
@@ -368,7 +368,7 @@ global func FxTutorialScaleTimer(object target, proplist effect, int timer)
 		var up = GetPlayerControlAssignment(plr, CON_Up, true, true);
 		var down = GetPlayerControlAssignment(plr, CON_Down, true, true);
 		guide->AddGuideMessage(Format("$MsgTutorialScaleWall$", up, down));
-		guide->ShowGuideMessage(3);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialHangle", nil, 100, 2);
 		return FX_Execute_Kill;
 	}
@@ -383,7 +383,7 @@ global func FxTutorialHangleTimer(object target, proplist effect, int timer)
 		var plr = clonk->GetOwner();
 		var down = GetPlayerControlAssignment(plr, CON_Down, true, true);
 		guide->AddGuideMessage(Format("$MsgTutorialHangle$", down));
-		guide->ShowGuideMessage(4);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialJump", nil, 100, 2);
 		return FX_Execute_Kill;
 	}
@@ -395,7 +395,7 @@ global func FxTutorialJumpTimer(object target, proplist effect, int timer)
 	if (FindObject(Find_ID(Clonk), Find_InRect(744, 568, 56, 40)))
 	{
 		guide->AddGuideMessage("$MsgTutorialJump$");
-		guide->ShowGuideMessage(5);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialSwimming", nil, 100, 2);
 		return FX_Execute_Kill;
 	}
@@ -414,7 +414,7 @@ global func FxTutorialSwimmingTimer(object target, proplist effect, int timer)
 		var down = GetPlayerControlAssignment(plr, CON_Down, true, true);
 		var control_keys = Format("[%s] [%s] [%s] [%s]", up, left, down, right);
 		guide->AddGuideMessage(Format("$MsgTutorialSwimming$", control_keys));
-		guide->ShowGuideMessage(6);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialDiving", nil, 100, 2);
 		return FX_Execute_Kill;
 	}
@@ -426,7 +426,7 @@ global func FxTutorialDivingTimer(object target, proplist effect, int timer)
 	if (FindObject(Find_ID(Clonk), Find_InRect(472, 280, 48, 64)))
 	{
 		guide->AddGuideMessage("$MsgTutorialDiving$");
-		guide->ShowGuideMessage(7);
+		guide->ShowGuideMessage();
 		return FX_Execute_Kill;
 	}
 	return FX_OK;
@@ -502,7 +502,7 @@ global func FxClonkRestoreStop(object target, effect, int reason, bool  temporar
 {
 	if (reason == 3 || reason == 4)
 	{
-		var restorer = CreateObjectAbove(ObjectRestorer, 0, 0, NO_OWNER);
+		var restorer = CreateObject(ObjectRestorer, 0, 0, NO_OWNER);
 		var x = BoundBy(target->GetX(), 0, LandscapeWidth());
 		var y = BoundBy(target->GetY(), 0, LandscapeHeight());
 		restorer->SetPosition(x, y);
@@ -510,8 +510,9 @@ global func FxClonkRestoreStop(object target, effect, int reason, bool  temporar
 		var to_y = effect.to_y;
 		// Respawn new clonk.
 		var plr = target->GetOwner();
-		var clonk = CreateObjectAbove(Clonk, 0, 0, plr);
+		var clonk = CreateObject(Clonk, 0, 0, plr);
 		clonk->GrabObjectInfo(target);
+		Rule_BaseRespawn->TransferInventory(target, clonk);
 		SetCursor(plr, clonk);
 		clonk->DoEnergy(100000);
 		restorer->SetRestoreObject(clonk, nil, to_x, to_y, 0, "ClonkRestore");

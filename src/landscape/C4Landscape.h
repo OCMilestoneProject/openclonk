@@ -112,6 +112,7 @@ public:
 	bool SetPix2(int32_t x, int32_t y, BYTE fgPix, BYTE bgPix); // set landscape pixel (bounds checked)
 	bool _SetPix2(int32_t x, int32_t y, BYTE fgPix, BYTE bgPix); // set landsape pixel (bounds not checked)
 	void _SetPix2Tmp(int32_t x, int32_t y, BYTE fgPix, BYTE bgPix); // set landsape pixel (bounds not checked, no material count updates, no landscape relighting). Material must be reset to original value with this function before modifying landscape in any other way. Only used for temporary pixel changes by SolidMask (C4SolidMask::RemoveTemporary, C4SolidMask::PutTemporary).
+	bool InsertMaterialOutsideLandscape(int32_t tx, int32_t ty, int32_t mdens); // return whether material insertion would be successful on an out-of-landscape position. Does not actually insert material.
 	bool InsertMaterial(int32_t mat, int32_t *tx, int32_t *ty, int32_t vx = 0, int32_t vy = 0, bool query_only=false); // modifies tx/ty to actual insertion position
 	bool InsertDeadMaterial(int32_t mat, int32_t tx, int32_t ty);
 	bool FindMatPath(int32_t &fx, int32_t &fy, int32_t ydir, int32_t mdens, int32_t mslide) const;
@@ -351,7 +352,7 @@ bool FindLiquid(int32_t &rx, int32_t &ry, int32_t width, int32_t height);
 bool FindTunnel(int32_t &rx, int32_t &ry, int32_t width, int32_t height);
 bool FindSurfaceLiquid(int32_t &rx, int32_t &ry, int32_t width, int32_t height);
 bool FindLevelGround(int32_t &rx, int32_t &ry, int32_t width, int32_t hrange);
-bool FindConSiteSpot(int32_t &rx, int32_t &ry, int32_t wdt, int32_t hgt, int32_t Plane, int32_t hrange=-1);
+bool FindConSiteSpot(int32_t &rx, int32_t &ry, int32_t wdt, int32_t hgt, int32_t hrange=-1);
 bool FindThrowingPosition(int32_t iTx, int32_t iTy, C4Real fXDir, C4Real fYDir, int32_t iHeight, int32_t &rX, int32_t &rY);
 bool PathFree(int32_t x1, int32_t y1, int32_t x2, int32_t y2);
 bool PathFree(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t *ix, int32_t *iy);

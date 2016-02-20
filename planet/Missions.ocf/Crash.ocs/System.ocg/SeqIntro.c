@@ -13,7 +13,8 @@ func Intro_Init()
 	this.pilot->SetAction("Walk");
 
 	this.pilot->SetName("Pyrit");
-	this.pilot->SetColor(0xff0000);
+	this.pilot->SetColor(0xff0000); // currently overridden by skin
+	this.pilot->SetAlternativeSkin("MaleBrownHair");
 	this.pilot->SetDir(DIR_Left);
 	this.pilot->SetObjectLayer(this.pilot);
 	this.pilot->AttachMesh(Hat, "skeleton_head", "main", Trans_Translate(5500, 0, 0));
@@ -258,8 +259,8 @@ func Intro_Stop()
 	if (plane)
 	{
 		plane->FaceLeft();
-		plane->SetR(-130);
-		plane->SetPosition(1387, 238);
+		plane->SetR(-90);
+		plane->SetPosition(1387, 345);
 	}
 	return true;
 }

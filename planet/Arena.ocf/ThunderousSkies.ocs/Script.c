@@ -22,7 +22,7 @@ protected func Initialize()
 	//Enviroment.
 	//SetSkyAdjust(RGBa(250,250,255,128),RGB(200,200,220));
 	SetSkyParallax(1, 20,20, 0,0, nil, nil);
-	Sound("BirdsLoop",true,100,nil,+1);
+	Sound("Environment::BirdsLoop",true,100,nil,+1);
 		
 	CreateObjectAbove(Column,650,379);
 	CreateObjectAbove(Column,350,409);
@@ -38,7 +38,6 @@ protected func Initialize()
 	CreateObjectAbove(Chest, 355, 390, NO_OWNER)->MakeInvincible();
 	
 	AddEffect("IntFillChests", nil, 100, 2 * 36, nil);
-	// Smooth brick edges.
 	AddEffect("ChanneledWind", nil, 1, 1, nil);
 	AddEffect("Balloons", nil, 100, 100, nil);
 	
@@ -49,7 +48,8 @@ protected func Initialize()
 	brick = CreateObjectAbove(MovingBrick,550,250);
 	brick->MoveVertical(240, 296);
 
-	CreateObjectAbove(BrickEdge, 380, 416)->PermaEdge();
+	// Smooth brick edges.
+	DrawMaterialTriangle("Brick-brick", 380, 412, 0);
 	
 	PlaceGras();
 	

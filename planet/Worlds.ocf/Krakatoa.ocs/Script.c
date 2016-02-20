@@ -14,6 +14,9 @@ static intro_init;
 
 protected func Initialize()
 {
+	// Show wealth in HUD.
+	GUI_Controller->ShowWealth();
+	
 	// Goal: construct an airplane and fill it with gold bars.
 	var goal = CreateObject(Goal_Script);
 	// Add an effect to check whether the goal is fulfilled.
@@ -268,7 +271,7 @@ global func FxBigEruptionStart(object target, proplist effect, int temporary, in
 	// Duration of 6-9 seconds.
 	effect.Duration = (6 + Random(4)) * 36;
 	// Use earthquake sound for this eruption.
-	Sound("Earthquake", true, 100, nil, 1);
+	Sound("Environment::Disasters::Earthquake", true, 100, nil, 1);
 	// Shake also the viewport a bit on a big eruption.
 	ShakeViewport(3200, x, y);
 	return FX_OK;
@@ -315,8 +318,8 @@ global func FxBigEruptionStop(object target, proplist effect, int reason, bool t
 	if (temporary)
 		return FX_OK;
 	// Stop eruption sound.
-	Sound("Earthquake", true, 100, nil, -1);
-	Sound("EarthquakeEnd",true);
+	Sound("Environment::Disasters::Earthquake", true, 100, nil, -1);
+	Sound("Environment::Disasters::EarthquakeEnd",true);
 	return FX_OK;
 }
 

@@ -1,81 +1,101 @@
-/*-- Ropelbridge_Segment --*/
+/**
+	Ropebridge Segment
+
+	@author Randrian	
+*/
 
 local master;
-local Plank;
-local fragile;
+local is_fragile;
+local has_plank;
+local double;
 
-func SetMaster(newmaster)
+
+/*-- State --*/
+
+public func SetMaster(object new_master)
 {
-  master = newmaster;
+	master = new_master;
 }
 
-/* Events */
-
-protected func Damage(iAmount)
+public func SetFragile(bool fragile)
 {
-  if(GetDamage()>18 && Plank)
-    LoosePlank();
+	is_fragile = fragile;
 }
 
-func LoosePlank()
+public func SetPlank(bool plank)
 {
-  var loosePlank = CreateObjectAbove(BridgePlank);
-  loosePlank->SetR(GetR());
-  loosePlank->SetPosition(GetX(100)+Cos(GetR(), -400)+Sin(GetR(), 200), GetY(100)+Sin(GetR(), -400)+Cos(GetR(), 200), 0, 100);
-  Plank = 0;
-  SetSolidMask();
-  SetGraphics(nil, nil, 6);
+	has_plank = plank;
 }
 
-func GetLoadWeight()
+public func HasPlank() { return has_plank; }
+
+
+public func CreateDouble()
 {
-  if(!Plank) return 10;
-  var weight = 50;
-  var arr = [0,0,0,0,0,0,0];
-  var i = 0;
-  for(obj in FindObjects(Find_AtRect(-3,-10,6,10), Find_Exclude(this), Find_NoContainer()))
-    if(obj->GetID() != Ropebridge_Segment && obj->GetID() != Ropebridge_Post && obj->GetID() != BridgePlank)
-    if (obj->GetContact(-1, 8))
-    {
-      arr[i++] = obj->GetName();
-      weight += obj->GetMass();
-    }
-  if(fragile && weight > 60 && Random(10))
-  {
-    ScheduleCall(this, "LoosePlank", 10);
-    fragile = 0;
-  }
-  return weight;
+	if (!double)
+	{
+		double = CreateObjectAbove(GetID());
+		double.Plane = 600;
+	}
 }
 
-local Double;
+public func GetDouble() { return double; }
 
-func CreateDouble()
+
+/*-- Events --*/
+
+protected func Damage(int amount)
 {
-  if(!Double)
-  {
-    Double = CreateObjectAbove(GetID());
-    Double.Plane = 600;
-    //Double->SetAction("Attach", this);
-  }
+	if (GetDamage() > 18 && has_plank)
+		LoosePlank();
+	return;
+}
+
+public func LoosePlank()
+{
+	var loose_plank = CreateObject(BridgePlank);
+	loose_plank->SetR(GetR());
+	loose_plank->SetPosition(GetX(100) + Cos(GetR(), -400) + Sin(GetR(), 200), GetY(100) + Sin(GetR(), -400) + Cos(GetR(), 200), 0, 100);
+	has_plank = false;
+	SetSolidMask();
+	SetGraphics(nil, nil, 6);
+}
+
+public func GetLoadWeight()
+{
+	if (!has_plank)
+		return 10;
+	var weight = 50;
+	for (obj in FindObjects(Find_AtRect(-3, -10, 6, 10), Find_Exclude(this), Find_NoContainer()))
+		if (obj->GetID() != Ropebridge_Segment && obj->GetID() != Ropebridge_Post && obj->GetID() != BridgePlank)
+			if (obj->GetContact(-1, 8))
+				weight += obj->GetMass();
+
+	if (is_fragile && weight > 60 && Random(10))
+	{
+		ScheduleCall(this, "LoosePlank", 10);
+		is_fragile = 0;
+	}
+	return weight;
+}
+
+public func Destruction()
+{
+	if (double)
+		double->RemoveObject();
+	return;
 }
 
 // Main bridge object is saved
 func SaveScenarioObject() { return false; }
 
+
+/*-- Properties --*/
+
 local ActMap = {
-Attach = {
-  Prototype = Action,
-  Name = "Attach",
-  Procedure = DFA_ATTACH
-},
-Fall = {
-  Prototype = Action,
-  Name = "Fall",
-  Procedure = DFA_NONE,
-  Length=20,
-  Delay=1,
-  EndCall="LoosePlank",
-  NextAction = "Idle",
-},
+	Attach = {
+		Prototype = Action,
+		Name = "Attach",
+		Procedure = DFA_ATTACH
+	}
 };

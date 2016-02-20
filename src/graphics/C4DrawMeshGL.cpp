@@ -24,23 +24,51 @@
 
 #include "StdMesh.h"
 #include "graphics/C4GraphicsResource.h"
+#include <locale.h>
+#include <stdexcept>
 
 #ifndef USE_CONSOLE
 
 namespace
 {
+	template<int category>
+	class ScopedLocale
+	{
+		// We need to make a copy of the return value of setlocale, because
+		// it's using TLS
+		std::string saved_loc;
+	public:
+		explicit ScopedLocale(const char *locale)
+		{
+			const char *old_loc = setlocale(category, locale);
+			if (old_loc == nullptr)
+				throw std::invalid_argument("Argument to setlocale was invalid");
+			saved_loc = old_loc;
+		}
+		~ScopedLocale()
+		{
+			setlocale(category, saved_loc.c_str());
+		}
+	};
+
 	////////////////////////////////////////////
 	// Shader code generation
 	// This translates the fixed function instructions in a material script
 	// to an equivalent fragment shader. The generated code can certainly
 	// be optimized more.
 	////////////////////////////////////////////
-	StdStrBuf TextureUnitSourceToCode(int index, StdMeshMaterialTextureUnit::BlendOpSourceType source, const float manualColor[3], float manualAlpha)
+	StdStrBuf Texture2DToCode(int index, bool hasTextureAnimation)
+	{
+		if (hasTextureAnimation) return FormatString("texture(oc_Texture%d, (oc_TextureMatrix%d * vec4(texcoord, 0.0, 1.0)).xy)", index, index);
+		return FormatString("texture(oc_Texture%d, texcoord)", index);
+	}
+
+	StdStrBuf TextureUnitSourceToCode(int index, StdMeshMaterialTextureUnit::BlendOpSourceType source, const float manualColor[3], float manualAlpha, bool hasTextureAnimation)
 	{
 		switch(source)
 		{
 		case StdMeshMaterialTextureUnit::BOS_Current: return StdStrBuf("currentColor");
-		case StdMeshMaterialTextureUnit::BOS_Texture: return FormatString("texture2D(oc_Texture%d, texcoord)", index);
+		case StdMeshMaterialTextureUnit::BOS_Texture: return Texture2DToCode(index, hasTextureAnimation);
 		case StdMeshMaterialTextureUnit::BOS_Diffuse: return StdStrBuf("diffuse");
 		case StdMeshMaterialTextureUnit::BOS_Specular: return StdStrBuf("diffuse"); // TODO: Should be specular
 		case StdMeshMaterialTextureUnit::BOS_PlayerColor: return StdStrBuf("vec4(oc_PlayerColor, 1.0)");
@@ -49,7 +77,7 @@ namespace
 		}
 	}
 
-	StdStrBuf TextureUnitBlendToCode(int index, StdMeshMaterialTextureUnit::BlendOpExType blend_type, const char* source1, const char* source2, float manualFactor)
+	StdStrBuf TextureUnitBlendToCode(int index, StdMeshMaterialTextureUnit::BlendOpExType blend_type, const char* source1, const char* source2, float manualFactor, bool hasTextureAnimation)
 	{
 		switch(blend_type)
 		{
@@ -63,10 +91,10 @@ namespace
 		case StdMeshMaterialTextureUnit::BOX_AddSmooth: return FormatString("%s + %s - %s*%s", source1, source2, source1, source2);
 		case StdMeshMaterialTextureUnit::BOX_Subtract: return FormatString("%s - %s", source1, source2);
 		case StdMeshMaterialTextureUnit::BOX_BlendDiffuseAlpha: return FormatString("diffuse.a * %s + (1.0 - diffuse.a) * %s", source1, source2);
-		case StdMeshMaterialTextureUnit::BOX_BlendTextureAlpha: return FormatString("texture2D(oc_Texture%d, texcoord).a * %s + (1.0 - texture2D(oc_Texture%d, texcoord).a) * %s", index, source1, index, source2);
+		case StdMeshMaterialTextureUnit::BOX_BlendTextureAlpha: return FormatString("%s.a * %s + (1.0 - %s.a) * %s", Texture2DToCode(index, hasTextureAnimation).getData(), source1, Texture2DToCode(index, hasTextureAnimation).getData(), source2);
 		case StdMeshMaterialTextureUnit::BOX_BlendCurrentAlpha: return FormatString("currentColor.a * %s + (1.0 - currentColor.a) * %s", source1, source2);
 		case StdMeshMaterialTextureUnit::BOX_BlendManual: return FormatString("%f * %s + (1.0 - %f) * %s", manualFactor, source1, manualFactor, source2);
-		case StdMeshMaterialTextureUnit::BOX_Dotproduct: return FormatString("vec3(4.0 * dot(%s - 0.5, %s - 0.5), 4.0 * dot(%s - 0.5, %s - 0.5), 4.0 * dot(%s - 0.5, %s - 0.5));", source1, source2, source1, source2, source1, source2); // TODO: Needs special handling for the case of alpha
+		case StdMeshMaterialTextureUnit::BOX_Dotproduct: return FormatString("vec3(4.0 * dot(%s - 0.5, %s - 0.5), 4.0 * dot(%s - 0.5, %s - 0.5), 4.0 * dot(%s - 0.5, %s - 0.5))", source1, source2, source1, source2, source1, source2); // TODO: Needs special handling for the case of alpha
 		case StdMeshMaterialTextureUnit::BOX_BlendDiffuseColor: return FormatString("diffuse.rgb * %s + (1.0 - diffuse.rgb) * %s", source1, source2);
 		default: assert(false); return StdStrBuf(source1);
 		}
@@ -74,12 +102,42 @@ namespace
 
 	StdStrBuf TextureUnitToCode(int index, const StdMeshMaterialTextureUnit& texunit)
 	{
-		StdStrBuf color_source1 = FormatString("%s.rgb", TextureUnitSourceToCode(index, texunit.ColorOpSources[0], texunit.ColorOpManualColor1, texunit.AlphaOpManualAlpha1).getData());
-		StdStrBuf color_source2 = FormatString("%s.rgb", TextureUnitSourceToCode(index, texunit.ColorOpSources[1], texunit.ColorOpManualColor2, texunit.AlphaOpManualAlpha2).getData());
-		StdStrBuf alpha_source1 = FormatString("%s.a", TextureUnitSourceToCode(index, texunit.AlphaOpSources[0], texunit.ColorOpManualColor1, texunit.AlphaOpManualAlpha1).getData());
-		StdStrBuf alpha_source2 = FormatString("%s.a", TextureUnitSourceToCode(index, texunit.AlphaOpSources[1], texunit.ColorOpManualColor2, texunit.AlphaOpManualAlpha2).getData());
+		ScopedLocale<LC_NUMERIC> scoped_c_locale("C");
+		const bool hasTextureAnimation = texunit.HasTexCoordAnimation();
 
-		return FormatString("currentColor = vec4(%s, %s);\n", TextureUnitBlendToCode(index, texunit.ColorOpEx, color_source1.getData(), color_source2.getData(), texunit.ColorOpManualFactor).getData(), TextureUnitBlendToCode(index, texunit.AlphaOpEx, alpha_source1.getData(), alpha_source2.getData(), texunit.AlphaOpManualFactor).getData());
+		StdStrBuf color_source1 = FormatString("%s.rgb", TextureUnitSourceToCode(index, texunit.ColorOpSources[0], texunit.ColorOpManualColor1, texunit.AlphaOpManualAlpha1, hasTextureAnimation).getData());
+		StdStrBuf color_source2 = FormatString("%s.rgb", TextureUnitSourceToCode(index, texunit.ColorOpSources[1], texunit.ColorOpManualColor2, texunit.AlphaOpManualAlpha2, hasTextureAnimation).getData());
+		StdStrBuf alpha_source1 = FormatString("%s.a", TextureUnitSourceToCode(index, texunit.AlphaOpSources[0], texunit.ColorOpManualColor1, texunit.AlphaOpManualAlpha1, hasTextureAnimation).getData());
+		StdStrBuf alpha_source2 = FormatString("%s.a", TextureUnitSourceToCode(index, texunit.AlphaOpSources[1], texunit.ColorOpManualColor2, texunit.AlphaOpManualAlpha2, hasTextureAnimation).getData());
+
+		return FormatString("currentColor = vec4(%s, %s);\n", TextureUnitBlendToCode(index, texunit.ColorOpEx, color_source1.getData(), color_source2.getData(), texunit.ColorOpManualFactor, hasTextureAnimation).getData(), TextureUnitBlendToCode(index, texunit.AlphaOpEx, alpha_source1.getData(), alpha_source2.getData(), texunit.AlphaOpManualFactor, hasTextureAnimation).getData());
+	}
+
+	StdStrBuf AlphaTestToCode(const StdMeshMaterialPass& pass)
+	{
+		ScopedLocale<LC_NUMERIC> scoped_c_locale("C");
+		switch (pass.AlphaRejectionFunction)
+		{
+		case StdMeshMaterialPass::DF_AlwaysPass:
+			return StdStrBuf("");
+		case StdMeshMaterialPass::DF_AlwaysFail:
+			return StdStrBuf("discard;");
+		case StdMeshMaterialPass::DF_Less:
+			return FormatString("if (!(fragColor.a < %f)) discard;", pass.AlphaRejectionValue);
+		case StdMeshMaterialPass::DF_LessEqual:
+			return FormatString("if (!(fragColor.a <= %f)) discard;", pass.AlphaRejectionValue);
+		case StdMeshMaterialPass::DF_Equal:
+			return FormatString("if (!(fragColor.a == %f)) discard;", pass.AlphaRejectionValue);
+		case StdMeshMaterialPass::DF_NotEqual:
+			return FormatString("if (!(fragColor.a != %f)) discard;", pass.AlphaRejectionValue);
+		case StdMeshMaterialPass::DF_Greater:
+			return FormatString("if (!(fragColor.a > %f)) discard;", pass.AlphaRejectionValue);
+		case StdMeshMaterialPass::DF_GreaterEqual:
+			return FormatString("if (!(fragColor.a >= %f)) discard;", pass.AlphaRejectionValue);
+		default:
+			assert(false);
+			return StdStrBuf();
+		}
 	}
 
 	// Simple helper function
@@ -105,25 +163,32 @@ namespace
 	{
 		StdStrBuf buf;
 
-		if (!::GraphicsResource.Files.LoadEntryString("ObjectDefaultVS.glsl", &buf))
+		if (!::GraphicsResource.Files.LoadEntryString("MeshVertexShader.glsl", &buf))
 		{
 			// Fall back just in case
 			buf.Copy(
-				"varying vec3 normalDir;\n"
+				"attribute vec3 oc_Position;\n"
+				"attribute vec3 oc_Normal;\n"
+				"attribute vec2 oc_TexCoord;\n"
+				"varying vec3 vtxNormal;\n"
+				"varying vec2 texcoord;\n"
+				"uniform mat4 projectionMatrix;\n"
+				"uniform mat4 modelviewMatrix;\n"
+				"uniform mat3 normalMatrix;\n"
 				"\n"
 				"slice(position)\n"
 				"{\n"
-				"  gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;\n"
+				"  gl_Position = projectionMatrix * modelviewMatrix * vec4(oc_Position, 1.0);\n"
 				"}\n"
 				"\n"
 				"slice(texcoord)\n"
 				"{\n"
-				"  texcoord = gl_MultiTexCoord0.xy;\n"
+				"  texcoord = oc_TexCoord;\n"
 				"}\n"
 				"\n"
 				"slice(normal)\n"
 				"{\n"
-				"  normalDir = normalize(gl_NormalMatrix * gl_Normal);\n"
+				"  vtxNormal = normalize(normalMatrix * oc_Normal);\n"
 				"}\n"
 			);
 		}
@@ -154,6 +219,15 @@ namespace
 			{
 				textureUnitDeclCode.Append(FormatString("uniform sampler2D oc_Texture%u;\n", texIndex).getData());
 				params.AddParameter(FormatString("oc_Texture%u", texIndex).getData(), StdMeshMaterialShaderParameter::INT).GetInt() = texIndex;
+
+				// If the texture unit has texture coordinate transformations,
+				// add a corresponding texture matrix uniform.
+				if(texunit.HasTexCoordAnimation())
+				{
+					textureUnitDeclCode.Append(FormatString("uniform mat4 oc_TextureMatrix%u;\n", texIndex).getData());
+					params.AddParameter(FormatString("oc_TextureMatrix%u", texIndex).getData(), StdMeshMaterialShaderParameter::AUTO_TEXTURE_MATRIX).GetInt() = texIndex;
+				}
+
 				++texIndex;
 			}
 		}
@@ -164,13 +238,19 @@ namespace
 			"\n"
 			"slice(texture)\n"
 			"{\n"
-			"  vec4 diffuse = color;\n"
+			"  vec4 diffuse = fragColor;\n"
 			"  vec4 currentColor = diffuse;\n"
 			"  %s\n"
-			"  color = currentColor;\n"
+			"  fragColor = currentColor;\n"
+			"}\n"
+			"\n"
+			"slice(finish)\n"
+			"{\n"
+			"  %s\n"
 			"}\n",
 			textureUnitDeclCode.getData(),
-			textureUnitCode.getData()
+			textureUnitCode.getData(),
+			AlphaTestToCode(pass).getData()
 		);
 	}
 
@@ -201,9 +281,13 @@ bool CStdGL::PrepareMaterial(StdMeshMatManager& mat_manager, StdMeshMaterialLoad
 			StdMeshMaterialPass& pass = technique.Passes[j];
 
 			GLint max_texture_units;
-			glGetIntegerv(GL_MAX_TEXTURE_UNITS, &max_texture_units);
-			assert(max_texture_units >= 1);
-			
+			glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_texture_units);
+
+			// OpenGL 3.x guarantees at least 16 TIUs. If the above returns
+			// less it's probably a driver bug. So just keep going.
+			assert(max_texture_units >= 16);
+			max_texture_units = std::min<GLint>(max_texture_units, 16);
+
 			unsigned int active_texture_units = 0;
 			for(unsigned int k = 0; k < pass.TextureUnits.size(); ++k)
 				if(pass.TextureUnits[k].HasTexture())
@@ -299,21 +383,6 @@ bool CStdGL::PrepareMaterial(StdMeshMatManager& mat_manager, StdMeshMaterialLoad
 						technique.Available = false;
 						break;
 					}
-
-					for (unsigned int m = 0; m < texunit.Transformations.size(); ++m)
-					{
-						StdMeshMaterialTextureUnit::Transformation& trans = texunit.Transformations[m];
-						if (trans.TransformType == StdMeshMaterialTextureUnit::Transformation::T_TRANSFORM)
-						{
-							// transpose so we can directly pass it to glMultMatrixf
-							std::swap(trans.Transform.M[ 1], trans.Transform.M[ 4]);
-							std::swap(trans.Transform.M[ 2], trans.Transform.M[ 8]);
-							std::swap(trans.Transform.M[ 3], trans.Transform.M[12]);
-							std::swap(trans.Transform.M[ 6], trans.Transform.M[ 9]);
-							std::swap(trans.Transform.M[ 7], trans.Transform.M[13]);
-							std::swap(trans.Transform.M[11], trans.Transform.M[14]);
-						}
-					}
 				} // loop over textures
 			} // loop over texture units
 
@@ -386,27 +455,44 @@ namespace
 {
 	// Apply Zoom and Transformation to the current matrix stack. Return
 	// parity of the transformation.
-	bool ApplyZoomAndTransform(float ZoomX, float ZoomY, float Zoom, C4BltTransform* pTransform)
+	bool ApplyZoomAndTransform(float ZoomX, float ZoomY, float Zoom, C4BltTransform* pTransform, StdProjectionMatrix& projection)
 	{
 		// Apply zoom
-		glTranslatef(ZoomX, ZoomY, 0.0f);
-		glScalef(Zoom, Zoom, 1.0f);
-		glTranslatef(-ZoomX, -ZoomY, 0.0f);
+		Translate(projection, ZoomX, ZoomY, 0.0f);
+		Scale(projection, Zoom, Zoom, 1.0f);
+		Translate(projection, -ZoomX, -ZoomY, 0.0f);
 
 		// Apply transformation
 		if (pTransform)
 		{
-			const GLfloat transform[16] = { pTransform->mat[0], pTransform->mat[3], 0, pTransform->mat[6], pTransform->mat[1], pTransform->mat[4], 0, pTransform->mat[7], 0, 0, 1, 0, pTransform->mat[2], pTransform->mat[5], 0, pTransform->mat[8] };
-			glMultMatrixf(transform);
+			StdProjectionMatrix transform;
+			transform(0, 0) = pTransform->mat[0];
+			transform(0, 1) = pTransform->mat[1];
+			transform(0, 2) = 0.0f;
+			transform(0, 3) = pTransform->mat[2];
+			transform(1, 0) = pTransform->mat[3];
+			transform(1, 1) = pTransform->mat[4];
+			transform(1, 2) = 0.0f;
+			transform(1, 3) = pTransform->mat[5];
+			transform(2, 0) = 0.0f;
+			transform(2, 1) = 0.0f;
+			transform(2, 2) = 1.0f;
+			transform(2, 3) = 0.0f;
+			transform(3, 0) = pTransform->mat[6];
+			transform(3, 1) = pTransform->mat[7];
+			transform(3, 2) = 0.0f;
+			transform(3, 3) = pTransform->mat[8];
+			projection *= transform;
 
 			// Compute parity of the transformation matrix - if parity is swapped then
 			// we need to cull front faces instead of back faces.
-			const float det = transform[0]*transform[5]*transform[15]
-			                  + transform[4]*transform[13]*transform[3]
-			                  + transform[12]*transform[1]*transform[7]
-			                  - transform[0]*transform[13]*transform[7]
-			                  - transform[4]*transform[1]*transform[15]
-			                  - transform[12]*transform[5]*transform[3];
+			const float det = transform(0,0)*transform(1,1)*transform(3,3)
+			                + transform(1,0)*transform(3,1)*transform(0,3)
+			                + transform(3,0)*transform(0,1)*transform(1,3)
+			                - transform(0,0)*transform(3,1)*transform(1,3)
+			                - transform(1,0)*transform(0,1)*transform(3,3)
+			                - transform(3,0)*transform(1,1)*transform(0,3);
+
 			return det > 0;
 		}
 
@@ -440,7 +526,7 @@ namespace
 		if(pFoW != NULL)
 		{
 			call.AllocTexUnit(C4SSU_LightTex);
-			glBindTexture(GL_TEXTURE_2D, pFoW->getSurface()->textures[0].texName);
+			glBindTexture(GL_TEXTURE_2D, pFoW->getSurfaceName());
 			float lightTransform[6];
 			pFoW->GetFragTransform(clipRect, outRect, lightTransform);
 			call.SetUniformMatrix2x3fv(C4SSU_LightTransform, 1, lightTransform);
@@ -461,7 +547,70 @@ namespace
 		return false;
 	}
 
-	void RenderSubMeshImpl(const StdMeshInstance& mesh_instance, const StdSubMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
+	StdProjectionMatrix ResolveAutoTextureMatrix(const StdSubMeshInstance& instance, const StdMeshMaterialTechnique& technique, unsigned int passIndex, unsigned int texUnitIndex)
+	{
+		assert(passIndex < technique.Passes.size());
+		const StdMeshMaterialPass& pass = technique.Passes[passIndex];
+
+		assert(texUnitIndex < pass.TextureUnits.size());
+		const StdMeshMaterialTextureUnit& texunit = pass.TextureUnits[texUnitIndex];
+
+		StdProjectionMatrix matrix = StdProjectionMatrix::Identity();
+		const double Position = instance.GetTexturePosition(passIndex, texUnitIndex);
+
+		for (unsigned int k = 0; k < texunit.Transformations.size(); ++k)
+		{
+			const StdMeshMaterialTextureUnit::Transformation& trans = texunit.Transformations[k];
+			StdProjectionMatrix temp_matrix;
+			switch (trans.TransformType)
+			{
+			case StdMeshMaterialTextureUnit::Transformation::T_SCROLL:
+				Translate(matrix, trans.Scroll.X, trans.Scroll.Y, 0.0f);
+				break;
+			case StdMeshMaterialTextureUnit::Transformation::T_SCROLL_ANIM:
+				Translate(matrix, trans.GetScrollX(Position), trans.GetScrollY(Position), 0.0f);
+				break;
+			case StdMeshMaterialTextureUnit::Transformation::T_ROTATE:
+				Rotate(matrix, trans.Rotate.Angle, 0.0f, 0.0f, 1.0f);
+				break;
+			case StdMeshMaterialTextureUnit::Transformation::T_ROTATE_ANIM:
+				Rotate(matrix, trans.GetRotate(Position), 0.0f, 0.0f, 1.0f);
+				break;
+			case StdMeshMaterialTextureUnit::Transformation::T_SCALE:
+				Scale(matrix, trans.Scale.X, trans.Scale.Y, 1.0f);
+				break;
+			case StdMeshMaterialTextureUnit::Transformation::T_TRANSFORM:
+				for (int i = 0; i < 16; ++i)
+					temp_matrix(i / 4, i % 4) = trans.Transform.M[i];
+				matrix *= temp_matrix;
+				break;
+			case StdMeshMaterialTextureUnit::Transformation::T_WAVE_XFORM:
+				switch (trans.WaveXForm.XForm)
+				{
+				case StdMeshMaterialTextureUnit::Transformation::XF_SCROLL_X:
+					Translate(matrix, trans.GetWaveXForm(Position), 0.0f, 0.0f);
+					break;
+				case StdMeshMaterialTextureUnit::Transformation::XF_SCROLL_Y:
+					Translate(matrix, 0.0f, trans.GetWaveXForm(Position), 0.0f);
+					break;
+				case StdMeshMaterialTextureUnit::Transformation::XF_ROTATE:
+					Rotate(matrix, trans.GetWaveXForm(Position), 0.0f, 0.0f, 1.0f);
+					break;
+				case StdMeshMaterialTextureUnit::Transformation::XF_SCALE_X:
+					Scale(matrix, trans.GetWaveXForm(Position), 1.0f, 1.0f);
+					break;
+				case StdMeshMaterialTextureUnit::Transformation::XF_SCALE_Y:
+					Scale(matrix, 1.0f, trans.GetWaveXForm(Position), 1.0f);
+					break;
+				}
+				break;
+			}
+		}
+
+		return matrix;
+	}
+
+	void RenderSubMeshImpl(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, const StdMeshInstance& mesh_instance, const StdSubMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
 	{
 		const StdMeshMaterial& material = instance.GetMaterial();
 		assert(material.BestTechniqueIndex != -1);
@@ -469,7 +618,10 @@ namespace
 
 		bool using_shared_vertices = instance.GetSubMesh().GetVertices().empty();
 		GLuint vbo = mesh_instance.GetMesh().GetVBO();
-		size_t buffer_offset = using_shared_vertices ? 0 : instance.GetSubMesh().GetOffsetInBuffer();
+		GLuint ibo = mesh_instance.GetIBO();
+		unsigned int vaoid = mesh_instance.GetVAOID();
+		size_t vertex_buffer_offset = using_shared_vertices ? 0 : instance.GetSubMesh().GetOffsetInVBO();
+		size_t index_buffer_offset = instance.GetSubMesh().GetOffsetInIBO(); // note this is constant
 
 		// Cook the bone transform matrixes into something that OpenGL can use. This could be moved into RenderMeshImpl.
 		// Or, even better, we could upload them into a UBO, but Intel doesn't support them prior to Sandy Bridge.
@@ -503,6 +655,12 @@ namespace
 			}
 		}
 
+		// Don't render with degenerate matrix
+		if (fabs(modelviewMatrix.Determinant()) < 1e-6)
+			return;
+		// Modelview matrix does not change between passes, so cache it here
+		const StdMeshMatrix normalMatrixTranspose = StdMeshMatrix::Inverse(modelviewMatrix);
+
 		// Render each pass
 		for (unsigned int i = 0; i < technique.Passes.size(); ++i)
 		{
@@ -517,49 +675,6 @@ namespace
 				glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
 			else
 				glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
-
-			if (pass.AlphaRejectionFunction != StdMeshMaterialPass::DF_AlwaysPass)
-			{
-				glEnable(GL_ALPHA_TEST);
-
-				switch (pass.AlphaRejectionFunction)
-				{
-				case StdMeshMaterialPass::DF_AlwaysPass:
-					glAlphaFunc(GL_ALWAYS, 0.0f);
-					break;
-				case StdMeshMaterialPass::DF_AlwaysFail:
-					glAlphaFunc(GL_NEVER, 0.0f);
-					break;
-				case StdMeshMaterialPass::DF_Less:
-					glAlphaFunc(GL_LESS, pass.AlphaRejectionValue);
-					break;
-				case StdMeshMaterialPass::DF_LessEqual:
-					glAlphaFunc(GL_LEQUAL, pass.AlphaRejectionValue);
-					break;
-				case StdMeshMaterialPass::DF_Equal:
-					glAlphaFunc(GL_EQUAL, pass.AlphaRejectionValue);
-					break;
-				case StdMeshMaterialPass::DF_NotEqual:
-					glAlphaFunc(GL_NOTEQUAL, pass.AlphaRejectionValue);
-					break;
-				case StdMeshMaterialPass::DF_Greater:
-					glAlphaFunc(GL_GREATER, pass.AlphaRejectionValue);
-					break;
-				case StdMeshMaterialPass::DF_GreaterEqual:
-					glAlphaFunc(GL_GEQUAL, pass.AlphaRejectionValue);
-					break;
-				default:
-					assert(false);
-					break;
-				}
-			}
-
-			// Set material properties
-			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, pass.Ambient);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, pass.Diffuse);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, pass.Specular);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, pass.Emissive);
-			glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, pass.Shininess);
 
 			glFrontFace(parity ? GL_CW : GL_CCW);
 			if(mesh_instance.GetCompletion() < 1.0f)
@@ -606,11 +721,9 @@ namespace
 					glBlendFunc(OgreBlendTypeToGL(pass.SceneBlendFactors[0]), GL_ONE);
 			}
 
-			glMatrixMode(GL_TEXTURE);
-
 			assert(pass.Program.get() != NULL);
 
-			// Upload all parameters to the shader (keep GL_TEXTURE matrix mode for this)
+			// Upload all parameters to the shader
 			int ssc = 0;
 			if(dwBlitMode & C4GFXBLIT_MOD2) ssc |= C4SSC_MOD2;
 			if(pFoW != NULL) ssc |= C4SSC_LIGHT;
@@ -618,6 +731,19 @@ namespace
 			if (!shader) return;
 			C4ShaderCall call(shader);
 			call.Start();
+
+			// Upload projection, modelview and normal matrices
+			call.SetUniformMatrix4x4(C4SSU_ProjectionMatrix, projectionMatrix);
+			call.SetUniformMatrix4x4(C4SSU_ModelViewMatrix, modelviewMatrix);
+			call.SetUniformMatrix3x3Transpose(C4SSU_NormalMatrix, normalMatrixTranspose);
+
+
+			// Upload material properties
+			call.SetUniform4fv(C4SSU_MaterialAmbient, 1, pass.Ambient);
+			call.SetUniform4fv(C4SSU_MaterialDiffuse, 1, pass.Diffuse);
+			call.SetUniform4fv(C4SSU_MaterialSpecular, 1, pass.Specular);
+			call.SetUniform4fv(C4SSU_MaterialEmission, 1, pass.Emissive);
+			call.SetUniform1f(C4SSU_MaterialShininess, pass.Shininess);
 
 			// Upload the current bone transformation matrixes (if there are any)
 			if (!bones.empty())
@@ -628,23 +754,41 @@ namespace
 					glUniformMatrix4x3fv(shader->GetUniform(C4SSU_Bones), bones.size(), GL_TRUE, &bones[0].m[0][0]);
 			}
 
-			// Bind the vertex data of the mesh
-#define VERTEX_OFFSET(field) reinterpret_cast<const uint8_t *>(offsetof(StdMeshVertex, field))
-			glBindBuffer(GL_ARRAY_BUFFER, vbo);
-			glTexCoordPointer(2, GL_FLOAT, sizeof(StdMeshVertex), buffer_offset + VERTEX_OFFSET(u));
-			glVertexPointer(3, GL_FLOAT, sizeof(StdMeshVertex), buffer_offset + VERTEX_OFFSET(x));
-			glNormalPointer(GL_FLOAT, sizeof(StdMeshVertex), buffer_offset + VERTEX_OFFSET(nx));
-			for (int attrib_index = 0; attrib_index <= C4Shader::VAI_BoneIndicesMax - C4Shader::VAI_BoneIndices; ++attrib_index)
+			GLuint vao;
+			const bool has_vao = pGL->GetVAO(vaoid, vao);
+			glBindVertexArray(vao);
+			if (!has_vao)
 			{
-				glVertexAttribPointer(C4Shader::VAI_BoneWeights + attrib_index, 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex),
-					buffer_offset + VERTEX_OFFSET(bone_weight) + sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_weight)>::type) * 4 * attrib_index);
-				glEnableVertexAttribArray(C4Shader::VAI_BoneWeights + attrib_index);
-				glVertexAttribPointer(C4Shader::VAI_BoneIndices + attrib_index, 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex),
-					buffer_offset + VERTEX_OFFSET(bone_index) + sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_index)>::type) * 4 * attrib_index);
-				glEnableVertexAttribArray(C4Shader::VAI_BoneIndices + attrib_index);
-			}
+				// Bind the vertex data of the mesh
+				// Note this relies on the fact that all vertex
+				// attributes for all shaders are at the same
+				// locations.
+				// TODO: And this fails if the mesh changes
+				// from a material with texture to one without
+				// or vice versa.
+				glBindBuffer(GL_ARRAY_BUFFER, vbo);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+#define VERTEX_OFFSET(field) reinterpret_cast<const uint8_t *>(offsetof(StdMeshVertex, field))
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_Position), 3, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(x));
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_Normal), 3, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(nx));
+				if (shader->GetAttribute(C4SSA_TexCoord) != -1)
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_TexCoord), 2, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(u));
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneWeights0), 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_weight));
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneWeights1), 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_weight) + 4 * sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_weight)>::type));
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneIndices0), 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_index));
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneIndices1), 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_index) + 4 * sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_index)>::type));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Position));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Normal));
+				if (shader->GetAttribute(C4SSA_TexCoord) != -1)
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_TexCoord));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneWeights0));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneWeights1));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneIndices0));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneIndices1));
 #undef VERTEX_OFFSET
+			}
 
+			// Bind textures
 			for (unsigned int j = 0; j < pass.TextureUnits.size(); ++j)
 			{
 				const StdMeshMaterialTextureUnit& texunit = pass.TextureUnits[j];
@@ -653,66 +797,17 @@ namespace
 					call.AllocTexUnit(-1);
 					const unsigned int Phase = instance.GetTexturePhase(i, j);
 					glBindTexture(GL_TEXTURE_2D, texunit.GetTexture(Phase).texName);
-
-					// Setup texture coordinate transform
-					glLoadIdentity();
-					const double Position = instance.GetTexturePosition(i, j);
-					for (unsigned int k = 0; k < texunit.Transformations.size(); ++k)
-					{
-						const StdMeshMaterialTextureUnit::Transformation& trans = texunit.Transformations[k];
-						switch (trans.TransformType)
-						{
-						case StdMeshMaterialTextureUnit::Transformation::T_SCROLL:
-							glTranslatef(trans.Scroll.X, trans.Scroll.Y, 0.0f);
-							break;
-						case StdMeshMaterialTextureUnit::Transformation::T_SCROLL_ANIM:
-							glTranslatef(trans.GetScrollX(Position), trans.GetScrollY(Position), 0.0f);
-							break;
-						case StdMeshMaterialTextureUnit::Transformation::T_ROTATE:
-							glRotatef(trans.Rotate.Angle, 0.0f, 0.0f, 1.0f);
-							break;
-						case StdMeshMaterialTextureUnit::Transformation::T_ROTATE_ANIM:
-							glRotatef(trans.GetRotate(Position), 0.0f, 0.0f, 1.0f);
-							break;
-						case StdMeshMaterialTextureUnit::Transformation::T_SCALE:
-							glScalef(trans.Scale.X, trans.Scale.Y, 1.0f);
-							break;
-						case StdMeshMaterialTextureUnit::Transformation::T_TRANSFORM:
-							glMultMatrixf(trans.Transform.M);
-							break;
-						case StdMeshMaterialTextureUnit::Transformation::T_WAVE_XFORM:
-							switch (trans.WaveXForm.XForm)
-							{
-							case StdMeshMaterialTextureUnit::Transformation::XF_SCROLL_X:
-								glTranslatef(trans.GetWaveXForm(Position), 0.0f, 0.0f);
-								break;
-							case StdMeshMaterialTextureUnit::Transformation::XF_SCROLL_Y:
-								glTranslatef(0.0f, trans.GetWaveXForm(Position), 0.0f);
-								break;
-							case StdMeshMaterialTextureUnit::Transformation::XF_ROTATE:
-								glRotatef(trans.GetWaveXForm(Position), 0.0f, 0.0f, 1.0f);
-								break;
-							case StdMeshMaterialTextureUnit::Transformation::XF_SCALE_X:
-								glScalef(trans.GetWaveXForm(Position), 1.0f, 1.0f);
-								break;
-							case StdMeshMaterialTextureUnit::Transformation::XF_SCALE_Y:
-								glScalef(1.0f, trans.GetWaveXForm(Position), 1.0f);
-								break;
-							}
-							break;
-						}
-					}
 				}
 			}
 
 			// Set uniforms and instance parameters
 			SetStandardUniforms(call, dwModClr, dwPlayerColor, dwBlitMode, pass.CullHardware != StdMeshMaterialPass::CH_None, pFoW, clipRect, outRect);
-			for(unsigned int i = 0; i < pass.Program->Parameters.size(); ++i)
+			for(unsigned int j = 0; j < pass.Program->Parameters.size(); ++j)
 			{
-				const int uniform = pass.Program->Parameters[i].UniformIndex;
+				const int uniform = pass.Program->Parameters[j].UniformIndex;
 				if(!shader->HaveUniform(uniform)) continue; // optimized out
 
-				const StdMeshMaterialShaderParameter* parameter = pass.Program->Parameters[i].Parameter;
+				const StdMeshMaterialShaderParameter* parameter = pass.Program->Parameters[j].Parameter;
 
 				StdMeshMaterialShaderParameter auto_resolved;
 				if(parameter->GetType() == StdMeshMaterialShaderParameter::AUTO)
@@ -724,6 +819,9 @@ namespace
 
 				switch(parameter->GetType())
 				{
+				case StdMeshMaterialShaderParameter::AUTO_TEXTURE_MATRIX:
+					call.SetUniformMatrix4x4(uniform, ResolveAutoTextureMatrix(instance, technique, i, parameter->GetInt()));
+					break;
 				case StdMeshMaterialShaderParameter::INT:
 					call.SetUniform1i(uniform, parameter->GetInt());
 					break;
@@ -748,38 +846,23 @@ namespace
 				}
 			}
 
-			glMatrixMode(GL_MODELVIEW);
 			size_t vertex_count = 3 * instance.GetNumFaces();
-			glDrawElements(GL_TRIANGLES, vertex_count, GL_UNSIGNED_INT, instance.GetFaces());
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-			for (int attrib_index = 0; attrib_index <= C4Shader::VAI_BoneIndicesMax - C4Shader::VAI_BoneIndices; ++attrib_index)
-			{
-				glDisableVertexAttribArray(C4Shader::VAI_BoneIndices + attrib_index);
-				glDisableVertexAttribArray(C4Shader::VAI_BoneWeights + attrib_index);
-			}
+			assert (vertex_buffer_offset % sizeof(StdMeshVertex) == 0);
+			size_t base_vertex = vertex_buffer_offset / sizeof(StdMeshVertex);
+			glDrawElementsBaseVertex(GL_TRIANGLES, vertex_count, GL_UNSIGNED_INT, reinterpret_cast<void*>(index_buffer_offset), base_vertex);
+			glBindVertexArray(0);
 			call.Finish();
 
 			if(!pass.DepthCheck)
 				glEnable(GL_DEPTH_TEST);
-			if (pass.AlphaRejectionFunction != StdMeshMaterialPass::DF_AlwaysPass)
-				glDisable(GL_ALPHA_TEST);
 		}
 	}
 
-	void RenderMeshImpl(StdMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity); // Needed by RenderAttachedMesh
+	void RenderMeshImpl(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, StdMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity); // Needed by RenderAttachedMesh
 
-	void RenderAttachedMesh(StdMeshInstance::AttachedMesh* attach, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
+	void RenderAttachedMesh(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, StdMeshInstance::AttachedMesh* attach, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
 	{
 		const StdMeshMatrix& FinalTrans = attach->GetFinalTransformation();
-
-		// Convert matrix to column-major order, add fourth row
-		const float attach_trans_gl[16] =
-		{
-			FinalTrans(0,0), FinalTrans(1,0), FinalTrans(2,0), 0,
-			FinalTrans(0,1), FinalTrans(1,1), FinalTrans(2,1), 0,
-			FinalTrans(0,2), FinalTrans(1,2), FinalTrans(2,2), 0,
-			FinalTrans(0,3), FinalTrans(1,3), FinalTrans(2,3), 1
-		};
 
 		// Take the player color from the C4Object, if the attached object is not a definition
 		// This is a bit unfortunate because it requires access to C4Object which is otherwise
@@ -793,13 +876,11 @@ namespace
 		}
 
 		// TODO: Take attach transform's parity into account
-		glPushMatrix();
-		glMultMatrixf(attach_trans_gl);
-		RenderMeshImpl(*attach->Child, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
-		glPopMatrix();
+		StdMeshMatrix newModelviewMatrix = modelviewMatrix * FinalTrans;
+		RenderMeshImpl(projectionMatrix, newModelviewMatrix, *attach->Child, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
 	}
 
-	void RenderMeshImpl(StdMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
+	void RenderMeshImpl(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, StdMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
 	{
 		const StdMesh& mesh = instance.GetMesh();
 
@@ -807,31 +888,23 @@ namespace
 		StdMeshInstance::AttachedMeshIter attach_iter = instance.AttachedMeshesBegin();
 
 		for (; attach_iter != instance.AttachedMeshesEnd() && ((*attach_iter)->GetFlags() & StdMeshInstance::AM_DrawBefore); ++attach_iter)
-			RenderAttachedMesh(*attach_iter, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
+			RenderAttachedMesh(projectionMatrix, modelviewMatrix, *attach_iter, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
 
-		GLint modes[2];
 		// Check if we should draw in wireframe or normal mode
 		if(dwBlitMode & C4GFXBLIT_WIREFRAME)
-		{
-			// save old mode
-			glGetIntegerv(GL_POLYGON_MODE, modes);
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		}
 
 		// Render each submesh
 		for (unsigned int i = 0; i < mesh.GetNumSubMeshes(); ++i)
-			RenderSubMeshImpl(instance, instance.GetSubMeshOrdered(i), dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
+			RenderSubMeshImpl(projectionMatrix, modelviewMatrix, instance, instance.GetSubMeshOrdered(i), dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
 
 		// reset old mode to prevent rendering errors
 		if(dwBlitMode & C4GFXBLIT_WIREFRAME)
-		{
-			glPolygonMode(GL_FRONT, modes[0]);
-			glPolygonMode(GL_BACK, modes[1]);
-		}
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 		// Render non-AM_DrawBefore attached meshes
 		for (; attach_iter != instance.AttachedMeshesEnd(); ++attach_iter)
-			RenderAttachedMesh(*attach_iter, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
+			RenderAttachedMesh(projectionMatrix, modelviewMatrix, *attach_iter, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
 	}
 }
 
@@ -840,6 +913,17 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 	// Field of View for perspective projection, in degrees
 	static const float FOV = 60.0f;
 	static const float TAN_FOV = tan(FOV / 2.0f / 180.0f * M_PI);
+
+	// Check mesh transformation; abort when it is degenerate.
+	bool mesh_transform_parity = false;
+	if (MeshTransform)
+	{
+		const float det = MeshTransform->Determinant();
+		if (fabs(det) < 1e-6)
+			return;
+		else if (det < 0.0f)
+			mesh_transform_parity = true;
+	}
 
 	const StdMesh& mesh = instance.GetMesh();
 
@@ -858,12 +942,6 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND); // TODO: Shouldn't this always be enabled? - blending does not work for meshes without this though.
 
-	glClientActiveTexture(GL_TEXTURE0); // our only texcoord corresponds to tex0
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-
 	// TODO: We ignore the additive drawing flag for meshes but instead
 	// set the blending mode of the corresponding material. I'm not sure
 	// how the two could be combined.
@@ -873,23 +951,21 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 	//int iAdditive = dwBlitMode & C4GFXBLIT_ADDITIVE;
 	//glBlendFunc(GL_SRC_ALPHA, iAdditive ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
 
-	// Set up projection matrix first. We do transform and Zoom with the
-	// projection matrix, so that lighting is applied to the untransformed/unzoomed
-	// mesh.
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-
 	// Mesh extents
 	const float b = fabs(v2.x - v1.x)/2.0f;
 	const float h = fabs(v2.y - v1.y)/2.0f;
 	const float l = fabs(v2.z - v1.z)/2.0f;
 
+	// Set up projection matrix first. We do transform and Zoom with the
+	// projection matrix, so that lighting is applied to the untransformed/unzoomed
+	// mesh.
+	StdProjectionMatrix projectionMatrix;
 	if (!fUsePerspective)
 	{
-		// Orthographic projection. The orthographic projection matrix
-		// is already loaded in the GL matrix stack.
+		// Load the orthographic projection
+		projectionMatrix = ProjectionMatrix;
 
-		if (!ApplyZoomAndTransform(ZoomX, ZoomY, Zoom, pTransform))
+		if (!ApplyZoomAndTransform(ZoomX, ZoomY, Zoom, pTransform, projectionMatrix))
 			parity = !parity;
 
 		// Scale so that the mesh fits in (tx,ty,twdt,thgt)
@@ -919,24 +995,22 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 		// there are attached meshes.
 		const float scz = 1.0/(mesh.GetBoundingRadius());
 
-		glTranslatef(dx, dy, 0.0f);
-		glScalef(1.0f, 1.0f, scz);
+		Translate(projectionMatrix, dx, dy, 0.0f);
+		Scale(projectionMatrix, 1.0f, 1.0f, scz);
 	}
 	else
 	{
-		// Perspective projection. We need current viewport size.
-		const int iWdt=std::min(iClipX2, RenderTarget->Wdt-1)-iClipX1+1;
-		const int iHgt=std::min(iClipY2, RenderTarget->Hgt-1)-iClipY1+1;
-
-		// Get away with orthographic projection matrix currently loaded
-		glLoadIdentity();
+		// Perspective projection. This code transforms the projected
+		// 3D model into the target area.
+		const C4Rect clipRect = GetClipRect();
+		projectionMatrix = StdProjectionMatrix::Identity();
 
 		// Back to GL device coordinates
-		glTranslatef(-1.0f, 1.0f, 0.0f);
-		glScalef(2.0f/iWdt, -2.0f/iHgt, 1.0f);
+		Translate(projectionMatrix, -1.0f, 1.0f, 0.0f);
+		Scale(projectionMatrix, 2.0f/clipRect.Wdt, -2.0f/clipRect.Hgt, 1.0f);
 
-		glTranslatef(-iClipX1, -iClipY1, 0.0f);
-		if (!ApplyZoomAndTransform(ZoomX, ZoomY, Zoom, pTransform))
+		Translate(projectionMatrix, -clipRect.x, -clipRect.y, 0.0f);
+		if (!ApplyZoomAndTransform(ZoomX, ZoomY, Zoom, pTransform, projectionMatrix))
 			parity = !parity;
 
 		// Move to target location and compensate for 1.0f aspect
@@ -952,97 +1026,69 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 			ttwdt = thgt;
 		}
 
-		glTranslatef(ttx, tty, 0.0f);
-		glScalef(((float)ttwdt)/iWdt, ((float)tthgt)/iHgt, 1.0f);
+		Translate(projectionMatrix, ttx, tty, 0.0f);
+		Scale(projectionMatrix, ((float)ttwdt)/clipRect.Wdt, ((float)tthgt)/clipRect.Hgt, 1.0f);
 
 		// Return to Clonk coordinate frame
-		glScalef(iWdt/2.0, -iHgt/2.0, 1.0f);
-		glTranslatef(1.0f, -1.0f, 0.0f);
+		Scale(projectionMatrix, clipRect.Wdt/2.0, -clipRect.Hgt/2.0, 1.0f);
+		Translate(projectionMatrix, 1.0f, -1.0f, 0.0f);
 
-		// Fix for the case when we have a non-square target
+		// Fix for the case when we have different aspect ratios
 		const float ta = twdt / thgt;
 		const float ma = b / h;
 		if(ta <= 1 && ta/ma <= 1)
-			glScalef(std::max(ta, ta/ma), std::max(ta, ta/ma), 1.0f);
+			Scale(projectionMatrix, std::max(ta, ta/ma), std::max(ta, ta/ma), 1.0f);
 		else if(ta >= 1 && ta/ma >= 1)
-			glScalef(std::max(1.0f/ta, ma/ta), std::max(1.0f/ta, ma/ta), 1.0f);
+			Scale(projectionMatrix, std::max(1.0f/ta, ma/ta), std::max(1.0f/ta, ma/ta), 1.0f);
 
 		// Apply perspective projection. After this, x and y range from
 		// -1 to 1, and this is mapped into tx/ty/twdt/thgt by the above code.
-		// Aspect is 1.0f which is accounted for above.
-		gluPerspective(FOV, 1.0f, 0.1f, 100.0f);
+		// Aspect is 1.0f which is changed above as well.
+		Perspective(projectionMatrix, 1.0f/TAN_FOV, 1.0f, 0.1f, 100.0f);
 	}
 
-	// Now set up modelview matrix
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	glLoadIdentity();
-
+	// Now set up the modelview matrix
+	StdMeshMatrix modelviewMatrix;
 	if (fUsePerspective)
 	{
 		// Setup camera position so that the mesh with uniform transformation
 		// fits well into a square target (without distortion).
 		const float EyeR = l + std::max(b/TAN_FOV, h/TAN_FOV);
-		const float EyeX = MeshCenter.x;
-		const float EyeY = MeshCenter.y;
-		const float EyeZ = MeshCenter.z + EyeR;
+		const StdMeshVector Eye = StdMeshVector::Translate(MeshCenter.x, MeshCenter.y, MeshCenter.z + EyeR);
 
 		// Up vector is unit vector in theta direction
-		const float UpX = 0;//-sinEyePhi * sinEyeTheta;
-		const float UpY = -1;//-cosEyeTheta;
-		const float UpZ = 0;//-cosEyePhi * sinEyeTheta;
+		const StdMeshVector Up = StdMeshVector::Translate(0.0f, -1.0f, 0.0f);
 
 		// Fix X axis (???)
-		glScalef(-1.0f, 1.0f, 1.0f);
+		modelviewMatrix = StdMeshMatrix::Scale(-1.0f, 1.0f, 1.0f);
+
 		// center on mesh's bounding box, so that the mesh is really in the center of the viewport
-		gluLookAt(EyeX, EyeY, EyeZ, MeshCenter.x, MeshCenter.y, MeshCenter.z, UpX, UpY, UpZ);
+		modelviewMatrix *= StdMeshMatrix::LookAt(Eye, MeshCenter, Up);
+	}
+	else
+	{
+		modelviewMatrix = StdMeshMatrix::Identity();
 	}
 
 	// Apply mesh transformation matrix
 	if (MeshTransform)
 	{
-		// Convert to column-major order
-		const float Matrix[16] =
-		{
-			(*MeshTransform)(0,0), (*MeshTransform)(1,0), (*MeshTransform)(2,0), 0,
-			(*MeshTransform)(0,1), (*MeshTransform)(1,1), (*MeshTransform)(2,1), 0,
-			(*MeshTransform)(0,2), (*MeshTransform)(1,2), (*MeshTransform)(2,2), 0,
-			(*MeshTransform)(0,3), (*MeshTransform)(1,3), (*MeshTransform)(2,3), 1
-		};
-
-		const float det = MeshTransform->Determinant();
-		if (det < 0) parity = !parity;
-
-		// Renormalize if transformation resizes the mesh
-		// for lighting to be correct.
-		// TODO: Also needs to check for orthonormality to be correct
-		if (det != 1 && det != -1)
-			glEnable(GL_NORMALIZE);
-
 		// Apply MeshTransformation (in the Mesh's coordinate system)
-		glMultMatrixf(Matrix);
+		modelviewMatrix *= *MeshTransform;
+		// Keep track of parity
+		if (mesh_transform_parity) parity = !parity;
 	}
 
 	DWORD dwModClr = BlitModulated ? BlitModulateClr : 0xffffffff;
 
 	const C4Rect clipRect = GetClipRect();
 	const C4Rect outRect = GetOutRect();
-	RenderMeshImpl(instance, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
 
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix();
+	RenderMeshImpl(projectionMatrix, modelviewMatrix, instance, dwModClr, dwBlitMode, dwPlayerColor, pFoW, clipRect, outRect, parity);
 
-	glActiveTexture(GL_TEXTURE0); // switch back to default
-	glClientActiveTexture(GL_TEXTURE0); // switch back to default
+	// Reset state
+	//glActiveTexture(GL_TEXTURE0);
 	glDepthMask(GL_TRUE);
-
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
-
-	glDisable(GL_NORMALIZE);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);

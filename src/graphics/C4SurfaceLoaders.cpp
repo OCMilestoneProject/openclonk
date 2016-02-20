@@ -24,6 +24,7 @@
 #include <C4Group.h>
 #include <C4Log.h>
 #include <StdPNG.h>
+#include "lib/StdColors.h"
 
 bool C4Surface::LoadAny(C4Group &hGroup, const char *szName, bool fOwnPal, bool fNoErrIfNotFound, int iFlags)
 {
@@ -162,63 +163,49 @@ bool C4Surface::ReadPNG(CStdStream &hGroup, int iFlags)
 	// abort if loading wasn't successful
 	if (!fSuccess) return false;
 	// create surface(s) - do not create an 8bit-buffer!
-	if (!Create(png.iWdt, png.iHgt, false, 0, iFlags)) return false;
+	if (!Create(png.iWdt, png.iHgt, iFlags)) return false;
 	// lock for writing data
 	if (!Lock()) return false;
-	if (textures.empty())
+	if (!texture)
 	{
 		Unlock();
 		return false;
 	}
 	// write pixels
-	for (int tY = 0; tY * iTexSize < Hgt; ++tY) for (int tX = 0; tX * iTexSize < Wdt; ++tX)
-		{
-			assert (tX>=0 && tY>=0 && tX<iTexX && tY<iTexY);
-			// Get Texture and lock it
-			C4TexRef *pTexRef = &textures[tY*iTexX + tX];
-			if (!pTexRef->Lock()) continue;
-			// At the edges, not the whole texture is used
-			int maxY = std::min(iTexSize, Hgt - tY * iTexSize), maxX = std::min(iTexSize, Wdt - tX * iTexSize);
-			for (int iY = 0; iY < maxY; ++iY)
-			{
-				// The global, not texture-relative position
-				int rY = iY + tY * iTexSize;
+	// Get Texture and lock it
+	if (!texture->Lock()) return false;
+	int maxX = std::min(Wdt, iTexSize);
+	int maxY = std::min(Hgt, iTexSize);
+	for (int iY = 0; iY < maxY; ++iY)
+	{
 #ifndef __BIG_ENDIAN__
-				if (byBytesPP == 4 && png.iClrType == PNG_COLOR_TYPE_RGB_ALPHA)
-				{
-					// Optimize the easy case of a png in the same format as the display
-					// 32 bit
-					DWORD *pPix=(DWORD *) (((char *) pTexRef->texLock.pBits) + iY * pTexRef->texLock.Pitch);
-					memcpy (pPix, png.GetRow(rY) + tX * iTexSize, maxX * 4);
-					int iX = maxX;
-					while (iX--) { if (((BYTE *)pPix)[3] == 0x00) *pPix = 0x00000000; ++pPix; }
-				}
-				else
-#endif
-				{
-					// Loop through every pixel and convert
-					for (int iX = 0; iX < maxX; ++iX)
-					{
-						uint32_t dwCol = png.GetPix(iX + tX * iTexSize, rY);
-						// if color is fully transparent, ensure it's black
-						if (dwCol>>24 == 0x00) dwCol=0x00000000;
-						// set pix in surface
-						if (byBytesPP == 4)
-						{
-							DWORD *pPix=(DWORD *) (((char *) pTexRef->texLock.pBits) + iY * pTexRef->texLock.Pitch + iX * 4);
-							*pPix=dwCol;
-						}
-						else
-						{
-							WORD *pPix=(WORD *) (((char *) pTexRef->texLock.pBits) + iY * pTexRef->texLock.Pitch + iX * 2);
-							*pPix=ClrDw2W(dwCol);
-						}
-					}
-				}
-			}
-			pTexRef->Unlock();
+		if (png.iClrType == PNG_COLOR_TYPE_RGB_ALPHA)
+		{
+			// Optimize the easy case of a png in the same format as the display
+			// 32 bit
+			DWORD *pPix=(DWORD *) (((char *) texture->texLock.pBits) + iY * texture->texLock.Pitch);
+			memcpy (pPix, png.GetRow(iY), maxX * sizeof(*pPix));
+			int iX = maxX;
+			while (iX--) { if (((BYTE *)pPix)[3] == 0x00) *pPix = 0x00000000; ++pPix; }
 		}
+		else
+#endif
+		{
+			// Loop through every pixel and convert
+			for (int iX = 0; iX < maxX; ++iX)
+			{
+				uint32_t dwCol = png.GetPix(iX, iY);
+				// if color is fully transparent, ensure it's black
+				if (dwCol>>24 == 0x00) dwCol=0x00000000;
+				// set pix in surface
+				DWORD *pPix=(DWORD *) (((char *) texture->texLock.pBits) + iY * texture->texLock.Pitch + iX * 4);
+				*pPix=dwCol;
+			}
+		}
+	}
+	
 	// unlock
+	texture->Unlock();
 	Unlock();
 	// return if successful
 	return fSuccess;
@@ -342,7 +329,7 @@ bool C4Surface::ReadJPEG(CStdStream &hGroup, int iFlags)
 	jpeg_start_decompress(&cinfo);
 
 	// create surface(s) - do not create an 8bit-buffer!
-	if (!Create(cinfo.output_width, cinfo.output_height, false, 0, iFlags)) return false;
+	if (!Create(cinfo.output_width, cinfo.output_height, iFlags)) return false;
 	// JSAMPLEs per row in output buffer
 	row_stride = cinfo.output_width * cinfo.output_components;
 	// Make a one-row-high sample array that will go away at jpeg_destroy_decompress
@@ -377,7 +364,7 @@ bool C4Surface::ReadJPEG(CStdStream &hGroup, int iFlags)
 
 bool C4Surface::ReadJPEG(CStdStream &, int) {
 	// Dummy surface
-	if (!Create(1, 1, false, 1, 0)) return false;
+	if (!Create(1, 1)) return false;
 	return true;
 }
 

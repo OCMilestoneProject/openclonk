@@ -31,7 +31,7 @@ public func Initialize()
 
 private func Hit()
 {
-	Sound("DullWoodHit?");
+	Sound("Hits::Materials::Wood::DullWoodHit?");
 }
 
 public func HoldingEnabled() { return true; }
@@ -52,7 +52,7 @@ public func ControlUse(object clonk, int x, int y)
 
 	wire = CreateObject(Fuse);
 	wire->Connect(dynamite, this);
-	Sound("Connect");
+	Sound("Objects::Connect");
 	wires[count - 1] = wire;
 	
 	count--;
@@ -82,6 +82,16 @@ public func ChangeToIgniter()
 	ChangeDef(Igniter);
 	SetGraphics("Picture", Igniter, 1, GFXOV_MODE_Picture);
 	return true;
+}
+
+public func SetDynamiteCount(int new_count)
+{
+	count = BoundBy(new_count, 1, DYNA_MaxCount);
+	UpdatePicture();
+	// Update inventory if contained in a crew member.
+	if (Contained())
+		Contained()->~OnInventoryChange();
+	return;
 }
 
 private func UpdatePicture()
@@ -132,8 +142,9 @@ public func GetInventoryIconOverlay()
 	return overlay;
 }
 
-public func OnFuseFinished()
+public func OnFuseFinished(object fuse)
 {
+	SetController(fuse->GetController());
 	DoExplode();
 }
 
@@ -157,7 +168,7 @@ protected func Incineration(int caused_by)
 {
 	ActivateFuse();
 	if (!GetEffect("Fuse", this)) AddEffect("Fuse", this, 100, 1, this);
-	Sound("Fuse");
+	Sound("Fire::Fuse");
 	SetController(caused_by);
 	return;
 }
@@ -166,6 +177,11 @@ protected func Damage(int change, int type, int by_player)
 {
 	Incinerate(nil, by_player);
 	return;
+}
+
+public func OnCannonShot(object cannon)
+{
+	Incinerate(nil, cannon->GetController());
 }
 
 public func FxFuseTimer(object target, effect, int timer)
@@ -198,7 +214,5 @@ func Definition(def) {
 local Collectible = 1;
 local Name = "$Name$";
 local Description = "$Description$";
-local UsageHelp = "$UsageHelp$";
-local Rebuy = true;
 local BlastIncinerate = 1;
 local ContactIncinerate = 2;

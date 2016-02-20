@@ -107,6 +107,7 @@ func Death()
 protected func ControlUse(object clonk, int iX, int iY)
 {
 	clonk->Eat(this);
+	return true;
 }
 
 public func NutritionalValue() { if (!GetAlive()) return 15; else return 0; }
@@ -381,7 +382,7 @@ func FxIsBeingEatenAdd(target, effect)
 func DoJump()
 {
 	SetAction("Jump");
-	Sound("SoftTouch*");
+	Sound("Hits::SoftTouch*");
 	
 	var x_dir = RandomX(ActMap.Jump.Speed/2, ActMap.Jump.Speed);
 	if (GetComDir() == COMD_Left) x_dir *= -1;
@@ -505,6 +506,8 @@ local MaxBreath = 180; // 180 = five seconds
 local Placement = 1;
 local NoBurnDecay = 1;
 local BreatheWater = 1;
+local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
+local ContactCalls = true;
 
 func IsPrey() { return true; }
 

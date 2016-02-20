@@ -36,6 +36,8 @@ enum C4LR_Byte {
 // Don't forget to update GetUniformName when introducing new uniforms!
 enum C4LR_Uniforms
 {
+	C4LRU_ProjectionMatrix,
+
 	C4LRU_LandscapeTex,
 	C4LRU_ScalerTex,
 	C4LRU_MaterialTex,
@@ -52,6 +54,15 @@ enum C4LR_Uniforms
 	C4LRU_AmbientTransform,
 
 	C4LRU_Count
+};
+
+enum C4LR_Attributes
+{
+	C4LRA_Position,
+	C4LRA_LandscapeTexCoord,
+	C4LRA_LightTexCoord,
+
+	C4LRA_Count
 };
 
 // How much data we want to store per landscape pixel
@@ -106,7 +117,11 @@ private:
 	C4Shader Shader;
 	C4Shader ShaderLight;
 	static const char *UniformNames[];
-	GLenum hLandscapeTexCoord, hLightTexCoord;
+	// VBO for landscape vertex data
+	GLuint hVBO;
+	// VAO IDs for rendering landscape w/ and w/o light
+	unsigned int hVAOIDNoLight;
+	unsigned int hVAOIDLight;
 
 	// 2D texture array of material textures
 	GLuint hMaterialTexture;
@@ -135,7 +150,8 @@ private:
 	bool InitMaterialTexture(C4TextureMap *pMap);
 	bool LoadShader(C4GroupSet *pGraphics, C4Shader& shader, const char* name, int ssc);
 	bool LoadShaders(C4GroupSet *pGraphics);
-    void ClearShaders();
+	bool InitVBO();
+	void ClearShaders();
 	bool LoadScaler(C4GroupSet *pGraphics);
 
 	int CalculateScalerBitmask(int x, int y, C4Rect To, C4Landscape *pSource);

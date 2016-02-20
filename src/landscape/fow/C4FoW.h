@@ -65,6 +65,34 @@ private:
 	float x0, y0;
 };
 
+enum C4FoWFramebufShaderUniforms {
+	C4FoWFSU_ProjectionMatrix, // projection matrix
+	C4FoWFSU_Texture,          // source texture
+
+	C4FoWFSU_Count
+};
+
+enum C4FoWFramebufShaderAttributes {
+	C4FoWFSA_Position,
+	C4FoWFSA_TexCoord,
+
+	C4FoWFSA_Count
+};
+
+enum C4FoWRenderShaderUniforms {
+	C4FoWRSU_ProjectionMatrix, // projection matrix
+	C4FoWRSU_VertexOffset,     // offset applied to vertex (TODO: could be encoded in projection matrix)
+
+	C4FoWRSU_Count
+};
+
+enum C4FoWRenderShaderAttributes {
+	C4FoWRSA_Position,
+	C4FoWRSA_Color,
+
+	C4FoWRSA_Count
+};
+
 /**
 	This class holds all lights for the objects. It forwards the update, invalidation and render calls each to the
 	lights.
@@ -83,6 +111,8 @@ public:
 
 	// Shader to use for updating the frame buffer
 	C4Shader *GetFramebufShader();
+	// Shader to use for rendering the lights
+	C4Shader *GetRenderShader();
 
 	void Clear();
 
@@ -96,12 +126,13 @@ public:
 	/** Triggers the recalculation of all light beams within the given rectangle because the landscape changed. */
 	void Invalidate(C4Rect r);
 
-	void Render(class C4FoWRegion *pRegion, const C4TargetFacet *pOnScreen, C4Player *pPlr);
+	void Render(class C4FoWRegion *pRegion, const C4TargetFacet *pOnScreen, C4Player *pPlr, const StdProjectionMatrix& projectionMatrix);
 
 private:
 #ifndef USE_CONSOLE
 	// Shader for updating the frame buffer
 	C4Shader FramebufShader;
+	C4Shader RenderShader;
 #endif
 };
 

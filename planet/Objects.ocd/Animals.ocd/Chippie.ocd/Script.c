@@ -32,13 +32,17 @@ public func Death()
 	var particles = 
 	{
 		Prototype = Particles_Material(RGB(50, 200, 50)),
-		OnCollision = nil,
+		OnCollision = PC_Bounce(),
 		DampingX = 900, DampingY = 900,
 	};
-	CreateParticle("SmokeDirty", PV_Random(-5, 5), PV_Random(-5, 5),
+	
+	for (var particle_graphics in ["SmokeDirty", "Flash"])
+	{
+		CreateParticle(particle_graphics, PV_Random(-1, 1), PV_Random(-1, 1),
 					PV_Random(-20, 20), PV_Random(-20, 20),
-					PV_Random(20, 60), particles, 120);
-	Sound("ChippieChirp*", false, 50);
+					PV_Random(20, 60), particles, 60);
+	}
+	Sound("Animals::Chippie::Chirp*", false, 50);
 	RemoveObject();
 }
 
@@ -113,7 +117,7 @@ private func FxJumpCheckTimer(target, effect, time)
 private func ClawTo(object obj)
 {
 	// Play the sound on the object, because the chippie turns invisible.
-	obj->Sound("ChippieBite*", false, 50);
+	obj->Sound("Animals::Chippie::Bite*", false, 50);
 	
 	energy_sucked += 5 * 1000;
 	obj->DoEnergy(-5, false, FX_Call_EngGetPunched, GetOwner());
@@ -217,7 +221,7 @@ private func FxActivityTimer(target, effect, time)
 		else
 		if(!Random(20) && !GetEffect("DanceCooldown", this))
 		{
-			Sound("ChippieTalk*");
+			Sound("Animals::Chippie::Talk*");
 			
 			var cnt = 0;
 			for(var obj in FindObjects(Find_Distance(100), Find_ID(GetID()), Find_Allied(GetOwner()), Sort_Distance()))
@@ -269,6 +273,8 @@ local MaxBreath = 10000;
 local NoBurnDecay = 1;
 local ContactIncinerate = 15;
 local CorrosionResist = 1;
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;
 
 local ActMap = {
 Walk = {

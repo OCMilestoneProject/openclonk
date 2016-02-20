@@ -2,7 +2,6 @@
 id=CableLorry
 Version=6,0
 Category=C4D_Vehicle
-ContactCalls=1
 Width=22
 Height=16
 Offset=-11,-8
@@ -18,4 +17,3 @@ Collection=-12,-8,24,10
 GrabPutGet=C4D_GrabGet|C4D_GrabPut
 Rotate=30
 UprightAttach=0
-BorderBound=1

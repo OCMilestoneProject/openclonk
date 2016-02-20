@@ -52,7 +52,7 @@ StdStrBuf FnStringFormat(C4PropList * _this, C4String *szFormatPar, C4Value * Pa
 				// number
 			case 'd': case 'x': case 'X':
 			{
-				if (cPar >= ParCount) throw new C4AulExecError("format placeholder without parameter");
+				if (cPar >= ParCount) throw C4AulExecError("format placeholder without parameter");
 				StringBuf.AppendFormat(szField, Pars[cPar++].getInt());
 				cpFormat+=SLen(szField);
 				break;
@@ -60,7 +60,7 @@ StdStrBuf FnStringFormat(C4PropList * _this, C4String *szFormatPar, C4Value * Pa
 			// character
 			case 'c':
 			{
-				if (cPar >= ParCount) throw new C4AulExecError("format placeholder without parameter");
+				if (cPar >= ParCount) throw C4AulExecError("format placeholder without parameter");
 				StringBuf.AppendCharacter(Pars[cPar++].getInt());
 				cpFormat+=SLen(szField);
 				break;
@@ -70,7 +70,7 @@ StdStrBuf FnStringFormat(C4PropList * _this, C4String *szFormatPar, C4Value * Pa
 			// C4Value
 			case 'v':
 			{
-				if (cPar >= ParCount) throw new C4AulExecError("format placeholder without parameter");
+				if (cPar >= ParCount) throw C4AulExecError("format placeholder without parameter");
 				StringBuf.Append(static_cast<const StdStrBuf&>(Pars[cPar++].GetDataString(10)));
 				cpFormat+=SLen(szField);
 				break;
@@ -79,12 +79,12 @@ StdStrBuf FnStringFormat(C4PropList * _this, C4String *szFormatPar, C4Value * Pa
 			case 's':
 			{
 				// get string
-				if (cPar >= ParCount) throw new C4AulExecError("format placeholder without parameter");
+				if (cPar >= ParCount) throw C4AulExecError("format placeholder without parameter");
 				const char *szStr = "(null)";
 				if (Pars[cPar].GetData())
 				{
 					C4String * pStr = Pars[cPar].getStr();
-					if (!pStr) throw new C4AulExecError("string format placeholder without string");
+					if (!pStr) throw C4AulExecError("string format placeholder without string");
 					szStr = pStr->GetCStr();
 				}
 				++cPar;
@@ -107,38 +107,10 @@ StdStrBuf FnStringFormat(C4PropList * _this, C4String *szFormatPar, C4Value * Pa
 	return StringBuf;
 }
 
-bool C4ValueToMatrix(C4Value& value, StdMeshMatrix* matrix)
+C4AulDefFunc::C4AulDefFunc(C4PropListStatic * Parent, C4ScriptFnDef* pDef):
+		C4AulFunc(Parent, pDef->Identifier), Def(pDef)
 {
-	const C4ValueArray* array = value.getArray();
-	if (!array) return false;
-	return C4ValueToMatrix(*array, matrix);
-}
-
-bool C4ValueToMatrix(const C4ValueArray& array, StdMeshMatrix* matrix)
-{
-	if (array.GetSize() != 12) return false;
-
-	StdMeshMatrix& trans = *matrix;
-	trans(0,0) = array[0].getInt()/1000.0f;
-	trans(0,1) = array[1].getInt()/1000.0f;
-	trans(0,2) = array[2].getInt()/1000.0f;
-	trans(0,3) = array[3].getInt()/1000.0f;
-	trans(1,0) = array[4].getInt()/1000.0f;
-	trans(1,1) = array[5].getInt()/1000.0f;
-	trans(1,2) = array[6].getInt()/1000.0f;
-	trans(1,3) = array[7].getInt()/1000.0f;
-	trans(2,0) = array[8].getInt()/1000.0f;
-	trans(2,1) = array[9].getInt()/1000.0f;
-	trans(2,2) = array[10].getInt()/1000.0f;
-	trans(2,3) = array[11].getInt()/1000.0f;
-
-	return true;
-}
-
-C4AulDefFunc::C4AulDefFunc(C4AulScript *pOwner, C4ScriptFnDef* pDef):
-		C4AulFunc(pOwner, pDef->Identifier), Def(pDef)
-{
-	Owner->GetPropList()->SetPropertyByS(Name, C4VFunction(this));
+	Parent->SetPropertyByS(Name, C4VFunction(this));
 }
 
 C4AulDefFunc::~C4AulDefFunc()
@@ -300,7 +272,7 @@ static bool FnSetProperty(C4PropList * _this, C4String * key, const C4Value & to
 	if (!pObj) return false;
 	if (!key) return false;
 	if (pObj->IsFrozen())
-		throw new C4AulExecError("proplist write: proplist is readonly");
+		throw C4AulExecError("proplist write: proplist is readonly");
 	pObj->SetPropertyByS(key, to);
 	return true;
 }
@@ -312,7 +284,7 @@ static bool FnResetProperty(C4PropList * _this, C4String * key, C4PropList * pOb
 	if (!key) return false;
 	if (!pObj->HasProperty(key)) return false;
 	if (pObj->IsFrozen())
-		throw new C4AulExecError("proplist write: proplist is readonly");
+		throw C4AulExecError("proplist write: proplist is readonly");
 	pObj->ResetProperty(key);
 	return true;
 }
@@ -320,7 +292,7 @@ static bool FnResetProperty(C4PropList * _this, C4String * key, C4PropList * pOb
 static C4ValueArray * FnGetProperties(C4PropList * _this, C4PropList * p)
 {
 	if (!p) p = _this;
-	if (!p) throw new NeedNonGlobalContext("GetProperties");
+	if (!p) throw NeedNonGlobalContext("GetProperties");
 	C4ValueArray * r = p->GetProperties();
 	r->SortStrings();
 	return r;
@@ -329,7 +301,8 @@ static C4ValueArray * FnGetProperties(C4PropList * _this, C4PropList * p)
 static C4Value FnCall(C4PropList * _this, C4Value * Pars)
 {
 	if (!_this) _this = ::ScriptEngine.GetPropList();
-	C4AulParSet ParSet(&Pars[1], C4AUL_MAX_Par - 1);
+	C4AulParSet ParSet;
+	ParSet.Copy(&Pars[1], C4AUL_MAX_Par - 1);
 	C4AulFunc * fn = Pars[0].getFunction();
 	C4String * name;
 	if (!fn)
@@ -348,8 +321,7 @@ static C4Value FnCall(C4PropList * _this, C4Value * Pars)
 		}
 	}
 	if (!fn)
-		throw new C4AulExecError(FormatString("Call: no function %s", Pars[0].GetDataString().getData()).getData());
-	fn->CheckParTypes(ParSet.Par);
+		throw C4AulExecError(FormatString("Call: no function %s", Pars[0].GetDataString().getData()).getData());
 	return fn->Exec(_this, &ParSet, true);
 }
 
@@ -459,14 +431,56 @@ static long FnArcCos(C4PropList * _this, long iVal, long iRadius)
 	return (long) floor(f1+0.5);
 }
 
-static long FnMin(C4PropList * _this, long iVal1, long iVal2)
+static std::pair<Nillable<int32_t>, Nillable<int32_t>> minmax(const char *func, const C4Value &a_val, const Nillable<int32_t> &b_opt)
 {
-	return std::min(iVal1,iVal2);
+	if (a_val.CheckConversion(C4V_Int))
+	{
+		int32_t a = a_val.getInt();
+		int32_t b = b_opt;
+		if (a > b)
+			std::swap(a, b);
+		return std::make_pair(a, b);
+	}
+	else if (a_val.CheckConversion(C4V_Array))
+	{
+		const C4ValueArray *a = a_val.getArray();
+		if (a->GetSize() == 0)
+			return std::make_pair(nullptr, nullptr);
+		
+		if (!a->GetItem(0).CheckConversion(C4V_Int))
+		{
+			throw C4AulExecError(FormatString("%s: argument 1 must be int or array-of-int, but element %d of array is of type %s", func, 0, a->GetItem(0).GetTypeName()).getData());
+		}
+		int32_t min, max;
+		min = max = a->GetItem(0).getInt();
+
+		for (int32_t i = 1; i < a->GetSize(); ++i)
+		{
+			if (!a->GetItem(i).CheckConversion(C4V_Int))
+			{
+				throw C4AulExecError(FormatString("%s: argument 1 must be int or array-of-int, but element %d of array is of type %s", func, i, a->GetItem(i).GetTypeName()).getData());
+			}
+			int32_t value = a->GetItem(i).getInt();
+			min = std::min(min, value);
+			max = std::max(max, value);
+		}
+
+		return std::make_pair(min, max);
+	}
+	else
+	{
+		throw C4AulExecError(FormatString("%s: argument 1 must be int or array-of-int, but is of type %s", func, a_val.GetTypeName()).getData());
+	}
 }
 
-static long FnMax(C4PropList * _this, long iVal1, long iVal2)
+static Nillable<int32_t> FnMin(C4PropList * _this, const C4Value &a, Nillable<int32_t> b)
 {
-	return std::max(iVal1,iVal2);
+	return minmax("Min", a, b).first;
+}
+
+static Nillable<int32_t> FnMax(C4PropList * _this, const C4Value &a, Nillable<int32_t> b)
+{
+	return minmax("Max", a, b).second;
 }
 
 static long FnDistance(C4PropList * _this, long iX1, long iY1, long iX2, long iY2)
@@ -518,7 +532,7 @@ static int FnGetLength(C4PropList * _this, const C4Value & Par)
 	C4String * pStr = Par.getStr();
 	if (pStr)
 		return GetCharacterCount(pStr->GetData().getData());
-	throw new C4AulExecError("GetLength: parameter 0 cannot be converted to string or array");
+	throw C4AulExecError("GetLength: parameter 0 cannot be converted to string or array");
 }
 
 static int FnGetIndexOf(C4PropList * _this, C4ValueArray * pArray, const C4Value & Needle)
@@ -541,15 +555,14 @@ static bool FnDeepEqual(C4PropList * _this, const C4Value & v1, const C4Value & 
 	return v1 == v2;
 }
 
-static C4Void FnSetLength(C4PropList * _this, C4ValueArray *pArray, int iNewSize)
+static void FnSetLength(C4PropList * _this, C4ValueArray *pArray, int iNewSize)
 {
 	// safety
 	if (iNewSize<0 || iNewSize > C4ValueArray::MaxSize)
-		throw new C4AulExecError(FormatString("SetLength: invalid array size (%d)", iNewSize).getData());
+		throw C4AulExecError(FormatString("SetLength: invalid array size (%d)", iNewSize).getData());
 
 	// set new size
 	pArray->SetSize(iNewSize);
-	return C4Void();
 }
 
 static Nillable<long> FnGetChar(C4PropList * _this, C4String *pString, long iIndex)
@@ -568,13 +581,7 @@ static Nillable<long> FnGetChar(C4PropList * _this, C4String *pString, long iInd
 
 static C4Value Fneval(C4PropList * _this, C4String *strScript)
 {
-	// execute script in the same object
-	if (Object(_this))
-		return Object(_this)->Def->Script.DirectExec(Object(_this), FnStringPar(strScript), "eval", true);
-	else if (_this && _this->GetDef())
-		return _this->GetDef()->Script.DirectExec(0, FnStringPar(strScript), "eval", true);
-	else
-		return ::GameScript.DirectExec(0, FnStringPar(strScript), "eval", true);
+	return ::AulExec.DirectExec(_this, FnStringPar(strScript), "eval", true);
 }
 
 static bool FnLocateFunc(C4PropList * _this, C4String *funcname, C4PropList * p)
@@ -642,13 +649,12 @@ static long FnWildcardMatch(C4PropList * _this, C4String *psString, C4String *ps
 
 static bool FnFatalError(C4PropList * _this, C4String *pErrorMsg)
 {
-	throw new C4AulExecError(FormatString("script: %s", pErrorMsg ? pErrorMsg->GetCStr() : "(no error)").getData());
+	throw C4AulExecError(FormatString("script: %s", pErrorMsg ? pErrorMsg->GetCStr() : "(no error)").getData());
 }
 
 static bool FnStartCallTrace(C4PropList * _this)
 {
-	extern void C4AulStartTrace();
-	C4AulStartTrace();
+	AulExec.StartTrace();
 	return true;
 }
 
@@ -692,7 +698,7 @@ static Nillable<C4String *> FnGetConstantNameByValue(C4PropList * _this, int val
 
 static bool FnSortArray(C4PropList * _this, C4ValueArray *pArray, bool descending)
 {
-	if (!pArray) throw new C4AulExecError("SortArray: no array given");
+	if (!pArray) throw C4AulExecError("SortArray: no array given");
 	// sort array by its members
 	pArray->Sort(descending);
 	return true;
@@ -700,19 +706,19 @@ static bool FnSortArray(C4PropList * _this, C4ValueArray *pArray, bool descendin
 
 static bool FnSortArrayByProperty(C4PropList * _this, C4ValueArray *pArray, C4String *prop_name, bool descending)
 {
-	if (!pArray) throw new C4AulExecError("SortArrayByProperty: no array given");
-	if (!prop_name) throw new C4AulExecError("SortArrayByProperty: no property name given");
+	if (!pArray) throw C4AulExecError("SortArrayByProperty: no array given");
+	if (!prop_name) throw C4AulExecError("SortArrayByProperty: no property name given");
 	// sort array by property
-	if (!pArray->SortByProperty(prop_name, descending)) throw new C4AulExecError("SortArrayByProperty: not all array elements are proplists");
+	if (!pArray->SortByProperty(prop_name, descending)) throw C4AulExecError("SortArrayByProperty: not all array elements are proplists");
 	return true;
 }
 
 static bool FnSortArrayByArrayElement(C4PropList * _this, C4ValueArray *pArray, int32_t element_index, bool descending)
 {
-	if (!pArray) throw new C4AulExecError("SortArrayByArrayElement: no array given");
-	if (element_index<0) throw new C4AulExecError("SortArrayByArrayElement: element index must be >=0");
+	if (!pArray) throw C4AulExecError("SortArrayByArrayElement: no array given");
+	if (element_index<0) throw C4AulExecError("SortArrayByArrayElement: element index must be >=0");
 	// sort array by array element
-	if (!pArray->SortByArrayElement(element_index, descending)) throw new C4AulExecError("SortArrayByArrayElement: not all array elements are arrays of sufficient length");
+	if (!pArray->SortByArrayElement(element_index, descending)) throw C4AulExecError("SortArrayByArrayElement: not all array elements are arrays of sufficient length");
 	return true;
 }
 
@@ -720,7 +726,7 @@ static bool FnFileWrite(C4PropList * _this, int32_t file_handle, C4String *data)
 {
 	// resolve file handle to user file
 	C4AulUserFile *file = ::ScriptEngine.GetUserFile(file_handle);
-	if (!file) throw new C4AulExecError("FileWrite: invalid file handle");
+	if (!file) throw C4AulExecError("FileWrite: invalid file handle");
 	// prepare string to write
 	if (!data) return false; // write NULL? No.
 	// write it
@@ -769,10 +775,11 @@ void InitCoreFunctionMap(C4AulScriptEngine *pEngine)
 		pEngine->RegisterGlobalConstant(pCDef->Identifier, C4VInt(pCDef->Data));
 	}
 
+	C4PropListStatic * p = pEngine->GetPropList();
 	// add all def script funcs
 	for (C4ScriptFnDef *pDef = &C4ScriptFnMap[0]; pDef->Identifier; pDef++)
-		new C4AulDefFunc(pEngine, pDef);
-#define F(f) AddFunc(pEngine, #f, Fn##f)
+		new C4AulDefFunc(p, pDef);
+#define F(f) ::AddFunc(p, #f, Fn##f)
 	F(Abs);
 	F(Min);
 	F(Max);
@@ -819,7 +826,7 @@ void InitCoreFunctionMap(C4AulScriptEngine *pEngine)
 	F(eval);
 	F(GetConstantNameByValue);
 
-	AddFunc(pEngine, "Translate", C4AulExec::FnTranslate);
-	AddFunc(pEngine, "LogCallStack", C4AulExec::FnLogCallStack);
+	::AddFunc(p, "Translate", C4AulExec::FnTranslate);
+	::AddFunc(p, "LogCallStack", C4AulExec::FnLogCallStack);
 #undef F
 }

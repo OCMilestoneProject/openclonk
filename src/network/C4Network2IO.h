@@ -95,16 +95,13 @@ protected:
 	int iTCPIRate, iTCPORate, iTCPBCRate,
 	iUDPIRate, iUDPORate, iUDPBCRate;
 
-	// punching
-	C4NetIO::addr_t PuncherAddr;
-
 public:
 
 	bool hasTCP() const { return !! pNetIO_TCP; }
 	bool hasUDP() const { return !! pNetIO_UDP; }
 
 	// initialization
-	bool Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscovery = -1, int16_t iPortRefServer = -1, bool fBroadcast = false); // by main thread
+	bool Init(int16_t iPortTCP, int16_t iPortUDP, int16_t iPortDiscovery = -1, int16_t iPortRefServer = -1, bool fBroadcast = false, bool enable_upnp = true); // by main thread
 	void Clear(); // by main thread
 	void SetLocalCCore(const C4ClientCore &CCore); // by main thread
 
@@ -133,9 +130,6 @@ public:
 	// sending helpers
 	bool SendMsgToClient(C4NetIOPacket &rPkt, int iClient); // by both
 	bool BroadcastMsg(const C4NetIOPacket &rPkt); // by both
-
-	// punch
-	bool Punch(C4NetIO::addr_t PuncherAddr); // by main thread
 
 	// stuff
 	C4NetIO *getNetIO(C4Network2IOProtocol eProt); // by both
@@ -191,9 +185,6 @@ protected:
 	void CheckTimeout();
 	void GenerateStatistics(int iInterval);
 	void SendConnPackets();
-
-	// puncher
-	void OnPunch(C4NetIO::addr_t addr);
 
 };
 

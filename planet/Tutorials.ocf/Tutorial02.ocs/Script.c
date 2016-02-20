@@ -125,12 +125,7 @@ private func InitCliffTop()
 private func InitAcidLake()
 {
 	// Ropebridge over the acid lake.
-	var post1 = CreateObjectAbove(Ropebridge_Post, 816, 528);
-	var post2 = CreateObjectAbove(Ropebridge_Post, 928, 528);
-	post2->SetObjDrawTransform(-1000, 0, 0, 0, 1000);
-	post2.Double->SetObjDrawTransform(-1000, 0, 0, 0, 1000);
-	var bridge = CreateObjectAbove(Ropebridge, 872, 528);
-	bridge->MakeBridge(post1, post2);
+	Ropebridge->Create(816, 528, 928, 528);
 	
 	// Make the acid lake bubbling a bit.
 	BoilingAcid->Place();
@@ -159,6 +154,8 @@ private func InitAnimals()
 	var wipf = CreateObjectAbove(Wipf, 500, 536);
 	wipf->EnableTutorialControl();
 	wipf->SetMeshMaterial("WipfSkin");
+	wipf.Name = "$WipfName$";
+	wipf.Description = "$WipfDescription$";
 	
 	// Some butterflies as atmosphere.
 	for (var i = 0; i < 25; i++)
@@ -178,7 +175,8 @@ protected func InitializePlayer(int plr)
 	effect.to_y = 318;
 	
 	// Add an effect to the clonk to track the goal.
-	AddEffect("TrackGoal", clonk, 100, 2);
+	var track_goal = AddEffect("TrackGoal", nil, 100, 2);
+	track_goal.plr = plr;
 
 	// Standard player zoom for tutorials.
 	SetPlayerViewLock(plr, true);
@@ -187,7 +185,7 @@ protected func InitializePlayer(int plr)
 	// Create tutorial guide, add messages, show first.
 	guide = CreateObject(TutorialGuide, 0, 0, plr);
 	guide->AddGuideMessage("$MsgTutorialIntro$");
-	guide->ShowGuideMessage(0);
+	guide->ShowGuideMessage();
 	AddEffect("TutorialShovel", nil, 100, 5);
 	return;
 }
@@ -196,11 +194,12 @@ protected func InitializePlayer(int plr)
 
 global func FxTrackGoalTimer(object target, proplist effect, int time)
 {
-	if (Inside(target->GetX(), 982, 1002) && Inside(target->GetY(), 504, 528))
+	var crew = GetCrew(effect.plr);
+	if (Inside(crew->GetX(), 982, 1002) && Inside(crew->GetY(), 504, 528))
 	{
-		if (FindObject(Find_ID(Wipf), Find_Distance(15, target->GetX(), target->GetY())))
+		if (FindObject(Find_ID(Wipf), Find_Distance(15, crew->GetX(), crew->GetY())))
 		{
-			AddEffect("GoalOutro", target, 100, 5);
+			AddEffect("GoalOutro", crew, 100, 5);
 			return FX_Execute_Kill;	
 		}		
 	}
@@ -214,7 +213,7 @@ global func FxGoalOutroStart(object target, proplist effect, int temp)
 		
 	// Show guide message congratulating.
 	guide->AddGuideMessage("$MsgTutorialCompleted$");
-	guide->ShowGuideMessage(11);
+	guide->ShowGuideMessage();
 	return FX_OK;
 }
 
@@ -251,7 +250,7 @@ global func FxTutorialShovelTimer()
 		var plr = clonk->GetOwner();
 		var pick_up = GetPlayerControlAssignment(plr, CON_PickUp, true, true);
 		guide->AddGuideMessage(Format("$MsgTutorialShovel$", pick_up));
-		guide->ShowGuideMessage(1);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialInventory", nil, 100, 5);
 		return FX_Execute_Kill;
 	}
@@ -275,7 +274,7 @@ global func FxTutorialInventoryTimer()
 			var inv_inv_scroll_down = GetPlayerControlAssignment(plr, CON_InventoryShiftBackward, true, true);
 			var inv_scroll = Format("[%s][%s]", inv_inv_scroll_up, inv_inv_scroll_down);
 			guide->AddGuideMessage(Format("$MsgTutorialInventory$", inv_hotkeys, inv_scroll));
-			guide->ShowGuideMessage(2);
+			guide->ShowGuideMessage();
 			AddEffect("TutorialDigging", nil, 100, 5);
 			return FX_Execute_Kill;
 		}
@@ -294,7 +293,7 @@ global func FxTutorialDiggingTimer()
 		{
 			var use = GetPlayerControlAssignment(plr, CON_Use, true, true);
 			guide->AddGuideMessage(Format("$MsgTutorialDigging$", use));
-			guide->ShowGuideMessage(3);
+			guide->ShowGuideMessage();
 			AddEffect("TutorialFirestones", nil, 100, 5);
 			return FX_Execute_Kill;
 		}
@@ -307,7 +306,7 @@ global func FxTutorialFirestonesTimer()
 	if (FindObject(Find_OCF(OCF_CrewMember), Find_InRect(288, 384, 24, 96)))
 	{
 		guide->AddGuideMessage("$MsgTutorialFirestones$");
-		guide->ShowGuideMessage(4);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialWipfHole", nil, 100, 5);
 		return FX_Execute_Kill;
 	}
@@ -322,7 +321,7 @@ global func FxTutorialWipfHoleTimer()
 		var plr = clonk->GetOwner();
 		var throw = GetPlayerControlAssignment(plr, CON_Throw, true, true);
 		guide->AddGuideMessage(Format("$MsgTutorialFoundWipf$", throw));
-		guide->ShowGuideMessage(5);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialBlastedRock", nil, 100, 5);
 		return FX_Execute_Kill;
 	}
@@ -337,7 +336,7 @@ global func FxTutorialBlastedRockTimer()
 		var plr = clonk->GetOwner();
 		var drop = GetPlayerControlAssignment(plr, CON_DropHotkey1, true, true);
 		guide->AddGuideMessage(Format("$MsgTutorialBlastedRock$", drop));
-		guide->ShowGuideMessage(6);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialFedWipf", nil, 100, 5);
 		return FX_Execute_Kill;
 	}
@@ -350,7 +349,7 @@ global func FxTutorialFedWipfTimer()
 	if (wipf->HadFood())
 	{
 		guide->AddGuideMessage("$MsgTutorialFedWipf$");
-		guide->ShowGuideMessage(7);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialDigOutLoam", nil, 100, 5);
 		return FX_Execute_Kill;
 	}
@@ -365,7 +364,7 @@ global func FxTutorialDigOutLoamTimer()
 		var plr = clonk->GetOwner();
 		var use = GetPlayerControlAssignment(plr, CON_Use, true, true);
 		guide->AddGuideMessage(Format("$MsgTutorialDigOutLoam$", use));
-		guide->ShowGuideMessage(8);
+		guide->ShowGuideMessage();
 		AddEffect("TutorialFragileBridge", nil, 100, 5);
 		var bridge = FindObject(Find_ID(Ropebridge));
 		bridge->SetFragile();
@@ -380,7 +379,7 @@ global func FxTutorialFragileBridgeTimer()
 	if (clonk)
 	{
 		guide->AddGuideMessage("$MsgTutorialFragileBridge$");
-		guide->ShowGuideMessage(9);
+		guide->ShowGuideMessage();
 		// Stop the controls of the clonk for a few seconds.
 		DisablePlrControls(clonk->GetOwner());
 		clonk->SetComDir(COMD_Stop);
@@ -395,8 +394,9 @@ global func FxTutorialWaitForBridgeTimer(object target, proplist effect, int tim
 {
 	if (time > 2 * 36)
 	{
-		guide->AddGuideMessage("$MsgTutorialMakeLoamBridge$");
-		guide->ShowGuideMessage(10);
+		var use = GetPlayerControlAssignment(effect.plr, CON_Use, true, true);
+		guide->AddGuideMessage(Format("$MsgTutorialMakeLoamBridge$", use));
+		guide->ShowGuideMessage();
 		// Start the controls of the clonk again.
 		EnablePlrControls(effect.plr);
 		return FX_Execute_Kill;
@@ -485,12 +485,10 @@ global func FxClonkRestoreStop(object target, effect, int reason, bool  temporar
 		var plr = target->GetOwner();
 		var clonk = CreateObject(Clonk, 0, 0, plr);
 		clonk->GrabObjectInfo(target);
+		Rule_BaseRespawn->TransferInventory(target, clonk);
 		SetCursor(plr, clonk);
 		clonk->DoEnergy(100000);
 		restorer->SetRestoreObject(clonk, nil, to_x, to_y, 0, "ClonkRestore");
-		// Transfer contents
-		var i = target->ContentsCount(), contents_obj;
-		while (i--) if (contents_obj = target->Contents(i)) contents_obj->Enter(clonk);
 	}
 	return FX_OK;
 }

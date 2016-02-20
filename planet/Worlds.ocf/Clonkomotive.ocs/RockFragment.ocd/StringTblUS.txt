@@ -1,0 +1,2 @@
+Name=Boulder
+Description=Hurts Clonks and damages buildings.

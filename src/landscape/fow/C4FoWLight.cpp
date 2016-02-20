@@ -23,6 +23,7 @@
 #include "C4FoWDrawStrategy.h"
 #include "C4PlayerList.h"
 #include "C4Player.h"
+#include "lib/StdColors.h"
 
 #include <vector>
 
@@ -117,7 +118,7 @@ void C4FoWLight::Update(C4Rect Rec)
 		sections[i]->Update(Rec);
 }
 
-void C4FoWLight::Render(C4FoWRegion *region, const C4TargetFacet *onScreen)
+void C4FoWLight::Render(C4FoWRegion *region, const C4TargetFacet *onScreen, C4ShaderCall& call)
 {
 	TriangleList triangles;
 
@@ -139,23 +140,23 @@ void C4FoWLight::Render(C4FoWRegion *region, const C4TargetFacet *onScreen)
 	CalculateFanMaxed(triangles);
 	CalculateIntermediateFadeTriangles(triangles);
 
-	C4FoWDrawStrategy* pen;
-	if (onScreen) pen = new C4FoWDrawWireframeStrategy(this, onScreen);
-	else          pen = new C4FoWDrawLightTextureStrategy(this, region);
-
-	for(int pass = 0; pass < pen->GetRequestedPasses(); pass++)
+	std::unique_ptr<C4FoWDrawStrategy>& strategy = onScreen ? OnScreenStrategy : OffScreenStrategy;
+	if (!strategy.get())
 	{
-		pen->Begin(pass);
-
-		DrawFan(pen, triangles);
-		DrawFanMaxed(pen, triangles);
-		DrawFade(pen, triangles);
-		DrawIntermediateFadeTriangles(pen, triangles);
-
-		pen->End(pass);
+		if (onScreen)
+			strategy.reset(new C4FoWDrawWireframeStrategy(this, onScreen));
+		else
+			strategy.reset(new C4FoWDrawLightTextureStrategy(this));
 	}
 
-	delete pen;
+	strategy->Begin(region);
+
+	DrawFan(strategy.get(), triangles);
+	DrawFanMaxed(strategy.get(), triangles);
+	DrawFade(strategy.get(), triangles);
+	DrawIntermediateFadeTriangles(strategy.get(), triangles);
+
+	strategy->End(call);
 }
 
 void C4FoWLight::CalculateFanMaxed(TriangleList &triangles) const
@@ -252,7 +253,7 @@ void C4FoWLight::CalculateIntermediateFadeTriangles(TriangleList &triangles) con
 void C4FoWLight::DrawFan(C4FoWDrawStrategy* pen, TriangleList &triangles) const
 {
 	pen->BeginFan();
-	pen->DrawLightVertex(getX(), getY());
+	if (!triangles.empty()) pen->DrawLightVertex(getX(), getY());
 
 	for (TriangleList::iterator it = triangles.begin(), nextIt = it; it != triangles.end(); ++it)
 	{

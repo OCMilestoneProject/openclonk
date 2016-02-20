@@ -22,8 +22,8 @@ protected func Initialize()
 {
 	turnDir = 1;
 	SetAction("Roll");
-	animAim = PlayAnimation("Aim", 1,  Anim_Const(0),Anim_Const(1000));
-	animTurn = PlayAnimation("TurnRight", 5, Anim_Const(0), Anim_Const(1000));
+	animAim = PlayAnimation("Aim", 1,  Anim_Const(0));
+	animTurn = PlayAnimation("TurnRight", 5, Anim_Const(0));
 }
 
 //some left-overs from Lorry script. Not sure of it's purpose...
@@ -86,7 +86,7 @@ private func CheckForKeg(object clonk)
 		{
 			keg->Exit();
 			keg->Enter(this);
-			Sound("WoodHit?");
+			Sound("Hits::Materials::Wood::WoodHit?");
 		}
 		else // No keg, stop using cannon.
 		{
@@ -214,15 +214,25 @@ func ControlRight(object clonk)
 	}
 }
 
-func TurnCannon(int dir)
+public func TurnCannon(int dir, bool instant)
 {
 	turnDir = dir;
 	//Remove any old effect
 	if(GetEffect("IntTurnCannon", this)) RemoveEffect("IntTurnCannon", this);
-	//Add a new one
-	return AddEffect("IntTurnCannon", this, 1, 1, this);
+	// Instant turn?
+	if (instant)
+	{
+		// Simply set anim position to desired side
+		var target = 0;
+		if (dir == DIR_Left) target = GetAnimationLength("TurnRight");
+		SetAnimationPosition(animTurn, Anim_Const(target));
+	}
+	else
+	{
+		// Non-instant turn: Add timer to adjust animation (I wonder why it's not just using Anim_Linear?)
+		return AddEffect("IntTurnCannon", this, 1, 1, this);
+	}
 }
-	
 
 func FxIntTurnCannonTimer(object cannon, proplist effect, int timer)
 {
@@ -249,7 +259,9 @@ protected func DoFire(object iammo, object clonk, int angle)
 	iammo->SetR(r / angPrec);
 	iammo->SetRDir(-4 + Random(9));
 	iammo->LaunchProjectile(r, 17, Fire_Velocity, 0,0, angPrec);
-	iammo->~Fuse();
+	if (clonk)
+		iammo->SetController(clonk->GetController());
+	iammo->~OnCannonShot(this);
 
 	//Particles
 	var dist = 25;
@@ -262,7 +274,7 @@ protected func DoFire(object iammo, object clonk, int angle)
 	CreateParticle("Smoke", px, py, PV_Random(x - 20, x + 20), PV_Random(y - 20, y + 20), PV_Random(40, 60), Particles_Smoke(), 20);
 	CreateMuzzleFlash(px, py, r / angPrec, 60);
 	//sound
-	Sound("Blast3");
+	Sound("Fire::Blast3");
 }
 
 local ActMap = {
@@ -285,4 +297,5 @@ Roll = {
 local Name = "$Name$";
 local Description = "$Description$";
 local Touchable = 1;
-local Rebuy = true;
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;

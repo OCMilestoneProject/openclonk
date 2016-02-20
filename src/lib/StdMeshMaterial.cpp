@@ -693,6 +693,7 @@ void StdMeshMaterialShaderParameter::CopyShallow(const StdMeshMaterialShaderPara
 	case AUTO:
 		a = other.a;
 		break;
+	case AUTO_TEXTURE_MATRIX:
 	case INT:
 		i = other.i;
 		break;
@@ -856,14 +857,16 @@ bool StdMeshMaterialProgram::CompileShader(StdMeshMaterialLoader& loader, C4Shad
 	// Add standard slices
 	loader.AddShaderSlices(shader, ssc);
 	// Add our slices
-	shader.AddVertexSlice(-1, "varying vec2 texcoord;");
-	shader.AddFragmentSlice(-1, "varying vec2 texcoord;");
 	shader.AddVertexSlices(VertexShader->GetFilename(), VertexShader->GetCode(), VertexShader->GetFilename());
 	shader.AddFragmentSlices(FragmentShader->GetFilename(), FragmentShader->GetCode(), FragmentShader->GetFilename());
 	// Construct the list of uniforms
 	std::vector<const char*> uniformNames;
+	std::vector<const char*> attributeNames;
 #ifndef USE_CONSOLE
 	uniformNames.resize(C4SSU_Count + ParameterNames.size() + 1);
+	uniformNames[C4SSU_ProjectionMatrix] = "projectionMatrix";
+	uniformNames[C4SSU_ModelViewMatrix] = "modelviewMatrix";
+	uniformNames[C4SSU_NormalMatrix] = "normalMatrix";
 	uniformNames[C4SSU_ClrMod] = "clrMod";
 	uniformNames[C4SSU_Gamma] = "gamma";
 	uniformNames[C4SSU_BaseTex] = "baseTex"; // unused
@@ -875,11 +878,26 @@ bool StdMeshMaterialProgram::CompileShader(StdMeshMaterialLoader& loader, C4Shad
 	uniformNames[C4SSU_AmbientTex] = "ambientTex";
 	uniformNames[C4SSU_AmbientTransform] = "ambientTransform";
 	uniformNames[C4SSU_AmbientBrightness] = "ambientBrightness";
+	uniformNames[C4SSU_MaterialAmbient] = "materialAmbient";
+	uniformNames[C4SSU_MaterialDiffuse] = "materialDiffuse";
+	uniformNames[C4SSU_MaterialSpecular] = "materialSpecular";
+	uniformNames[C4SSU_MaterialEmission] = "materialEmission";
+	uniformNames[C4SSU_MaterialShininess] = "materialShininess";
 	uniformNames[C4SSU_Bones] = "bones";
 	uniformNames[C4SSU_CullMode] = "cullMode";
 	for (unsigned int i = 0; i < ParameterNames.size(); ++i)
 		uniformNames[C4SSU_Count + i] = ParameterNames[i].getData();
 	uniformNames[C4SSU_Count + ParameterNames.size()] = NULL;
+	attributeNames.resize(C4SSA_Count + 1);
+	attributeNames[C4SSA_Position] = "oc_Position";
+	attributeNames[C4SSA_Normal] = "oc_Normal";
+	attributeNames[C4SSA_TexCoord] = "oc_TexCoord";
+	attributeNames[C4SSA_Color] = "oc_Color"; // unused
+	attributeNames[C4SSA_BoneIndices0] = "oc_BoneIndices0";
+	attributeNames[C4SSA_BoneIndices1] = "oc_BoneIndices1";
+	attributeNames[C4SSA_BoneWeights0] = "oc_BoneWeights0";
+	attributeNames[C4SSA_BoneWeights1] = "oc_BoneWeights1";
+	attributeNames[C4SSA_Count] = NULL;
 #endif
 	// Compile the shader
 	StdCopyStrBuf name(Name);
@@ -888,7 +906,7 @@ bool StdMeshMaterialProgram::CompileShader(StdMeshMaterialLoader& loader, C4Shad
 	if (ssc & C4SSC_LIGHT) name.Append("Light");
 	if (ssc & C4SSC_MOD2) name.Append("Mod2");
 #endif
-	return shader.Init(name.getData(), &uniformNames[0]);
+	return shader.Init(name.getData(), &uniformNames[0], &attributeNames[0]);
 }
 
 bool StdMeshMaterialProgram::Compile(StdMeshMaterialLoader& loader)
@@ -950,9 +968,8 @@ double StdMeshMaterialTextureUnit::Transformation::GetWaveXForm(double t) const
 }
 
 StdMeshMaterialTextureUnit::Tex::Tex(C4Surface* Surface)
-	: RefCount(1), Surf(Surface), Texture(Surface->textures[0])
+	: RefCount(1), Surf(Surface), Texture(*Surface->texture)
 {
-	assert(!Surface->textures.empty());
 }
 
 StdMeshMaterialTextureUnit::Tex::~Tex()
@@ -1011,8 +1028,6 @@ void StdMeshMaterialTextureUnit::LoadTexture(StdMeshMaterialParserCtx& ctx, cons
 
 	if (surface->Wdt != surface->Hgt)
 		ctx.Error(StdCopyStrBuf("Texture '") + texname + "' is not quadratic");
-	if (surface->iTexX > 1 || surface->iTexY > 1)
-		ctx.Error(StdCopyStrBuf("Texture '") + texname + "' is too large");
 
 	Textures.push_back(TexPtr(surface.release()));
 }

@@ -33,6 +33,7 @@
 // make use of other sub-libraries
 #include Library_Inventory
 #include Library_ClonkInventoryControl
+#include Library_ClonkInteractionControl
 #include Library_ClonkGamepadControl
 
 // used for interaction with objects
@@ -59,12 +60,13 @@ static const ELEVATOR_CALL_DISTANCE = 30;
 	this.control.noholdingcallbacks: whether to do HoldingUseControl callbacks
 	this.control.shelved_command: command (function) with condition that will be executed when the condition is met
 		used for example to re-call *Use/Throw commands when the Clonk finished scaling
+	this.control.menu: the menu that is currently assigned to the Clonk. Use the methods SetMenu/GetMenu/etc to access it.
 */
 
 
 /* Item limit */
-public func MaxContentsCount() { return 5; }		// Size of the clonks inventory
-public func HandObjects() { return 1; } // Amount of hands to select items
+local MaxContentsCount = 5; // Size of the clonks inventory
+local HandObjects = 1; // Amount of hands to select items
 public func NoStackedContentMenu() { return true; }	// Contents-Menu shall display each object in a seperate slot
 
 
@@ -75,14 +77,12 @@ protected func Construction()
 	if(this.control == nil)
 		this.control = {};
 	this.control.hotkeypressed = false;
-	
-	menu = nil;
 
 	this.control.alt = false;
 	this.control.current_object = nil;
 	this.control.using_type = nil;
 	this.control.shelved_command = nil;
-	
+	this.control.menu = nil;
 	return _inherited(...);
 }
 
@@ -182,52 +182,6 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 {
 	if (!this) 
 		return false;
-
-	// some controls should only do something on release (everything that has to do with interaction)
-	if(ctrl == CON_Interact)
-	{
-		if (!release)
-		{
-			if(GetMenu())
-			{
-				// close a possible menu but still open the action bar later
-				TryCancelMenu();
-				// interaction with a menu counts as a special hotkey
-				this.control.hotkeypressed = true;
-				return true;
-			}
-			
-			// this is needed to reset the hotkey-memory
-			this.control.hotkeypressed = false;
-			
-			this->~StartInteractionCheck(this); // for GUI_Controller_ActionBar
-			return true;
-		}
-		// if the interaction-command has already been handled by a hotkey (else it'd double-interact)
-		else if(this.control.hotkeypressed)
-			return true;
-		// check if we can handle it by simply accessing the first actionbar item (for consistency)
-		else
-		{
-			var closed = this->~StopInteractionCheck(); // for GUI_Controller_ActionBar
-
-			// releasing of space cancels the action bar without selecting anything
-			if (closed)
-				return true;
-
-			// if the first actionbar item can not be handled, look for interaction objects and use the one with the best priority
-			var interaction_objects = GetInteractableObjects();
-			// look for minimum priority
-			var best = nil;
-			for (var info in interaction_objects)
-				if (best == nil || (info.priority < best.priority)) best = info;
-			if (best)
-			{
-				ExecuteInteraction(best);
-				return true;
-			}
-		}
-	}
 	
 	// Contents menu
 	if (ctrl == CON_Contents && !release)
@@ -313,7 +267,7 @@ public func ObjectControl(int plr, int ctrl, int x, int y, int strength, bool re
 		vehicle = nil;
 	
 	// menu
-	if (menu)
+	if (this.control.menu)
 	{
 		return Control2Menu(ctrl, x,y,strength, repeat, release);
 	}
@@ -678,6 +632,9 @@ func StartUseControl(int ctrl, int x, int y, object obj)
 		// but still catch command
 		return true;
 	}
+
+	// Disable climb/hangle actions for the duration of this use
+	if (obj.ForceFreeHands && !GetEffect("IntControlFreeHands", this)) AddEffect("IntControlFreeHands", this, 130, 0, this);
 	
 	obj->SetController(GetController());
 	this.control.current_object = obj;
@@ -695,6 +652,11 @@ func StartUseControl(int ctrl, int x, int y, object obj)
 	{
 		handled = obj->Call(GetUseCallString(),this,x,y);
 		this.control.noholdingcallbacks = handled;
+	}
+	else
+	{
+		// *Start was handled. So clean up possible old noholdingcallbacks-values.
+		this.control.noholdingcallbacks = false;
 	}
 	
 	if (!handled)
@@ -727,6 +689,9 @@ func StartUseDelayedControl(int ctrl, object obj)
 		return true;
 	}
 	
+	// Disable climb/hangle actions for the duration of this use
+	if (obj.ForceFreeHands && !GetEffect("IntControlFreeHands", this)) AddEffect("IntControlFreeHands", this, 130, 0, this);
+
 	this.control.current_object = obj;
 	this.control.using_type = DetermineUsageType(obj);
 	this.control.alt = ctrl != CON_UseDelayed;
@@ -780,6 +745,8 @@ func StopUseControl(int x, int y, object obj, bool cancel)
 				if (removal_helper.CommandTarget != this) continue;
 				break;
 			} while (true);
+
+			RemoveEffect("IntControlFreeHands", this); // make sure we can climb again
 			
 			this.control.current_object = nil;
 			this.control.using_type = nil;
@@ -980,6 +947,31 @@ func ControlMovement2Script(int ctrl, int x, int y, int strength, bool repeat, b
 
 }
 
+// Effect to free/unfree hands by disabling/enabling scale and hangle procedures
+public func FxIntControlFreeHandsStart(object target, proplist fx, int temp)
+{
+	// Process on non-temp as well in case scale/handle effects need to stack
+	// Stop current action
+	var proc = GetProcedure();
+	if (proc == "SCALE" || proc == "HANGLE") SetAction("Walk");
+	// Make sure ActMap is writable
+	if (this.ActMap == this.Prototype.ActMap) this.ActMap = new this.ActMap{};
+	// Kill scale/hangle effects
+	fx.act_scale = this.ActMap.Scale;
+	this.ActMap.Scale = nil;
+	fx.act_hangle = this.ActMap.Hangle;
+	this.ActMap.Hangle = nil;
+	return FX_OK;
+}
+
+public func FxIntControlFreeHandsStop(object target, proplist fx, int reason, bool temp)
+{
+	// Restore scale/hangle effects (engine will handle re-grabbing walls if needed)
+	if (fx.act_scale) this.ActMap.Scale = fx.act_scale;
+	if (fx.act_hangle) this.ActMap.Hangle = fx.act_hangle;
+	return FX_OK;
+}
+
 // returns true if the clonk is able to enter a building (procedurewise)
 public func CanEnter()
 {
@@ -993,8 +985,6 @@ public func CanEnter()
 public func IsMounted() { return GetProcedure() == "ATTACH"; }
 
 /* +++++++++++++++++++++++ Menu control +++++++++++++++++++++++ */
-
-local menu;
 
 func HasMenuControl()
 {
@@ -1014,18 +1004,19 @@ When you call SetMenu with a menu ID, you should also call clonk->MenuClosed(), 
 func SetMenu(new_menu, bool unclosable)
 {
 	unclosable = unclosable ?? false;
+	var current_menu = this.control.menu;
 	
 	// no news?
 	if (new_menu) // if new_menu==nil, it is important that we still do the cleaning-up below even if we didn't have a menu before (see MenuClosed())
-		if (menu == new_menu) return;
+		if (current_menu == new_menu) return;
 	
 	// close old one!
-	if (menu != nil)
+	if (current_menu != nil)
 	{
-		if (GetType(menu) == C4V_C4Object)
-			menu->Close();
-		else if (GetType(menu) == C4V_PropList)
-			GuiClose(menu.ID);
+		if (GetType(current_menu) == C4V_C4Object)
+			current_menu->Close();
+		else if (GetType(current_menu) == C4V_PropList)
+			GuiClose(current_menu.ID);
 		else
 			FatalError("Library_ClonkControl::SetMenu() was called with invalid parameter.");
 	}
@@ -1055,12 +1046,12 @@ func SetMenu(new_menu, bool unclosable)
 	{
 		if (GetType(new_menu) == C4V_C4Object)
 		{
-			menu = new_menu;
+			this.control.menu = new_menu;
 		}
 		else if (GetType(new_menu) == C4V_Int)
 		{
 			// add a proplist, so that it is always safe to call functions on clonk->GetMenu()
-			menu =
+			this.control.menu =
 			{
 				ID = new_menu
 			};
@@ -1071,7 +1062,7 @@ func SetMenu(new_menu, bool unclosable)
 		// make sure the menu is unclosable even if it is just a GUI ID
 		if (unclosable)
 		{
-			menu.Unclosable = Library_ClonkControl.GetTrue;
+			this.control.menu.Unclosable = Library_ClonkControl.GetTrue;
 		}
 	}
 	else
@@ -1082,15 +1073,15 @@ func SetMenu(new_menu, bool unclosable)
 		SetPlayerControlEnabled(GetOwner(), CON_GUIClick1, false);
 		SetPlayerControlEnabled(GetOwner(), CON_GUIClick2, false);
 
-		menu = nil;
+		this.control.menu = nil;
 	}
-	return menu;
+	return this.control.menu;
 }
 
 func MenuClosed()
 {
 	// make sure not to clean up the menu again
-	menu = nil;
+	this.control.menu = nil;
 	// and remove cursors etc.
 	SetMenu(nil);
 }
@@ -1102,13 +1093,21 @@ If you want to remove the menu, the suggested method is clonk->TryCancelMenu() t
 */
 func GetMenu()
 {
-	return menu;
+	// No new-style menu set? Return the classic menu ID. This is deprecated and should be removed in some future.
+	// This function must return a proplist, but clashes with the engine-defined "GetMenu".
+	// This workaround here at least allows developers to reach the Clonk's menu ID.
+	if (this.control.menu == nil)
+	{
+		var menu_id = inherited(...);
+		if (menu_id) return {ID = menu_id};
+	}
+	return this.control.menu;
 }
 
 // Returns true when an existing menu was closed
 func CancelMenu()
 {
-	if (menu)
+	if (this.control.menu)
 	{
 		SetMenu(nil);
 		return true;
@@ -1120,10 +1119,22 @@ func CancelMenu()
 // Tries to cancel a non-unclosable menu. Returns true when there is no menu left after this call (even if there never was one).
 func TryCancelMenu()
 {
-	if (!menu) return true;
-	if (menu->~Unclosable()) return false;
+	if (!this.control.menu) return true;
+	if (this.control.menu->~Unclosable()) return false;
 	CancelMenu();
 	return true;
+}
+
+public func RejectShiftCursor()
+{
+	if (this.control.menu && this.control.menu->~Unclosable()) return true;
+	return _inherited(...);
+}
+
+public func OnShiftCursor()
+{
+	TryCancelMenu();
+	return _inherited(...);
 }
 
 /* +++++++++++++++  Throwing, jumping +++++++++++++++ */
@@ -1175,7 +1186,8 @@ public func ControlJump()
 			ydir = BoundBy(this.JumpSpeed * 3 / 5, 240, 380);
 	}
 
-	if (GetProcedure() == "SCALE")
+	// Jump speed of the wall kick is halved.
+	if (GetProcedure() == "SCALE" || GetAction() == "Climb")
 	{
 		ydir = this.JumpSpeed/2;
 	}
@@ -1184,8 +1196,8 @@ public func ControlJump()
 	{
 		SetPosition(GetX(),GetY()-1);
 
-		//Wall kick
-		if(GetProcedure() == "SCALE")
+		// Wall kick if scaling or climbing.
+		if(GetProcedure() == "SCALE" || GetAction() == "Climb")
 		{
 			AddEffect("WallKick",this,1);
 			SetAction("Jump");
@@ -1217,174 +1229,6 @@ public func ControlJump()
 	return false;
 }
 
-func FxIsWallKickStart(object target, int num, bool temp)
-{
-	return 1;
-}
-
-/*
-	returns an array containing proplists with informations about the interactable actions.
-	The proplist properties are:
-		interaction_object
-		priority: used for sorting the objects in the action bar. Note that the returned objects are not yet sorted
-		interaction_index: when an object has multiple defined interactions, this is the index
-		extra_data: custom extra_data for an interaction specified by the object
-		actiontype: the kind of interaction. One of the ACTIONTYPE_* constants
-*/
-func GetInteractableObjects()
-{
-	var possible_interactions = [];
-	// find vehicles & structures & script interactables
-	// Get custom interactions from the clonk
-	// extra interactions are an array of proplists. proplists have to contain at least a function pointer "f", a description "desc" and an "icon" definition/object. Optional "front"-boolean for sorting in before/after other interactions.
-	var extra_interactions = this->~GetExtraInteractions() ?? []; // if not present, just use []. Less error prone than having multiple if(!foo).
-		
-	// all except structures only if outside
-	var can_only_use_container = !!Contained();
-
-	// add extra-interactions
-	if (!can_only_use_container)
-	for(var interaction in extra_interactions)
-	{
-		PushBack(possible_interactions,
-			{
-				interaction_object = interaction.Object,
-				priority = interaction.Priority,
-				interaction_index = nil,
-				extra_data = interaction,
-				actiontype = ACTIONTYPE_EXTRA
-			});
-	}
-	
-	// add interactables (script interface)
-	var interactables = FindObjects(
-		Find_AtPoint(0, 0),
-		Find_Or(Find_OCF(OCF_Grab), Find_Func("IsInteractable", this), Find_OCF(OCF_Entrance)),
-		Find_NoContainer(), Find_Layer(GetObjectLayer()));
-	for(var interactable in interactables)
-	{
-		var icnt = interactable->~GetInteractionCount() ?? 1;
-		
-		if (!can_only_use_container)
-		{
-			// first the script
-			// one object could have a scripted interaction AND be a vehicle
-			if (interactable->~IsInteractable(this))
-				for(var j = 0; j < icnt; j++)
-				{
-					PushBack(possible_interactions,
-						{
-							interaction_object = interactable,
-							priority = 9,
-							interaction_index = j,
-							extra_data = nil,
-							actiontype = ACTIONTYPE_SCRIPT
-						});
-				}
-			// check whether further interactions are possible
-	
-			// can be grabbed? (vehicles/chests..)
-			if (interactable->GetOCF() & OCF_Grab)
-			{
-				var priority = 19;
-				// high priority if already grabbed
-				if (GetActionTarget() == interactable) priority = 0;
-				
-				PushBack(possible_interactions,
-					{
-						interaction_object = interactable,
-						priority = priority,
-						interaction_index = nil,
-						extra_data = nil,
-						actiontype = ACTIONTYPE_VEHICLE
-					});
-			}
-		}
-		
-		// can be entered?
-		if (interactable->GetOCF() & OCF_Entrance && (!can_only_use_container || interactable == Contained()))
-		{
-			var priority = 29;
-			if (Contained() == interactable) priority = 0;
-			PushBack(possible_interactions,
-				{
-					interaction_object = interactable,
-					priority = priority,
-					interaction_index = nil,
-					extra_data = nil,
-					actiontype = ACTIONTYPE_STRUCTURE
-				});
-		}
-	}
-	
-	return possible_interactions;
-}
-
-// executes interaction with an object. /action_info/ is a proplist as returned by GetInteractableObjects
-func ExecuteInteraction(proplist action_info)
-{
-	if (!action_info.interaction_object)
-		return;
-		
-	// object is a pushable vehicle
-	if(action_info.actiontype == ACTIONTYPE_VEHICLE)
-	{
-		var proc = GetProcedure();
-		// object is inside building -> activate
-		if(Contained() && action_info.interaction_object->Contained() == Contained())
-		{
-			SetCommand("Activate", action_info.interaction_object);
-			return true;
-		}
-		// crew is currently pushing vehicle
-		else if(proc == "PUSH")
-		{
-			// which is mine -> let go
-			if(GetActionTarget() == action_info.interaction_object)
-				ObjectCommand("UnGrab");
-			else
-				ObjectCommand("Grab", action_info.interaction_object);
-				
-			return true;
-		}
-		// grab
-		else if(proc == "WALK")
-		{
-			ObjectCommand("Grab", action_info.interaction_object);
-			return true;
-		}
-	}
-	// object is a building
-	else if (action_info.actiontype == ACTIONTYPE_STRUCTURE)
-	{
-		// inside? -> exit
-		if(Contained() == action_info.interaction_object)
-		{
-			ObjectCommand("Exit");
-			return true;
-		}
-		// outside? -> enter
-		else if(this->CanEnter())
-		{
-			ObjectCommand("Enter", action_info.interaction_object);
-			return true;
-		}
-	}
-	else if (action_info.actiontype == ACTIONTYPE_SCRIPT)
-	{
-		if(action_info.interaction_object->~IsInteractable(this))
-		{
-			action_info.interaction_object->Interact(this, action_info.interaction_index);
-			return true;
-		}
-	}
-	else if (action_info.actiontype == ACTIONTYPE_EXTRA)
-	{
-		if(action_info.extra_data)
-			action_info.extra_data.Object->Call(action_info.extra_data.Fn, this);
-	}
-}
-
 // Interaction with clonks is special:
 // * The clonk opening the menu should always have higher priority so the clonk is predictably selected on the left side even if standing behind e.g. a crate
 // * Other clonks should be behind because interaction with them is rare but having your fellow players stand in front of a building is very common
@@ -1393,6 +1237,8 @@ func GetInteractionPriority(object target)
 {
 	// Self with high priority
 	if (target == this) return 100;
+	// Dead Clonks are shown (for a death message e.g.) but sorted to the bottom.
+	if (!GetAlive()) return -190;
 	var owner = NO_OWNER;
 	if (target) owner = target->GetOwner();
 	// Prefer own clonks for item transfer

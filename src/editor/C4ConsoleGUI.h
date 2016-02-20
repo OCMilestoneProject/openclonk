@@ -86,7 +86,6 @@ public:
 	void AddNetMenu();
 	void ClearNetMenu();
 	void AddNetMenuItemForPlayer(int32_t index, StdStrBuf &text);
-	void ClearInput();
 	void ClearPlayerMenu();
 	void SetInputFunctions(std::list<const char*> &functions);
 	
@@ -136,6 +135,9 @@ public:
 	void Win32KeepDialogsFloating(HWND hwnd = 0);
 	virtual bool Win32DialogMessageHandling(MSG *msg);
 	void UpdateMenuText(HMENU hMenu);
+
+	friend INT_PTR CALLBACK PropertyDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam);
+	friend INT_PTR CALLBACK ConsoleDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam);
 #endif
 };
 

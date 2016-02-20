@@ -8,7 +8,7 @@ protected func Construction()
 
 protected func Hit()
 {
-	Sound("GeneralHit?");
+	Sound("Hits::GeneralHit?");
 	return 1;
 }
 
@@ -18,5 +18,4 @@ public func GetFuelNeed() { return 100; }
 local Name = "$Name$";
 local Description = "$Description$";
 local Collectible = 1;
-local Rebuy = true;
 local Plane = 470;

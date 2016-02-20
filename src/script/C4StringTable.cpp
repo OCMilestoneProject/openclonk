@@ -40,7 +40,6 @@ bool C4Set<C4String *>::Equals<const char *>(C4String * const & a, const char * 
 // *** C4String
 
 C4String::C4String(StdStrBuf strString)
-: RefCnt(0)
 {
 	// take string
 	Data.Take(std::move(strString));
@@ -50,7 +49,6 @@ C4String::C4String(StdStrBuf strString)
 }
 
 C4String::C4String()
-: RefCnt(0)
 {
 }
 
@@ -148,6 +146,8 @@ C4StringTable::C4StringTable()
 	P[P_Blasted] = "Blasted";
 	P[P_IncineratingObj] = "IncineratingObj";
 	P[P_Plane] = "Plane";
+	P[P_BorderBound] = "BorderBound";
+	P[P_ContactCalls] = "ContactCalls";
 	P[P_SolidMaskPlane] = "SolidMaskPlane";
 	P[P_Tooltip] = "Tooltip";
 	P[P_Placement] = "Placement";

@@ -25,6 +25,7 @@ const int C4MSGB_MaxMsgFading   = 6;
 #include <C4Facet.h>
 #include <C4LogBuf.h>
 
+class C4CustomKey;
 class C4MessageBoard
 {
 public:
@@ -32,9 +33,7 @@ public:
 	~C4MessageBoard();
 
 	C4Facet Output;
-	
-	bool Active;
-protected:
+private:
 	float ScreenFader;
 	bool Startup;
 	// mode 0:
@@ -45,13 +44,12 @@ protected:
 	int iBackScroll; // how many lines scrolled back?
 	int iLineHgt; // line height
 
+	std::unique_ptr<C4KeyBinding> ScrollUpBinding, ScrollDownBinding;
+
 	C4LogBuffer LogBuffer; // backbuffer for log
 public:
-	void Default();
-	void Clear();
 	void Init(C4Facet &cgo, bool fStartup);
 	void Execute();
-	void DrawLoader(C4Facet &cgo);
 	void Draw(C4Facet &cgo);
 	void AddLog(const char *szMessage);
 	void ClearLog();

@@ -670,19 +670,6 @@ int32_t C4PropList::GetPropertyInt(C4PropertyName n, int32_t default_val) const
 	return default_val;
 }
 
-bool C4PropList::GetPropertyBoolByS(C4String * k, bool default_val) const
-{
-	if (Properties.Has(k))
-	{
-		return Properties.Get(k).Value.getBool();
-	}
-	if (GetPrototype())
-	{
-		return GetPrototype()->GetPropertyBoolByS(k, default_val);
-	}
-	return default_val;
-}
-
 C4PropList *C4PropList::GetPropertyPropList(C4PropertyName n) const
 {
 	C4String * k = &Strings.P[n];
@@ -743,7 +730,7 @@ void C4PropList::SetPropertyByS(C4String * k, const C4Value & to)
 		C4PropList * newpt = to.getPropList();
 		for(C4PropList * it = newpt; it; it = it->GetPrototype())
 			if(it == this)
-				throw new C4AulExecError("Trying to create cyclic prototype structure");
+				throw C4AulExecError("Trying to create cyclic prototype structure");
 		prototype.SetPropList(newpt);
 	}
 	else if (Properties.Has(k))

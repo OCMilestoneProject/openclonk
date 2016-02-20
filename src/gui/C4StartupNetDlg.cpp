@@ -397,7 +397,7 @@ void C4StartupNetListEntry::SetReference(C4Network2Reference *pRef)
 	sInfoText[1].Format( LoadResStr("IDS_NET_INFOPLRSGOALDESC"),
 	                     (int)iPlrCnt,
 	                     (int)pRef->Parameters.MaxPlayers,
-	                     pRef->Parameters.GetGameGoalString().getData(),
+	                     pRef->getGameGoalString().getData(),
 	                     StdStrBuf(pRef->getGameStatus().getDescription(), true).getData() );
 	if (pRef->getTime() > 0)
 	{
@@ -1101,7 +1101,7 @@ bool C4StartupNetDlg::DoOK()
 	SCopy("Objects.ocd", Game.DefinitionFilenames);
 	Game.NetworkActive = true;
 	Game.fObserve = false;
-	Game.pJoinReference = pRef;
+	Game.pJoinReference.reset(pRef);
 	// start with this set!
 	Application.OpenGame();
 	return true;
@@ -1121,7 +1121,7 @@ void C4StartupNetDlg::DoRefresh()
 	if (tLastRefresh && tNow < tLastRefresh + C4NetMinRefreshInterval)
 	{
 		// avoid hammering on refresh key
-		C4GUI::GUISound("Error");
+		C4GUI::GUISound("UI::Error");
 		return;
 	}
 	tLastRefresh = tNow;

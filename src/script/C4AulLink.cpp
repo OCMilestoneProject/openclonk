@@ -42,9 +42,9 @@ bool C4ScriptHost::ResolveAppends(C4DefList *rDefs)
 	if (State != ASS_PREPARSED) return false;
 	for (std::list<StdCopyStrBuf>::iterator a = Appends.begin(); a != Appends.end(); ++a)
 	{
-		if (*a != "*")
+		if (*a != "*" || !rDefs)
 		{
-			C4Def *Def = rDefs->GetByName(*a);
+			C4Def *Def = rDefs ? rDefs->GetByName(*a) : NULL;
 			if (Def)
 			{
 				if (std::find(Def->Script.SourceScripts.begin(), Def->Script.SourceScripts.end(), GetScriptHost()) == Def->Script.SourceScripts.end())
@@ -93,7 +93,7 @@ bool C4ScriptHost::ResolveIncludes(C4DefList *rDefs)
 	// append all includes to local script
 	for (std::list<StdCopyStrBuf>::reverse_iterator i = Includes.rbegin(); i != Includes.rend(); ++i)
 	{
-		C4Def *Def = rDefs->GetByName(*i);
+		C4Def *Def = rDefs ? rDefs->GetByName(*i) : NULL;
 		if (Def)
 		{
 			// resolve #includes in included script first (#include-chains :( )
@@ -144,6 +144,8 @@ void C4ScriptHost::UnLink()
 
 void C4AulScriptEngine::UnLink()
 {
+	warnCnt = errCnt = lineCnt = 0;
+
 	// unlink scripts
 	for (C4AulScript *s = Child0; s; s = s->Next)
 		s->UnLink();
@@ -163,7 +165,6 @@ void C4AulScriptEngine::Link(C4DefList *rDefs)
 {
 	try
 	{
-
 		// resolve appends
 		for (C4AulScript *s = Child0; s; s = s->Next)
 			s->ResolveAppends(rDefs);
@@ -179,31 +180,22 @@ void C4AulScriptEngine::Link(C4DefList *rDefs)
 		// engine is always parsed (for global funcs)
 		State = ASS_PARSED;
 
-		// update material pointers
-		::MaterialMap.UpdateScriptPointers();
-
-		rDefs->CallEveryDefinition();
+		if (rDefs)
+			rDefs->CallEveryDefinition();
 
 		// Done modifying the proplists now
 		for (C4AulScript *s = Child0; s; s = s->Next)
 			s->GetPropList()->Freeze();
 		GetPropList()->Freeze();
-
-		// display state
-		LogF("C4AulScriptEngine linked - %d line%s, %d warning%s, %d error%s",
-		     lineCnt, (lineCnt != 1 ? "s" : ""), warnCnt, (warnCnt != 1 ? "s" : ""), errCnt, (errCnt != 1 ? "s" : ""));
-
-		// reset counters
-		warnCnt = errCnt = lineCnt = 0;
 	}
-	catch (C4AulError *err)
+	catch (C4AulError &err)
 	{
 		// error??! show it!
-		err->show();
-		delete err;
+		err.show();
 	}
 
-
+	// Set name list for globals (FIXME: is this necessary?)
+	ScriptEngine.GlobalNamed.SetNameList(&ScriptEngine.GlobalNamedNames);
 }
 
 
@@ -218,24 +210,17 @@ void C4AulScriptEngine::ReLink(C4DefList *rDefs)
 	// re-link
 	Link(rDefs);
 
-	// update effect pointers
-	::Objects.UpdateScriptPointers();
-
-	// update material pointers
-	::MaterialMap.UpdateScriptPointers();
+	// display state
+	LogF("C4AulScriptEngine linked - %d line%s, %d warning%s, %d error%s",
+		lineCnt, (lineCnt != 1 ? "s" : ""), warnCnt, (warnCnt != 1 ? "s" : ""), errCnt, (errCnt != 1 ? "s" : ""));
 }
 
-bool C4AulScriptEngine::ReloadScript(const char *szScript, C4DefList *pDefs, const char *szLanguage)
+bool C4AulScriptEngine::ReloadScript(const char *szScript, const char *szLanguage)
 {
 	C4AulScript * s;
 	for (s = Child0; s; s = s->Next)
 		if (s->ReloadScript(szScript, szLanguage))
 			break;
-	if (!s)
-		return false;
-	// relink
-	ReLink(pDefs);
-	// ok
-	return true;
+	return !!s;
 }
 

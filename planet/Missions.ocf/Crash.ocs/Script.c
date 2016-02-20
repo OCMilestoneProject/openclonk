@@ -7,8 +7,16 @@
 
 static g_is_initialized, g_has_bought_plans, npc_pyrit;
 
+public func Initialize()
+{
+	// Show wealth in HUD.
+	GUI_Controller->ShowWealth();
+	return true;
+}
+
 func DoInit(int first_player)
 {
+
 	CreateObjectAbove(Windmill, 152, 825+48, 0);
 
 	// Set time of day to evening and create some clouds and celestials.
@@ -31,9 +39,9 @@ func DoInit(int first_player)
 	// NPC: Merchant.
 	var merchant = CreateObjectAbove(Clonk, 76, 870);
 	merchant->MakeInvincible();
-	merchant->SetSkin(1);
+	merchant->SetColor(RGB(55, 65, 75)); // currently overridden by skin
+	merchant->SetAlternativeSkin("Leather");
 	merchant->SetName("$NameMerchant$");
-	merchant->SetColor(RGB(55, 65, 75));
 	merchant->SetDir(DIR_Left);
 	merchant->SetObjectLayer(merchant);
 	merchant->SetDialogue("Merchant", true);
@@ -56,7 +64,7 @@ func EnsureTrees(proplist area)
 	return true;
 }
 
-global func FxIntWaterfallTimer(object obj, int eff)
+global func FxIntWaterfallTimer(object obj, proplist eff)
 {
 	InsertMaterial(Material("Water"), 1560,840);
 	ExtractLiquid(1314,901);

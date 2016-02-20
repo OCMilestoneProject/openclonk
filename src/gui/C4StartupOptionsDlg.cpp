@@ -367,6 +367,23 @@ void C4StartupOptionsDlg::ControlConfigListBox::SetUserKey(class C4PlayerControl
 		C4PlayerControlAssignment *config_assignment = config_set->GetAssignmentByControlName(assignment->GetControlName());
 		if (!config_assignment) config_assignment = config_set->CreateAssignmentForControl(assignment->GetControlName());
 		config_assignment->SetKey(key);
+		// check for duplicates. Allow them in principle because they can be used with priorities
+		// however, do warn because usually it may be unintended
+		// Just deleting the old assignments is also usually undesirable, because half of the time a newbi changes a control and creates a conflict,
+		// they may want to change the key they just assigned to something else instead
+		C4PlayerControlAssignment *other_assignment;
+		for (int32_t i = 0; (other_assignment = assignment_set->GetAssignmentByIndex(i)); ++i)
+			if (other_assignment != assignment)
+				if (other_assignment->GetTriggerKey() == key)
+				{
+					const char *gui_name = other_assignment->GetGUIName(Game.PlayerControlDefs);
+					// only warn for assignable keys, because other keys are typically derived from the settable keys
+					if (gui_name && *gui_name)
+					{
+						C4GUI::TheScreen.ShowMessage(FormatString(LoadResStr("IDS_MSG_DEFINEKEYDUPLICATE"), key.ToString(true, false).getData(), gui_name).getData(), LoadResStr("IDS_MSG_DEFINEKEY"), C4GUI::Ico_Error);
+					}
+				}
+
 	}
 }
 
@@ -786,19 +803,6 @@ C4StartupOptionsDlg::C4StartupOptionsDlg() : C4StartupDlg(LoadResStrNoAmp("IDS_D
 	pGfxResCombo->SetDecoration(&(C4Startup::Get()->Graphics.fctContext));
 	pGfxResCombo->SetText(GetGfxResString(Config.Graphics.ResX, Config.Graphics.ResY).getData());
 	pGroupResolution->AddElement(pGfxResCombo);
-	// color depth checkboxes
-	C4GUI::ComponentAligner cdBox(caGroupResolution.GetGridCell(0,1,iOpt++,iNumGfxOptions), 0, 0, false);
-	w=20; q=12; pUseFont->GetTextExtent(LoadResStr("IDS_CTL_BITDEPTH"), w,q, true);
-	pGroupResolution->AddElement(new C4GUI::Label(LoadResStr("IDS_CTL_BITDEPTH"), cdBox.GetFromLeft(w+C4GUI_DefDlgSmallIndent,q), ALeft, C4StartupFontClr, pUseFont, false, false));
-	pUseFont->GetTextExtent("32bit", w,q,true); w = std::min<int32_t>(caGroupResolution.GetInnerWidth(), w+40);
-	C4GUI::ComboBox *pGfxClrDepthCombo = new C4GUI::ComboBox(cdBox.GetFromLeft(w+40,C4GUI::ComboBox::GetDefaultHeight()));
-	pGfxClrDepthCombo->SetToolTip(LoadResStr("IDS_CTL_BITDEPTHC"));
-	pGfxClrDepthCombo->SetComboCB(new C4GUI::ComboBox_FillCallback<C4StartupOptionsDlg>(this, &C4StartupOptionsDlg::OnGfxClrDepthComboFill, &C4StartupOptionsDlg::OnGfxClrDepthComboSelChange));
-	pGfxClrDepthCombo->SetColors(C4StartupFontClr, C4StartupEditBGColor, C4StartupEditBorderColor);
-	pGfxClrDepthCombo->SetFont(pUseFont);
-	pGfxClrDepthCombo->SetDecoration(&(C4Startup::Get()->Graphics.fctContext));
-	pGfxClrDepthCombo->SetText(FormatString("%d Bit", (int)Config.Graphics.BitDepth).getData());
-	pGroupResolution->AddElement(pGfxClrDepthCombo);
 	// fullscreen combobox
 	C4GUI::ComponentAligner fsBox(caGroupResolution.GetGridCell(0,1,iOpt++,iNumGfxOptions), 0, 0, false);
 	w=20; q=12; pUseFont->GetTextExtent(LoadResStr("IDS_CTL_FULLSCREENMODE"), w,q, true);
@@ -940,7 +944,7 @@ C4StartupOptionsDlg::C4StartupOptionsDlg() : C4StartupDlg(LoadResStrNoAmp("IDS_D
 	StdStrBuf sServerText; sServerText.Copy(LoadResStr("IDS_CTL_USEOTHERSERVER"));
 	NetworkServerAddressConfig::GetControlSize(&iServerCfgWdt, &iServerCfgHgt, &iServerCfgWdtMid, sServerText.getData());
 	int32_t net_component_hgt = iPortCfgHgt * 4 + iServerCfgHgt + 3 * pUseFont->GetLineHeight();
-	C4GUI::ComponentAligner caSheetNetwork(pSheetNetwork->GetClientRect(), caMain.GetWidth() / 20, std::max<int32_t>(0, (caMain.GetHeight() - net_component_hgt)/10), true);
+	C4GUI::ComponentAligner caSheetNetwork(pSheetNetwork->GetClientRect(), caMain.GetWidth() / 20, std::max<int32_t>(0, (caMain.GetHeight() - net_component_hgt)/20), true);
 	pPortCfgTCP = new NetworkPortConfig(caSheetNetwork.GetGridCell(0,2,0,2, iPortCfgWdt, iPortCfgHgt), LoadResStr("IDS_NET_PORT_TCP"), &(Config.Network.PortTCP), C4NetStdPortTCP);
 	pPortCfgUDP = new NetworkPortConfig(caSheetNetwork.GetGridCell(1,2,0,2, iPortCfgWdt, iPortCfgHgt), LoadResStr("IDS_NET_PORT_UDP"), &(Config.Network.PortUDP), C4NetStdPortUDP);
 	pPortCfgRef = new NetworkPortConfig(caSheetNetwork.GetGridCell(0,2,1,2, iPortCfgWdt, iPortCfgHgt), LoadResStr("IDS_NET_PORT_REFERENCE"), &(Config.Network.PortRefServer), C4NetStdPortRefServer);
@@ -964,6 +968,10 @@ C4StartupOptionsDlg::C4StartupOptionsDlg() : C4StartupDlg(LoadResStrNoAmp("IDS_D
 	pCheck->SetFont(pUseFont, C4StartupFontClr, C4StartupFontClrDisabled);
 	pSheetNetwork->AddElement(pCheck);
 #endif
+	pCheck = new BoolConfig(caSheetNetwork.GetFromTop(pUseFont->GetLineHeight()), LoadResStr("IDS_CTL_UPNP"), NULL, &Config.Network.EnableUPnP, false);
+	pCheck->SetToolTip(LoadResStr("IDS_DESC_UPNP"));
+	pCheck->SetFont(pUseFont, C4StartupFontClr, C4StartupFontClrDisabled);
+	pSheetNetwork->AddElement(pCheck);
 	pCheck = new BoolConfig(caSheetNetwork.GetFromTop(pUseFont->GetLineHeight()), LoadResStr("IDS_CTL_PACKETLOGGING"), NULL, &Config.Network.PacketLogging, false);
 	pCheck->SetToolTip(LoadResStr("IDS_DESC_PACKETLOGGING"));
 	pCheck->SetFont(pUseFont, C4StartupFontClr, C4StartupFontClrDisabled);
@@ -1039,7 +1047,7 @@ bool C4StartupOptionsDlg::OnGfxMSComboSelChange(C4GUI::ComboBox *pForCombo, int3
 	// Note: This assumes there is only one GL context (the main context). This
 	// is true in fullscreen mode, and since the startup dlg is only shown in
 	// fullscreen mode we are safe this way.
-	if(pGL) pGL->pMainCtx->Clear();
+	if(pGL) pGL->pMainCtx->Clear(true);
 #endif
 	int32_t PrevMultiSampling = Config.Graphics.MultiSampling;
 	Config.Graphics.MultiSampling = idNewSelection;
@@ -1064,7 +1072,7 @@ void C4StartupOptionsDlg::OnGfxResComboFill(C4GUI::ComboBox_FillCB *pFiller)
 	int32_t idx = 0, iXRes, iYRes, iBitDepth;
 	while (Application.GetIndexedDisplayMode(idx++, &iXRes, &iYRes, &iBitDepth, NULL, Config.Graphics.Monitor))
 #ifdef _WIN32 // why only WIN32?
-		if (iBitDepth == Config.Graphics.BitDepth)
+		if (iBitDepth == C4Draw::COLOR_DEPTH)
 #endif
 		{
 			StdStrBuf sGfxString = GetGfxResString(iXRes, iYRes);
@@ -1103,7 +1111,7 @@ bool C4StartupOptionsDlg::TryNewResolution(int32_t iResX, int32_t iResY)
 	else if (iResY > 800)
 		iNewFontSize = 16;
 	// call application to set it
-	if (!Application.SetVideoMode(iResX, iResY, Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, true))
+	if (!Application.SetVideoMode(iResX, iResY, Config.Graphics.RefreshRate, Config.Graphics.Monitor, true))
 	{
 		StdCopyStrBuf strChRes(LoadResStr("IDS_MNU_SWITCHRESOLUTION"));
 		pScreen->ShowMessage(FormatString(LoadResStr("IDS_ERR_SWITCHRES"), Application.GetLastError()).getData(), strChRes.getData(), C4GUI::Ico_Clonk, NULL);
@@ -1129,7 +1137,7 @@ bool C4StartupOptionsDlg::TryNewResolution(int32_t iResX, int32_t iResY)
 	if (!pScreen->ShowModalDlg(pConfirmDlg, true))
 	{
 		// abort: Restore screen, if this was not some program abort
-		if (Application.SetVideoMode(iOldResX, iOldResY, Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, !Config.Graphics.Windowed))
+		if (Application.SetVideoMode(iOldResX, iOldResY, Config.Graphics.RefreshRate, Config.Graphics.Monitor, !Config.Graphics.Windowed))
 		{
 			if (iNewFontSize != iOldFontSize) Application.SetGameFont(Config.General.RXFontName, iOldFontSize);
 			RecreateDialog(false);
@@ -1141,7 +1149,7 @@ bool C4StartupOptionsDlg::TryNewResolution(int32_t iResX, int32_t iResY)
 	Config.Graphics.ResX = iResX;
 	Config.Graphics.ResY = iResY;
 	if(Config.Graphics.Windowed)
-		Application.SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, false);
+		Application.SetVideoMode(Application.GetConfigWidth(), Application.GetConfigHeight(), Config.Graphics.RefreshRate, Config.Graphics.Monitor, false);
 	return true;
 }
 
@@ -1153,31 +1161,11 @@ StdStrBuf C4StartupOptionsDlg::GetGfxResString(int32_t iResX, int32_t iResY)
 	return FormatString("%d x %d", (int)iResX, (int)iResY);
 }
 
-void C4StartupOptionsDlg::OnGfxClrDepthComboFill(C4GUI::ComboBox_FillCB *pFiller)
-{
-	pFiller->ClearEntries();
-	for (int32_t iBitDepthIdx = 0; iBitDepthIdx<2; ++iBitDepthIdx)
-	{
-		int iBitDepth = (iBitDepthIdx+1) * 16;
-		pFiller->AddEntry(FormatString("%d Bit", (int)iBitDepth).getData(), iBitDepthIdx);
-	}
-}
-
-bool C4StartupOptionsDlg::OnGfxClrDepthComboSelChange(C4GUI::ComboBox *pForCombo, int32_t idNewSelection)
-{
-	// change config
-	Config.Graphics.BitDepth = (idNewSelection+1) * 16;
-	// notify user that he has to restart to see any changes
-	StdStrBuf sTitle; sTitle.Copy(LoadResStrNoAmp("IDS_CTL_BITDEPTH"));
-	GetScreen()->ShowMessage(LoadResStr("IDS_MSG_RESTARTCHANGECFG"), sTitle.getData(), C4GUI::Ico_Notify, &Config.Startup.HideMsgGfxBitDepthChange);
-	return true;
-}
-
 const char * C4StartupOptionsDlg::GetWindowedName(int32_t mode /* = -1*/)
 {
 	if(mode == -1)
 		mode = Config.Graphics.Windowed;
-	     if(mode == 0) return LoadResStr("IDS_MSG_FULLSCREEN");
+	if(mode == 0) return LoadResStr("IDS_MSG_FULLSCREEN");
 	else if(mode == 1) return LoadResStr("IDS_MSG_WINDOWED");
 	else if(mode == 2) return LoadResStr("IDS_MSG_AUTOWINDOWED");
 	assert(!"Requested name for config value which does not exist");
@@ -1194,7 +1182,7 @@ void C4StartupOptionsDlg::OnWindowedModeComboFill(C4GUI::ComboBox_FillCB *pFille
 bool C4StartupOptionsDlg::OnWindowedModeComboSelChange(C4GUI::ComboBox *pForCombo, int32_t idNewSelection)
 {
 	Config.Graphics.Windowed = idNewSelection;
-	Application.SetVideoMode(Config.Graphics.ResX, Config.Graphics.ResY, Config.Graphics.BitDepth, Config.Graphics.RefreshRate, Config.Graphics.Monitor, !Config.Graphics.Windowed);
+	Application.SetVideoMode(Config.Graphics.ResX, Config.Graphics.ResY, Config.Graphics.RefreshRate, Config.Graphics.Monitor, !Config.Graphics.Windowed);
 	pForCombo->SetText(GetWindowedName(idNewSelection));
 	return true;
 }
@@ -1329,7 +1317,11 @@ void C4StartupOptionsDlg::UpdateFontControls()
 	pFontSizeCombo->SetText(sSize.getData());
 }
 
+#ifdef _WIN32
 const char *DefaultFonts[] = { "Arial Unicode MS", "Comic Sans MS", C4DEFAULT_FONT_NAME, "Verdana", NULL };
+#else
+const char *DefaultFonts[] = { C4DEFAULT_FONT_NAME, NULL };
+#endif
 
 void C4StartupOptionsDlg::OnFontFaceComboFill(C4GUI::ComboBox_FillCB *pFiller)
 {
@@ -1405,7 +1397,7 @@ void C4StartupOptionsDlg::OnSoundVolumeSliderChange(int32_t iNewVal)
 	// sound system reads this value directly
 	Config.Sound.SoundVolume = iNewVal;
 	// test sound
-	StartSoundEffect("ArrowHit", false, 100, NULL);
+	StartSoundEffect("Objects::Arrow::HitGround", false, 100, NULL);
 }
 
 void C4StartupOptionsDlg::OnRXSoundCheck(C4GUI::Element *pCheckBox)

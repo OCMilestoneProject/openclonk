@@ -1,2 +1,0 @@
-MsgWave=Attack wave %d
-MsgBoss=Boss attacks!!!

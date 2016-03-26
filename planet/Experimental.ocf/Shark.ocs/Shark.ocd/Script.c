@@ -1,14 +1,12 @@
 /**
 	Shark
 	Very strong water animal.
+
+	@author Armin
 */
 
-local attacking;
-// 0 = Idle.
-// 1 = Moving back to his old position and waiting a bit before attacking again.
-// 2 = Charging for Clonk.
 local BiteStrength = 25;
-local walking, swimming, swim_animation, base_transform;
+local attacking, walking, swimming, swim_animation, base_transform, turned;
 
 private func Construction()
 {
@@ -26,8 +24,13 @@ private func Construction()
 
 private func Attack(object target, int x, int y)
 {
-	if (attacking < 2)
+	if (!attacking || (target->GetAction() != "Swim" && target->GetAction() != "Jump") || !target->GetAlive() || !PathFree(GetX(), GetY(), target->GetX(), target->GetY()))
+	{
+		SetCommand("None");
+		attacking = false;
+		SetAction("Swim");
 		return 1;
+	}
 	var dis = Distance(GetX(), GetY(), target->GetX(), target->GetY());
 	if (dis > 30)
 	{
@@ -51,9 +54,6 @@ private func Attack(object target, int x, int y)
 		SetCommand("None");
 		this["MeshTransformation"] = Trans_Identity();
 		this->SetCommand("MoveTo", nil, x, y);
-
-		// Let the Clonk in peace for a few seconds.
-		attacking = 1;
 		ScheduleCall(this, "ResetHunger", 300);
 		return 1;
 	}
@@ -62,63 +62,75 @@ private func Attack(object target, int x, int y)
 
 private func Turn()
 {
+	if (GetCommand() != nil)
+		return 1;
 	SetComDir(COMD_None);
 	SetXDir(0);
 	SetYDir(0);
 	SetAction("Turn");
-	if (GetDir() == DIR_Left)
-	{
-		SetDir(DIR_Right);
-		SetComDir(COMD_Right);
-	}
-	else
-	{
-		SetDir(DIR_Left);
-		SetComDir(COMD_Left);
-	}
+
+	// The shark should now turn around in very short intervalls.
+	turned = true;
+	ScheduleCall(this, "ResetTurn", 80);
 }
 
 private func Activity()
 {
+	if (GetAction() == "Turn")
+		return;
 	if (swimming)
 	{
-		if (!attacking)
+		if (Inside(GetXDir(), -6, 6) && !turned)
+		{
+			SetCommand("None");
+			Turn();
+		}
+		else if (!attacking)
 		{
 			var target = FindObject(Find_ID(Clonk), Find_Distance(400), Find_Action("Swim"));
 			if (target)
+				if (PathFree(GetX(), GetY(), target->GetX(), target->GetY()))
+				{
+					attacking = true;
+					Attack(target, GetX(), GetY());
+					SetAction("FastSwim");
+					return 1;
+				}
+
+			// Avoid surface.
+			if (!GBackLiquid(0, -10)) 
 			{
-				attacking = 2;
-				Attack(target, GetX(), GetY());
-				SetAction("FastSwim");
+				if (GetDir())
+					SetComDir(COMD_DownRight);
+				else
+					SetComDir(COMD_DownLeft);
 				return 1;
 			}
 
-			// Avoid surface.
-			if (!GBackLiquid(0, -8) && GetAction() != "Walk") 
-			return SetComDir(BoundBy(GetComDir(), COMD_DownRight, COMD_DownLeft));
-
-			// Wall?
-			if (GetContact(-1))
-				Turn();
-
-			// Do nothing.
-			if (Random(2))
-				return 1;
-
-			// Turn around.
-			if (!Random(40))
-				Turn();
-
-			// Avoid other sharks.
-			var obj = FindObject(Find_ID(Shark), Find_InRect(-100, -25, 200, 50), Find_NoContainer(), Find_Exclude(this));
-			if (obj)
+			// Avoid ground.
+			if (!GBackLiquid(0, 25))
 			{
-				if (obj->GetY() < GetY())
-					SetComDir(BoundBy(GetComDir(), COMD_DownRight, COMD_DownLeft));
-				else if (GetComDir() == COMD_Right)
+				if (GetDir())
 					SetComDir(COMD_UpRight);
 				else
 					SetComDir(COMD_UpLeft);
+				return 1;
+			}
+
+			if (!turned)
+			{
+				// Wall?
+				if ((GBackSolid(+75, 0) && GetDir() == DIR_Right) ^ (GBackSolid(-75, 0) && GetDir() == DIR_Left))
+				{
+					Turn();
+					return;
+				}
+
+				if (!Random(40))
+				{
+					Turn();
+					return 1;
+				}
 			}
 		}
 	}
@@ -208,10 +220,10 @@ private func Death()
 	this.MeshTransformation = Trans_Rotate(160 + Random(41), 1, 0, 0);
 	if (base_transform) this.MeshTransformation = Trans_Mul(base_transform, this.MeshTransformation);
 	StopAnimation(swim_animation);
-	// Decay();
+	Decay();
 	this.Collectible = true;
 	
-	// maybe respawn a new fish if roe is near
+	// Maybe respawn a new fish if roe is near.
 	var roe = FindObject(Find_Distance(200), Find_ID(FishRoe));
 	if (roe)
 		roe->Hatch(GetID());
@@ -232,6 +244,11 @@ private func DoJump()
 
 private func StartWalk() 
 {
+	var len = GetAnimationLength("Swim");
+	var pos = GetAnimationPosition(swim_animation);
+	SetAnimationPosition(swim_animation, Anim_Linear(pos, 0, len, 10, ANIM_Loop));
+	this.MeshTransformation = Trans_Mul(Trans_Rotate(90 + RandomX(-10, 10), 1, 0, 0), base_transform);
+	SetObjDrawTransform(0,0,0,0,0,0);
 	swim_animation = PlayAnimation("Swim", 5, Anim_Linear(0, 0, len, 100, ANIM_Loop), Anim_Const(500));
 	if (GBackLiquid())
 	{
@@ -240,21 +257,32 @@ private func StartWalk()
 	}
 	walking = true;
 	swimming = false;
-	
-	var len = GetAnimationLength("Swim");
-	var pos = GetAnimationPosition(swim_animation);
-	SetAnimationPosition(swim_animation, Anim_Linear(pos, 0, len, 10, ANIM_Loop));
-	this.MeshTransformation = Trans_Mul(Trans_Rotate(90 + RandomX(-10, 10), 1, 0, 0), base_transform);
 
 	ResetHunger();
 }
 
 private func StartSwim()
-{
-	StopAnimation(swim_animation);
+{	
+	StopAnimation(GetRootAnimation(5));
 	swimming = true;
 	walking = false;
 	this["MeshTransformation"] = Trans_Identity();
+	if (GetCommand() != nil)
+		return 1;
+	if (GetDir() == DIR_Left)
+	{
+		SetDir(DIR_Right);
+		if (!Random(5)) SetComDir(COMD_UpRight);
+		else if (!Random(6)) SetComDir(COMD_DownRight);
+		else SetComDir(COMD_Right);
+	}
+	else
+	{
+		SetDir(DIR_Left);
+		if (!Random(5)) SetComDir(COMD_UpLeft);
+		else if (!Random(6)) SetComDir(COMD_DownLeft);
+		else SetComDir(COMD_Left);
+	}
 }
 
 private func StartJump()
@@ -270,7 +298,12 @@ private func StartJump()
 
 private func ResetHunger()
 {
-	attacking = 0;
+	attacking = false;
+}
+
+private func ResetTurn()
+{
+	turned = false;
 }
 
 local ActMap = {
@@ -290,7 +323,7 @@ Swim = {
 },
 FastSwim = {
 	Prototype = Action,
-	Name = "Swim",
+	Name = "FastSwim",
 	Procedure = DFA_SWIM,
 	Speed = 370,
 	Accel = 64,
@@ -299,6 +332,7 @@ FastSwim = {
 	Delay = 10,
 	Directions = 2,
 	FlipDir = 0,
+	NextAction = "FastSwim",
 	Animation = "Swim"
 },
 Turn = {
@@ -311,13 +345,14 @@ Turn = {
 	Length = 52,
 	Delay = 10,
 	Directions = 2,
-	FlipDir = 0,
+	FlipDir = 1,
 	NextAction = "Swim",
 	Animation = "Turn"
 },
 Bite = {
 	Prototype = Action,
 	Name = "Bite",
+	Procedure = DFA_SWIM,
 	Speed = 100,
 	Accel = 16,
 	Decel = 16,

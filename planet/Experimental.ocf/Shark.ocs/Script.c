@@ -1,6 +1,6 @@
 func Initialize()
 {
-	Shark->Place(2);
+	Shark->Place(3);
 	Squid->Place(1);
 	Seaweed->Place(71);
 	Coral->Place(4);

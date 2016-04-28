@@ -36,7 +36,7 @@ protected func Initialize()
 	// First initialize the libraries (especially the flag library).
 	_inherited(...);	
 	// Create a helper object for the wheel.
-	wheel = CreateObject(WindGenerator_Wheel, 0, 0, NO_OWNER);
+	wheel = CreateObject(WindGeneratorWheel, 0, 0, NO_OWNER);
 	wheel->SetParent(this);
 	// Start the animation for the wheel.
 	PlayAnimation(TurnAnimation(), 5, wheel->Anim_R(0, GetAnimationLength(TurnAnimation())));

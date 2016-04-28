@@ -1,5 +1,5 @@
 [DefCore]
-id=Elevator_Case_Back
+id=ElevatorCaseBack
 Version=6,0
 Width=24
 Height=45

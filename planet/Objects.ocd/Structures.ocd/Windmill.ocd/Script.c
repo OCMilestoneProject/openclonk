@@ -27,7 +27,7 @@ protected func Construction()
 protected func Initialize()
 {
 	// Create a helper object for the wheel.
-	wheel = CreateObject(WindGenerator_Wheel, 0, 0, NO_OWNER);
+	wheel = CreateObject(WindGeneratorWheel, 0, 0, NO_OWNER);
 	wheel->SetParent(this, 150);
 	// Start the animation for the wheel.
 	PlayAnimation(TurnAnimation(), 5, wheel->Anim_R(GetAnimationLength(TurnAnimation()), 0));

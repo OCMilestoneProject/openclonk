@@ -1,5 +1,5 @@
 [DefCore]
-id=Chippie_Egg
+id=ChippieEgg
 Version=6,1
 Category=C4D_Object
 Width=6
@@ -12,7 +12,7 @@ VertexFriction=20, 20, 20, 20
 VertexCNAT=0, 15, 15, 15
 Value=1
 Mass=10
-Components=Chippie_Egg=1
+Components=ChippieEgg=1
 Projectile=1
 Rotate=1
 IncompleteActivity=1

@@ -261,7 +261,7 @@ private func FxActivityDamage(target, effect, dmg)
 private func LayEgg()
 {
 	if(GetEffect("DmgShock", this)) return;
-	var o = CreateObject(Chippie_Egg, 0, 0, GetOwner());
+	var o = CreateObject(ChippieEgg, 0, 0, GetOwner());
 	o->SetSpeed(-GetXDir(), -GetYDir());
 	o->SetCon(50);
 	o->StartGrowth(10);

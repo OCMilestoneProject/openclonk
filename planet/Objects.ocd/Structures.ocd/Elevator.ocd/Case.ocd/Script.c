@@ -87,8 +87,8 @@ private func Initialize()
 
 	partner_was_synced = false;
 
-	front = CreateObject(Elevator_Case_Front);
-	back = CreateObjectAbove(Elevator_Case_Back, 0, 13, GetOwner());
+	front = CreateObject(ElevatorCaseFront);
+	back = CreateObjectAbove(ElevatorCaseBack, 0, 13, GetOwner());
 
 	front->SetAction("Attach", this);
 	back->SetAction("Attach", this);

@@ -132,7 +132,7 @@ func SpitPhase()
 
 		Sound("MooqSpit*");
 
-		var obj = CreateContents(Mooq_Firebomb);
+		var obj = CreateContents(MooqFirebomb);
 		obj->Exit(iX, iY);
 		obj->SetXDir(iXDir,100);
 		obj->SetYDir(iYDir,100);

@@ -1,5 +1,5 @@
 [DefCore]
-id=Compensator_BurningBattery
+id=CompensatorBurningBattery
 Version=6,0
 Category=C4D_Object
 Width=10

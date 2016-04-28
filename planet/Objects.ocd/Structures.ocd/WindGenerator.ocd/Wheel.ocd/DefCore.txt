@@ -1,5 +1,5 @@
 [DefCore]
-id=WindGenerator_Wheel
+id=WindGeneratorWheel
 Version=6,0
 Category=C4D_None | C4D_MouseIgnore
 Width=50

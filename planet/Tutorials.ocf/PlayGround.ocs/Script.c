@@ -68,7 +68,7 @@ private func InitAnimals(int type)
 		var amount = BoundBy(wdt / 200, 4, 40);
 		if (type >= 3)
 		{
-			Chippie_Egg->Place(amount / 2);
+			ChippieEgg->Place(amount / 2);
 		}
 	}
 

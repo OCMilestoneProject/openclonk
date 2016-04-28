@@ -219,7 +219,7 @@ public func ConstructionPreview(object previewer, int overlay, int dir)
 {
 	if (GetType(this) != C4V_Def) return;
 
-	previewer->SetGraphics(nil, Elevator_Case_Front, overlay, GFXOV_MODE_Base);
+	previewer->SetGraphics(nil, ElevatorCaseFront, overlay, GFXOV_MODE_Base);
 	previewer->SetObjDrawTransform(1000, 0, -19000 * (dir*2-1), 0, 1000, 17000, overlay);
 	return true;
 }

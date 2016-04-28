@@ -1,5 +1,5 @@
 [DefCore]
-id=Mooq_Firebomb
+id=MooqFirebomb
 Version=7,0,0,0
 Category=C4D_Vehicle
 Width=5

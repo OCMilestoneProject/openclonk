@@ -32,9 +32,9 @@ protected func Construction(object creator)
 
 protected func Initialize()
 {
-	leftcharge = CreateObjectAbove(Compensator_ChargeShower, 7 * GetCalcDir(), 10, NO_OWNER);
+	leftcharge = CreateObjectAbove(CompensatorChargeShower, 7 * GetCalcDir(), 10, NO_OWNER);
 	leftcharge->Init(this);
-	rightcharge = CreateObjectAbove(Compensator_ChargeShower, -6 * GetCalcDir(), 10, NO_OWNER);
+	rightcharge = CreateObjectAbove(CompensatorChargeShower, -6 * GetCalcDir(), 10, NO_OWNER);
 	rightcharge->Init(this);
 	return _inherited(...);
 }
@@ -49,7 +49,7 @@ protected func Incineration(int caused_by)
 	for (var i = 0; i < 2; ++i)
 	{
 		var x = -7 + 14 * i;
-		var b = CreateObject(Compensator_BurningBattery, x, 6, NO_OWNER); 
+		var b = CreateObject(CompensatorBurningBattery, x, 6, NO_OWNER); 
 		b->SetSpeed(-30 + 60 * i + RandomX(-10, 10), RandomX(-50, -30));
 	}
 	return Explode(30);

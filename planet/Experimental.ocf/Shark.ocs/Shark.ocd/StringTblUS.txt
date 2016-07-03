@@ -1,2 +1,0 @@
-Name=Shark
-Description=Underwater animal with extremely strong bite force.

@@ -80,14 +80,14 @@ private func Activity()
 		return;
 	if (swimming)
 	{
-		if (Inside(GetXDir(), -6, 6) && !turned)
+		if (Inside(GetXDir(), -6, 6) && !turned && GetAction() != "FastSwim")
 		{
 			SetCommand("None");
 			Turn();
 		}
 		else if (!attacking)
 		{
-			var target = FindObject(Find_ID(Clonk), Find_Distance(400), Find_Action("Swim"));
+			var target = FindObject(Find_ID(Clonk), Find_Distance(380), Find_Action("Swim"));
 			if (target)
 				if (PathFree(GetX(), GetY(), target->GetX(), target->GetY()))
 				{
@@ -188,8 +188,8 @@ private func Place(int amount, proplist rectangle, proplist settings)
 		// Randomly add some large/slim fish
 		if (Random(3))
 		{
-			// There are naturally smaller and larger fishes. Fishes above around 150 can be clipped, so stay below that.
-			f->SetCon(RandomX(75, 140));
+			// There are naturally smaller and larger sharks.
+			f->SetCon(RandomX(80, 120));
 			// make sure the smaller ones don't grow larger any more
 			f->StopGrowth(); 
 			// Slim fish.
@@ -325,11 +325,11 @@ FastSwim = {
 	Prototype = Action,
 	Name = "FastSwim",
 	Procedure = DFA_SWIM,
-	Speed = 370,
-	Accel = 64,
+	Speed = 300,
+	Accel = 48,
 	Decel = 16,
 	Length = 20,
-	Delay = 10,
+	Delay = 0,
 	Directions = 2,
 	FlipDir = 0,
 	NextAction = "FastSwim",
@@ -360,7 +360,6 @@ Bite = {
 	Delay = 10,
 	Directions = 2,
 	NextAction = "Swim",
-	StartCall = "StartBite",
 	Animation = "Bite"
 },
 Walk = {

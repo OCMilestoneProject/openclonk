@@ -1,2 +1,0 @@
-Name=Hai
-Description=Unterwasserlebewesen mit extrem starker Beißkraft.

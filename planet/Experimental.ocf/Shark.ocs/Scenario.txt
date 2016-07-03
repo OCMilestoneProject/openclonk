@@ -6,7 +6,9 @@ Title=Sharks
 Goals=MELE=1
 
 [Player1]
-Crew=Clonk=1
+Wealth=10
+Crew=Clonk=1;
+Knowledge=Tower=1;
 
 [Landscape]
 NoScan=1

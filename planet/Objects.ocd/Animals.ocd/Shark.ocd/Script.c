@@ -92,8 +92,8 @@ private func Activity()
 				if (PathFree(GetX(), GetY(), target->GetX(), target->GetY()))
 				{
 					attacking = true;
-					Attack(target, GetX(), GetY());
 					SetAction("FastSwim");
+					Attack(target, GetX(), GetY());
 					return 1;
 				}
 

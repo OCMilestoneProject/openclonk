@@ -103,7 +103,7 @@ global func ShuffleArray(array arr)
   
 	while (--len >= 0)
 	{
-		var i = Random(len);
+		var i = Random(len + 1);
 		arr[len] = working[i];
 		working[i] = working[len];
 	}
@@ -187,4 +187,65 @@ global func PopFront(array arr)
 global func RandomElement(array arr)
 {
 	return arr[Random(GetLength(arr))];
+}
+
+// Move array of indexes before given element. Called from editor on item move.
+global func MoveArrayItems(array arr, array source_indices, int insert_before)
+{
+	if (!arr) return false;
+	var len = GetLength(arr), off = 0, val;
+	// make sure source indices are sorted
+	if (len > 1)
+	{
+		source_indices = source_indices[:]; 
+		SortArray(source_indices);
+	}
+	for (idx in source_indices)
+	{
+		if (idx < 0) idx += (1-(idx+1)/len)*len; // resolve negative indices
+		if (idx >= len) continue;
+		if (idx < insert_before) 
+		{
+			// Move element forward
+			idx += off; --off; // Adjust for other elements already moved
+			val = arr[idx];
+			while (++idx < insert_before) arr[idx-1] = arr[idx];
+			arr[insert_before - 1] = val;
+		}
+		else
+		{
+			// Move element backward
+			val = arr[idx];
+			while (idx-- >= insert_before) arr[idx+1] = arr[idx];
+			arr[insert_before] = val;
+			++insert_before;
+		}
+	}
+	return true;
+}
+
+// Deletes multiple indexes from an array, does not change the order of items in the array.
+global func RemoveArrayIndices(array arr, array indices)
+{
+	indices = indices[:];
+	SortArray(indices, true);
+	for (idx in indices)
+		if (idx < GetLength(arr))
+			RemoveArrayIndex(arr, idx);
+	return true;
+}
+
+// Performs a left fold.
+//
+// Examples:
+//  - Reduce([1, 2, 3, 4], Min) == 1
+//  - func Add(int a, int b) { return a + b; }
+//    Reduce([1, 2, 3, 4], Add, 100) == 110
+global func Reduce(array arr, func fn, initial)
+{
+	var i = 0;
+	var result = initial ?? arr[i++];
+	while (i < GetLength(arr))
+		result = Call(fn, result, arr[i++]);
+	return result;
 }

@@ -28,7 +28,7 @@ local transfer_contents; // Set to true if contents should be transferred on res
 
 /*-- General --*/
 
-protected func Initialize()
+protected func Initialize(...)
 {
 	finished = false;
 	no_respawn_handling = false;
@@ -43,11 +43,30 @@ protected func Initialize()
 	AddEffect("IntBestTime", this, 100, 1, this);
 	// Add a message board command "/resetpb" to reset the pb for this round.
 	AddMsgBoardCmd("resetpb", "Goal_Parkour->~ResetPersonalBest(%player%)");
-	// Activate restart rule, if there isn't any.
-	if (!ObjectCount(Find_ID(Rule_Restart)))
-		CreateObject(Rule_Restart, 0, 0, NO_OWNER);
+	// Activate restart rule, if there isn't any. But check delayed because it may be created later.
+	ScheduleCall(this, this.EnsureRestartRule, 1, 1);
 	// Scoreboard.
 	InitScoreboard();
+	// Assign unassigned checkpoints
+	for (var obj in FindObjects(Find_ID(ParkourCheckpoint)))
+		if (!obj->GetCPController())
+			obj->SetCPController(this);
+	return _inherited(...);
+}
+
+private func EnsureRestartRule()
+{
+	if (!ObjectCount(Find_ID(Rule_Restart)))
+		CreateObject(Rule_Restart, Min(64, LandscapeWidth()-GetX()-32), 0, NO_OWNER);
+	return true;
+}
+
+protected func Destruction(...)
+{
+	// Unassign checkpoints (updates editor help message)
+	for (var obj in FindObjects(Find_ID(ParkourCheckpoint)))
+		if (obj->GetCPController() == this)
+			obj->SetCPController(nil);
 	return _inherited(...);
 }
 
@@ -62,10 +81,9 @@ public func SetStartpoint(int x, int y)
 	var cp = FindObject(Find_ID(ParkourCheckpoint), Find_Func("FindCPMode", PARKOUR_CP_Start));
 	if (!cp)	
 		cp = CreateObjectAbove(ParkourCheckpoint, x, y, NO_OWNER);
+	cp->SetCPController(this);
 	cp->SetPosition(x, y);
 	cp->SetCPMode(PARKOUR_CP_Start);
-	cp->SetCPController(this);
-	cp_list[0] = cp;
 	return cp;
 }
 
@@ -77,15 +95,12 @@ public func SetFinishpoint(int x, int y, bool team)
 	var cp = FindObject(Find_ID(ParkourCheckpoint), Find_Func("FindCPMode", PARKOUR_CP_Finish));
 	if (!cp)	
 		cp = CreateObjectAbove(ParkourCheckpoint, x, y, NO_OWNER);
+	cp->SetCPController(this);
 	cp->SetPosition(x, y);
 	var mode = PARKOUR_CP_Finish;
 	if (team)
 		mode = mode | PARKOUR_CP_Team;
 	cp->SetCPMode(mode);
-	cp->SetCPController(this);
-	cp_count++;
-	cp_list[cp_count] = cp;
-	UpdateScoreboardTitle();
 	return cp;
 }
 
@@ -95,24 +110,9 @@ public func AddCheckpoint(int x, int y, int mode)
 	x = BoundBy(x, 0, LandscapeWidth());
 	y = BoundBy(y, 0, LandscapeHeight());
 	var cp = CreateObjectAbove(ParkourCheckpoint, x, y, NO_OWNER);
+	cp->SetCPController(this);
 	cp->SetPosition(x, y);
 	cp->SetCPMode(mode);
-	cp->SetCPController(this);
-	// Only increase cp count and update list if mode is check.
-	if (!(cp->GetCPMode() & PARKOUR_CP_Check))
-		return cp;
-	// Move finish one place further in checkpoint list.
-	if (cp_list[cp_count] && cp_list[cp_count]->GetCPMode() & PARKOUR_CP_Finish)
-	{
-		cp_list[cp_count + 1] = cp_list[cp_count];
-		cp_list[cp_count] = cp;
-	}
-	else
-	{
-		cp_list[cp_count + 1] = cp;
-	}
-	cp_count++;
-	UpdateScoreboardTitle();
 	return cp;
 }
 
@@ -131,11 +131,25 @@ public func TransferContentsOnRelaunch(bool on)
 	return;
 }
 
+public func SetIndexedCP(object cp, int index)
+{
+	// Called directly from checkpoints after index assignment, resorting, etc.
+	// Update internal list
+	cp_list[index] = cp;
+	if (cp->GetCPMode() & PARKOUR_CP_Finish)
+	{
+		cp_count = index;
+		SetLength(cp_list, cp_count+1);
+	}
+	UpdateScoreboardTitle();
+	return true;
+}
+
 
 /*-- Checkpoint interaction --*/
 
 // Called from a finish CP to indicate that plr has reached it.
-public func PlayerReachedFinishCP(int plr, object cp)
+public func PlayerReachedFinishCP(int plr, object cp, bool is_first_clear)
 {
 	if (finished)
 		return;
@@ -149,6 +163,8 @@ public func PlayerReachedFinishCP(int plr, object cp)
 	SetEvalData(plr);
 	EliminatePlayers(plr);
 	finished = true;
+	if (is_first_clear) UserAction->EvaluateAction(on_checkpoint_first_cleared, this, cp, plr);
+	UserAction->EvaluateAction(on_checkpoint_cleared, this, cp, plr);
 	return;
 }
 
@@ -163,13 +179,18 @@ public func SetPlayerRespawnCP(int plr, object cp)
 }
 
 // Called from a check CP to indicate that plr has cleared it.
-public func AddPlayerClearedCP(int plr, object cp)
+public func AddPlayerClearedCP(int plr, object cp, bool is_first_clear, bool is_team_auto_clear)
 {
 	if (finished)
 		return;
 	var plrid = GetPlayerID(plr);
 	plr_list[plrid]++;
 	UpdateScoreboard(plr);
+	if (!is_team_auto_clear) // No callback if only auto-cleared for other team members after another player cleared it
+	{
+		if (is_first_clear) UserAction->EvaluateAction(on_checkpoint_first_cleared, this, cp, plr);
+		UserAction->EvaluateAction(on_checkpoint_cleared, this, cp, plr);
+	}
 	return;
 }
 
@@ -181,6 +202,16 @@ public func AddTeamClearedCP(int team, object cp)
 	if (team)
 		team_list[team]++;
 	return;
+}
+
+private func ResetAllClearedCP()
+{
+	plr_list = [];
+	team_list = [];
+	respawn_list = [];
+	for (var cp in FindObjects(Find_ID(ParkourCheckpoint)))
+		cp->ResetCleared();
+	return true;
 }
 
 
@@ -401,7 +432,7 @@ protected func OnClonkDeath(object clonk, int killed_by)
 {
 	var plr = clonk->GetOwner();
 	// Only respawn if required and if the player still exists.
-	if (no_respawn_handling || !GetPlayerName(plr)) 
+	if (no_respawn_handling || !GetPlayerName(plr) || GetCrewCount(plr)) 
 		return;
 	var new_clonk = CreateObjectAbove(Clonk, 0, 0, plr);
 	new_clonk->MakeCrewMember(plr);
@@ -414,6 +445,10 @@ protected func OnClonkDeath(object clonk, int killed_by)
 	GameCall("OnPlayerRespawn", plr, FindRespawnCP(plr));
 	// Log message.
 	Log(RndRespawnMsg(), GetPlayerName(plr));
+	// Respawn actions
+	var cp = FindRespawnCP(plr);
+	UserAction->EvaluateAction(on_respawn, this, clonk, plr);
+	if (cp) cp->OnPlayerRespawn(new_clonk, plr);
 	return;
 }
 
@@ -436,17 +471,21 @@ protected func JoinPlayer(int plr)
 // More complicated behavior should be set by the scenario. 
 private func FindRespawnCP(int plr)
 {
-	return respawn_list[plr];
+	var respawn_cp = respawn_list[plr];
+	if (!respawn_cp) respawn_cp = respawn_list[plr] = cp_list[0];
+	return respawn_cp;
 }
 
 private func FindRespawnPos(int plr)
 {
 	var cp = FindRespawnCP(plr);
+	if (!cp) cp = this; // Have to start somewhere
 	return [cp->GetX(), cp->GetY()];
 }
 
 protected func RemovePlayer(int plr)
 {
+	respawn_list[plr] = nil;
 	if (!finished)
 		AddEvalData(plr);
 	return;
@@ -679,6 +718,27 @@ private func AddEvalData(int plr)
 }
 
 
+/* Editor */
+
+local on_checkpoint_cleared, on_checkpoint_first_cleared, on_respawn;
+
+public func SetOnCheckpointCleared(v) { on_checkpoint_cleared=v; return true; }
+public func SetOnCheckpointFirstCleared(v) { on_checkpoint_first_cleared=v; return true; }
+public func SetOnRespawn(v) { on_respawn=v; return true; }
+
+public func Definition(def)
+{
+	_inherited(def);
+	if (!def.EditorProps) def.EditorProps = {};
+	def.EditorProps.on_checkpoint_cleared = new UserAction.Prop { Name="$OnCleared$", EditorHelp="$OnClearedHelp$", Set="SetOnCheckpointCleared", Save="Checkpoint" };
+	def.EditorProps.on_checkpoint_first_cleared = new UserAction.Prop { Name="$OnFirstCleared$", EditorHelp="$OnFirstClearedHelp$", Set="SetOnCheckpointFirstCleared", Save="Checkpoint" };
+	def.EditorProps.on_respawn = new UserAction.Prop { Name="$OnRespawn$", EditorHelp="$OnRespawnHelp$", Set="SetOnRespawn", Save = "Checkpoint" };
+	if (!def.EditorActions) def.EditorActions = {};
+	def.EditorActions.reset_all_cleared = { Name="$ResetAllCleared$", EditorHelp="$ResetAllClearedHelp$", Command="ResetAllClearedCP()" };
+}
+
+
 /*-- Proplist --*/
 
 local Name = "$Name$";
+local Visibility = VIS_Editor;

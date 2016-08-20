@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,14 +17,14 @@
 /* OpenGL implementation of NewGfx */
 
 #include "C4Include.h"
-#include <C4DrawGL.h>
+#include "graphics/C4DrawGL.h"
 
-#include <C4Surface.h>
-#include <C4Window.h>
-#include <C4FoWRegion.h>
-#include "C4Rect.h"
-#include "C4Config.h"
-#include <C4App.h>
+#include "graphics/C4Surface.h"
+#include "platform/C4Window.h"
+#include "landscape/fow/C4FoWRegion.h"
+#include "lib/C4Rect.h"
+#include "config/C4Config.h"
+#include "game/C4Application.h"
 #include "lib/StdColors.h"
 
 #ifndef USE_CONSOLE
@@ -227,6 +227,7 @@ bool CStdGL::PrepareSpriteShader(C4Shader& shader, const char* name, int ssc, C4
 	uniformNames[C4SSU_MaterialShininess] = "materialShininess"; // unused
 	uniformNames[C4SSU_Bones] = "bones"; // unused
 	uniformNames[C4SSU_CullMode] = "cullMode"; // unused
+	uniformNames[C4SSU_FrameCounter] = "frameCounter";
 	uniformNames[C4SSU_Count] = NULL;
 
 	const char* attributeNames[C4SSA_Count + 1];
@@ -289,7 +290,14 @@ CStdGLCtx *CStdGL::CreateContext(C4Window * pWindow, C4AbstractApp *pApp)
 	if (!pWindow) return NULL;
 
 	// create it
-	CStdGLCtx *pCtx = new CStdGLCtx();
+	CStdGLCtx *pCtx;
+#ifdef WITH_QT_EDITOR
+	auto app = dynamic_cast<C4Application*>(pApp);
+	if (app->isEditor)
+		pCtx = new CStdGLCtxQt();
+	else
+#endif
+	pCtx = new CStdGLCtx();
 	bool first_ctx = !pMainCtx;
 	if (first_ctx)
 	{
@@ -315,6 +323,7 @@ CStdGLCtx *CStdGL::CreateContext(C4Window * pWindow, C4AbstractApp *pApp)
 		const char *gl_renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 		const char *gl_version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
 		LogF("GL %s on %s (%s)", gl_version ? gl_version : "", gl_renderer ? gl_renderer : "", gl_vendor ? gl_vendor : "");
+		
 		if (Config.Graphics.DebugOpenGL)
 		{
 			// Dump extension list
@@ -908,6 +917,7 @@ void CStdGL::Default()
 	iPixelFormat=0;
 	sfcFmt=0;
 	Workarounds.LowMaxVertexUniformCount = false;
+	Workarounds.ForceSoftwareTransform = false;
 }
 
 unsigned int CStdGL::GenVAOID()

@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2009-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,16 +15,16 @@
  
 #include <GL/glew.h>
 
-#include <C4Include.h>
-#include <C4Console.h>
-#include <C4Player.h>
-#include <C4PlayerList.h>
-#include <C4Game.h>
+#include "C4Include.h"
+#include "editor/C4Console.h"
+#include "player/C4Player.h"
+#include "player/C4PlayerList.h"
+#include "game/C4Game.h"
 
 #import <Cocoa/Cocoa.h>
-#import <C4EditorWindowController.h>
-#import <C4DrawGLMac.h>
-#import <C4AppDelegate.h>
+#import "editor/C4EditorWindowController.h"
+#import "graphics/C4DrawGLMac.h"
+#import "platform/C4AppDelegate.h"
 
 #ifdef USE_COCOA
 
@@ -160,7 +160,7 @@ int indexFromSender(id sender)
 - (IBAction) selectLandscapeMode:(id)sender
 {
 	// add one since 0 is "undefined"
-	Console.ToolsDlg.SetLandscapeMode([sender selectedSegment]+1, NO);
+	Console.ToolsDlg.SetLandscapeMode((LandscapeMode)([sender selectedSegment]+1), NO, NO);
 }
 
 - (IBAction) setGrade:(id)sender

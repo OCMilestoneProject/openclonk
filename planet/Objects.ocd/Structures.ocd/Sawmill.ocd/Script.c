@@ -19,6 +19,8 @@ public func Construction()
 	return _inherited(...);
 }
 
+public func IsHammerBuildable() { return true; }
+
 public func Initialize()
 {
 	this.SpinAnimation = PlayAnimation("work", 10, Anim_Const(0));
@@ -127,7 +129,6 @@ public func Saw(object target)
 {
 	if (target->Contained() != this)
 		target->Enter(this);
-	var output = target->GetComponent(Wood);
 	target->Split2Components();
 	AddEffect("WoodProduction", this, 100, 3, this);
 	// Refresh interaction menus to show the wood count.
@@ -215,7 +216,7 @@ public func EjectWood()
 	if (!wood) return;
 
 	wood->Exit(-25 * GetCalcDir(), -8, 30 - Random(59), -2 * GetCalcDir(), 1);
-	Sound("Pop");
+	Sound("Structures::EjectionPop");
 	
 	// Refresh interaction menus to show the wood count.
 	UpdateInteractionMenus(this.GetInfoMenuEntries);
@@ -244,8 +245,8 @@ private func SpinOn(int diff)
 		rotate = 0;
 		SetMeshMaterial("SawmillBlade.Spin", 2);
 		running = true;
-		Sound("Structures::SawmillRipcut", nil, nil, nil, +1);
-		Sound("Sawmill::EngineLoop", nil, nil, nil, +1);
+		Sound("Structures::SawmillRipcut", {loop_count = +1});
+		Sound("Sawmill::EngineLoop", {loop_count = +1});
 	}
 
 	SetProperty("MeshTransformation", Trans_Mul(Trans_Rotate(-20, 0, 1, 0), Trans_Rotate(rotate, 1, 0, 0)));
@@ -260,14 +261,14 @@ private func SpinOff(int call)
 		running = false;
 		spin = 50;
 		SetMeshMaterial("SawmillBlade", 2);
-		Sound("Structures::SawmillRipcut", nil, nil, nil, -1);
+		Sound("Structures::SawmillRipcut", {loop_count = -1});
 		SetProperty("MeshTransformation", Trans_Rotate(-20, 0, 1, 0));
 	}
 	if (call == 1) spin = 75;
 	if (call == 2)
 	{
 		spin = 100;
-		Sound("Sawmill::EngineLoop", nil, nil, nil, -1);
+		Sound("Sawmill::EngineLoop", {loop_count = -1});
 		Sound("Sawmill::EngineStop");
 	}
 	if (call == 3) spin = 150;
@@ -309,3 +310,4 @@ local SpinStep = 30;
 local ContainBlast = true;
 local BlastIncinerate = 100;
 local HitPoints = 70;
+local Components = {Rock = 4, Wood = 1};

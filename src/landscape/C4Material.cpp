@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,21 +17,21 @@
 
 /* Material definitions used by the landscape */
 
-#include <C4Include.h>
-#include <C4Material.h>
-#include <C4Components.h>
+#include "C4Include.h"
+#include "landscape/C4Material.h"
+#include "c4group/C4Components.h"
 
-#include <C4Group.h>
-#include <C4PXS.h>
-#include <C4Random.h>
-#include <C4ToolsDlg.h> // For C4TLS_MatSky...
-#include <C4Texture.h>
-#include <C4Aul.h>
-#include <C4Landscape.h>
-#include <C4SoundSystem.h>
-#include <C4Effect.h>
-#include <C4Log.h>
-#include <C4Physics.h> // For GravAccel
+#include "c4group/C4Group.h"
+#include "landscape/C4PXS.h"
+#include "lib/C4Random.h"
+#include "editor/C4ToolsDlg.h" // For C4TLS_MatSky...
+#include "landscape/C4Texture.h"
+#include "script/C4Aul.h"
+#include "landscape/C4Landscape.h"
+#include "platform/C4SoundSystem.h"
+#include "script/C4Effect.h"
+#include "lib/C4Log.h"
+#include "game/C4Physics.h" // For GravAccel
 
 
 int32_t MVehic=MNone,MHalfVehic=MNone,MTunnel=MNone,MWater=MNone,MEarth=MNone;
@@ -816,7 +816,7 @@ bool C4MaterialMap::mrfCorrode(C4MaterialReaction *pReaction, int32_t &iX, int32
 			fDoCorrode = (d100 < ::MaterialMap.Map[iPxsMat].Corrosive) && (d100 < ::MaterialMap.Map[iLsMat].Corrode);
 		if (fDoCorrode)
 		{
-			ClearBackPix(iLSPosX,iLSPosY);
+			::Landscape.ClearPix(iLSPosX,iLSPosY);
 			//::Landscape.CheckInstabilityRange(iLSPosX,iLSPosY); - more correct, but makes acid too effective as well
 			if (!Random(5))
 			{
@@ -843,7 +843,7 @@ bool C4MaterialMap::mrfCorrode(C4MaterialReaction *pReaction, int32_t &iX, int32
 			fDoCorrode = (d100 < ::MaterialMap.Map[iPxsMat].Corrosive) && (d100 < ::MaterialMap.Map[iLsMat].Corrode);
 		if (fDoCorrode)
 		{
-			ClearBackPix(iLSPosX,iLSPosY);
+			::Landscape.ClearPix(iLSPosX,iLSPosY);
 			::Landscape.CheckInstabilityRange(iLSPosX,iLSPosY);
 			if (!Random(5))
 			{

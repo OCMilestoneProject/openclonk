@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -16,19 +16,19 @@
 
 /* Game configuration as stored in registry */
 
-#include <C4Include.h>
-#include <C4Config.h>
+#include "C4Include.h"
+#include "config/C4Config.h"
 
-#include <C4Version.h>
-#include <C4Log.h>
-#include <C4Components.h>
-#include <C4Network2.h>
-#include <C4Language.h>
+#include "C4Version.h"
+#include "lib/C4Log.h"
+#include "c4group/C4Components.h"
+#include "network/C4Network2.h"
+#include "c4group/C4Language.h"
 
 #include <utility>
-#include <StdFile.h>
-#include <C4Window.h>
-#include <StdRegistry.h>
+#include "platform/StdFile.h"
+#include "platform/C4Window.h"
+#include "platform/StdRegistry.h"
 
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
@@ -40,7 +40,7 @@
 #include <locale.h>
 #endif
 
-#include <C4Application.h>
+#include "game/C4Application.h"
 
 void C4ConfigGeneral::CompileFunc(StdCompiler *pComp)
 {
@@ -86,6 +86,25 @@ void C4ConfigDeveloper::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(s(AltTodoFilename), "AltTodoFilename2",   "{USERPATH}/TODO.txt", false, true));
 	pComp->Value(mkNamingAdapt(MaxScriptMRU,        "MaxScriptMRU",       30                  , false, false));
 	pComp->Value(mkNamingAdapt(DebugShapeTextures,  "DebugShapeTextures", 0                   , false, true));
+	pComp->Value(mkNamingAdapt(ShowHelp,            "ShowHelp",           true                , false, false));
+	for (int32_t i = 0; i < CFG_MaxEditorMRU; ++i)
+		pComp->Value(mkNamingAdapt(s(RecentlyEditedSzenarios[i]), FormatString("EditorMRU%02d", (int)i).getData(), "", false, false));
+}
+
+void C4ConfigDeveloper::AddRecentlyEditedScenario(const char *fn)
+{
+	if (!fn || !*fn) return;
+	// Put given scenario first in list by moving all other scenarios down
+	// Check how many scenarios to move down the list. Stop moving down when the given scenario is in the list
+	int32_t move_down_num;
+	for (move_down_num = 0; move_down_num < CFG_MaxEditorMRU - 1; ++move_down_num)
+		if (!strncmp(fn, RecentlyEditedSzenarios[move_down_num], CFG_MaxString))
+			break;
+	// Move them down
+	for (int32_t i = move_down_num; i > 0; --i)
+		strcpy(RecentlyEditedSzenarios[i], RecentlyEditedSzenarios[i - 1]);
+	// Put current scenario in
+	strncpy(RecentlyEditedSzenarios[0], fn, CFG_MaxString);
 }
 
 void C4ConfigGraphics::CompileFunc(StdCompiler *pComp)
@@ -97,7 +116,6 @@ void C4ConfigGraphics::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(RefreshRate,           "RefreshRate",          0             ));
 	pComp->Value(mkNamingAdapt(SplitscreenDividers,   "SplitscreenDividers",  1             ));
 	pComp->Value(mkNamingAdapt(ShowStartupMessages,   "ShowStartupMessages",  1             ,false, true));
-	pComp->Value(mkNamingAdapt(HighResLandscape,      "HighResLandscape",     1             ,false, true));
 	pComp->Value(mkNamingAdapt(VerboseObjectLoading,  "VerboseObjectLoading", 0             ));
 	pComp->Value(mkNamingAdapt(MenuTransparency,      "MenuTransparency",     1             ,false, true));
 	pComp->Value(mkNamingAdapt(UpperBoard,            "UpperBoard",           1             ,false, true));
@@ -114,6 +132,7 @@ void C4ConfigGraphics::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(NoOffscreenBlits,      "NoOffscreenBlits",     1             ));
 	pComp->Value(mkNamingAdapt(MultiSampling,         "MultiSampling",        4             ));
 	pComp->Value(mkNamingAdapt(AutoFrameSkip,         "AutoFrameSkip",        1          ));
+	pComp->Value(mkNamingAdapt(MouseCursorSize,       "MouseCursorSize",      50            ));
 }
 
 void C4ConfigSound::CompileFunc(StdCompiler *pComp)

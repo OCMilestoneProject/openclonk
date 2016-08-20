@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,18 +17,18 @@
 
 /* NewGfx interfaces */
 #include "C4Include.h"
-#include <C4Draw.h>
+#include "graphics/C4Draw.h"
 
-#include "C4App.h"
-#include <C4FontLoader.h>
-#include <C4Window.h>
-#include <C4DrawGL.h>
-#include <C4DrawT.h>
-#include <C4Markup.h>
-#include "C4Rect.h"
-#include <C4Config.h>
-#include "StdMesh.h"
-#include <CSurface8.h>
+#include "platform/C4App.h"
+#include "graphics/C4FontLoader.h"
+#include "platform/C4Window.h"
+#include "graphics/C4DrawGL.h"
+#include "graphics/C4DrawT.h"
+#include "lib/C4Markup.h"
+#include "lib/C4Rect.h"
+#include "config/C4Config.h"
+#include "lib/StdMesh.h"
+#include "graphics/CSurface8.h"
 #include "lib/StdColors.h"
 
 #include <stdio.h>
@@ -627,7 +627,24 @@ void C4Draw::DrawLineDw(C4Surface * sfcTarget, float x1, float y1, float x2, flo
 	PerformMultiLines(sfcTarget, vertices, 2, width, NULL);
 }
 
-void C4Draw::DrawFrameDw(C4Surface * sfcDest, int x1, int y1, int x2, int y2, DWORD dwClr) // make these parameters float...?
+void C4Draw::DrawCircleDw(C4Surface * sfcTarget, float cx, float cy, float r, DWORD dwClr, float width)
+{
+	// Draw as line segments
+	int32_t num_lines = 12 + int32_t(r / 10);
+	std::unique_ptr<C4BltVertex[]> vertices(new C4BltVertex[num_lines * 2]);
+	for (int32_t i = 0; i < num_lines; ++i)
+	{
+		float ang = float(i) * 2 * M_PI / num_lines;
+		int32_t iv = i * 2 + 1;
+		vertices[iv].ftx = cx + sin(ang) * r;
+		vertices[iv].fty = cy + cos(ang) * r;
+		DwTo4UB(dwClr, vertices[iv].color);
+		vertices[(iv + 1) % (num_lines * 2)] = vertices[iv];
+	}
+	PerformMultiLines(sfcTarget, vertices.get(), num_lines * 2, width, NULL);
+}
+
+void C4Draw::DrawFrameDw(C4Surface * sfcDest, int x1, int y1, int x2, int y2, DWORD dwClr, float width) // make these parameters float...?
 {
 	C4BltVertex vertices[8];
 	vertices[0].ftx = x1; vertices[0].fty = y1;
@@ -642,7 +659,7 @@ void C4Draw::DrawFrameDw(C4Surface * sfcDest, int x1, int y1, int x2, int y2, DW
 	for(int i = 0; i < 8; ++i)
 		DwTo4UB(dwClr, vertices[i].color);
 
-	PerformMultiLines(sfcDest, vertices, 8, 1.0f, NULL);
+	PerformMultiLines(sfcDest, vertices, 8, width, NULL);
 }
 
 void C4Draw::DrawQuadDw(C4Surface * sfcTarget, float *ipVtx, DWORD dwClr1, DWORD dwClr2, DWORD dwClr3, DWORD dwClr4, C4ShaderCall* shader_call)

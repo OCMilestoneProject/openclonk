@@ -15,6 +15,8 @@ func Construction(object creator)
 	return _inherited(creator, ...);
 }
 
+public func IsHammerBuildable() { return true; }
+
 /*-- Production --*/
 
 public func IsProduct(id product_id)
@@ -29,26 +31,26 @@ public func OnProductionStart(id product)
 {
 	AddEffect("Working", this, 100, 1, this);
 	hold_production = false;
-	Sound("Liquids::Boiling", false, nil, nil, 1);
+	Sound("Liquids::Boiling", {loop_count = 1});
 }
 
 public func OnProductionHold(id product)
 {
 	hold_production = true;
-	Sound("Liquids::Boiling", false, nil, nil, -1);
+	Sound("Liquids::Boiling", {loop_count = -1});
 	Sound("Fire::Blowout");
 }
 
 public func OnProductionContinued(id product)
 {
 	hold_production = false;
-	Sound("Liquids::Boiling", false, nil, nil, 1);
+	Sound("Liquids::Boiling", {loop_count = 1});
 }
 
 public func OnProductionFinish(id product)
 {
 	RemoveEffect("Working", this);
-	Sound("Liquids::Boiling", false, nil, nil, -1);
+	Sound("Liquids::Boiling", {loop_count = -1});
 }
 
 protected func FxWorkingTimer()
@@ -81,3 +83,4 @@ local Description ="$Description$";
 local ContainBlast = true;
 local BlastIncinerate = 100;
 local HitPoints = 70;
+local Components = {Wood = 3, Metal = 2};

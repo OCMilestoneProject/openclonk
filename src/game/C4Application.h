@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -18,12 +18,12 @@
 #ifndef INC_C4Application
 #define INC_C4Application
 
-#include <C4Group.h>
-#include <C4MusicSystem.h>
-#include <C4SoundSystem.h>
-#include <C4Components.h>
-#include <C4InteractiveThread.h>
-#include <C4App.h>
+#include "c4group/C4Group.h"
+#include "platform/C4MusicSystem.h"
+#include "platform/C4SoundSystem.h"
+#include "c4group/C4Components.h"
+#include "network/C4InteractiveThread.h"
+#include "platform/C4App.h"
 
 class C4ApplicationGameTimer;
 
@@ -36,6 +36,8 @@ public:
 	~C4Application();
 	// Flag for restarting the engine at the end
 	bool restartAtEnd;
+	// Flag set during game tick
+	bool is_in_game_tick;
 	// main System.ocg in working folder
 	C4Group SystemGroup;
 	C4MusicSystem MusicSystem;
@@ -50,6 +52,7 @@ public:
 	void ClearCommandLine();
 	// Tick timing
 	void GameTick();
+	bool IsInGameTick() const { return is_in_game_tick; }
 	void Draw();
 	// System.ocg helper funcs
 	bool OpenSystemGroup() { return SystemGroup.IsOpen() || SystemGroup.Open(C4CFN_System); }

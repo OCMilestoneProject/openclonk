@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -21,7 +21,7 @@
 #error Include C4Value.h instead of C4AulFunc.h
 #endif
 
-#include <C4StringTable.h>
+#include "script/C4StringTable.h"
 
 #define C4AUL_MAX_Par         10  // max number of parameters
 
@@ -46,7 +46,6 @@ struct C4AulParSet
 // base function class
 class C4AulFunc: public C4RefCnt
 {
-	friend class C4AulScript;
 	friend class C4AulScriptEngine;
 	friend class C4AulFuncMap;
 	friend class C4AulParse;
@@ -54,9 +53,9 @@ class C4AulFunc: public C4RefCnt
 public:
 	C4AulFunc(C4PropListStatic * Parent, const char *pName);
 
-	const C4PropListStatic * Parent;
+	C4PropListStatic * Parent;
 	const char * GetName() const { return Name ? Name->GetCStr() : 0; }
-	virtual StdStrBuf GetFullName(); // get a fully classified name (C4ID::Name) for debug output
+	virtual StdStrBuf GetFullName() const; // get a fully classified name (C4ID::Name) for debug output
 
 protected:
 	C4RefCntPointer<C4String> Name; // function name

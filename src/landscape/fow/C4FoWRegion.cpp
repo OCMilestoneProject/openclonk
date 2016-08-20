@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2014-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2014-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -14,8 +14,8 @@
  */
 
 #include "C4Include.h"
-#include "C4FoWRegion.h"
-#include "C4DrawGL.h"
+#include "landscape/fow/C4FoWRegion.h"
+#include "graphics/C4DrawGL.h"
 
 C4FoWRegion::C4FoWRegion(C4FoW *pFoW, C4Player *pPlayer)
 	: pFoW(pFoW)
@@ -47,7 +47,7 @@ C4FoWRegion::~C4FoWRegion()
 #endif
 }
 
-bool C4FoWRegion::BindFramebuf()
+bool C4FoWRegion::BindFramebuf(GLuint prev_fb)
 {
 #ifndef USE_CONSOLE
 	// Flip texture
@@ -149,7 +149,7 @@ bool C4FoWRegion::BindFramebuf()
 	if (status1 != GL_FRAMEBUFFER_COMPLETE ||
 	   (pBackSurface && status2 != GL_FRAMEBUFFER_COMPLETE))
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, prev_fb);
 		return false;
 	}
 #endif
@@ -188,6 +188,9 @@ void C4FoWRegion::Update(C4Rect r, const FLOAT_RECT& vp)
 bool C4FoWRegion::Render(const C4TargetFacet *pOnScreen)
 {
 #ifndef USE_CONSOLE
+	GLint prev_fb;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fb);
+
 	// Update FoW at interesting location
 	pFoW->Update(Region, pPlayer);
 
@@ -205,7 +208,7 @@ bool C4FoWRegion::Render(const C4TargetFacet *pOnScreen)
 
 	// Create & bind the frame buffer
 	pDraw->StorePrimaryClipper();
-	if(!BindFramebuf())
+	if(!BindFramebuf(prev_fb))
 	{
 		pDraw->RestorePrimaryClipper();
 		return false;
@@ -328,7 +331,7 @@ bool C4FoWRegion::Render(const C4TargetFacet *pOnScreen)
 	}
 
 	// Done!
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, prev_fb);
 	pDraw->RestorePrimaryClipper();
 
 	OldRegion = Region;

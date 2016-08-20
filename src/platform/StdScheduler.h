@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -18,7 +18,7 @@
 #ifndef STDSCHEDULER_H
 #define STDSCHEDULER_H
 
-#include "StdSync.h"
+#include "platform/StdSync.h"
 
 // Events are Windows-specific
 #ifdef _WIN32
@@ -27,7 +27,7 @@
 #define STDSCHEDULER_EVENT_MESSAGE INVALID_HANDLE_VALUE
 struct pollfd;
 #ifndef STDSCHEDULER_USE_EVENTS
-#include <C4windowswrapper.h>
+#include "platform/C4windowswrapper.h"
 #include <winsock2.h>
 #endif // STDSCHEDULER_USE_EVENTS
 #else // _WIN32
@@ -263,6 +263,7 @@ public:
 	// needs to be called on thread tasks for this scheduler are meant to be run on
 	void StartOnCurrentThread();
 
+	C4TimeMilliseconds GetNextTick(C4TimeMilliseconds tNow);
 	bool ScheduleProcs(int iTimeout = 1000/36);
 	void UnBlock();
 

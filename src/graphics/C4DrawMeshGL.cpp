@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2013-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2013-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,12 +17,12 @@
 /* OpenGL implementation of Mesh Rendering */
 
 #include "C4Include.h"
-#include <C4Object.h>
-#include <C4DrawGL.h>
-#include <C4FoWRegion.h>
-#include <SHA1.h>
+#include "object/C4Object.h"
+#include "graphics/C4DrawGL.h"
+#include "landscape/fow/C4FoWRegion.h"
+#include "lib/SHA1.h"
 
-#include "StdMesh.h"
+#include "lib/StdMesh.h"
 #include "graphics/C4GraphicsResource.h"
 #include <locale.h>
 #include <stdexcept>
@@ -192,6 +192,9 @@ namespace
 				"}\n"
 			);
 		}
+
+		if (pGL->Workarounds.ForceSoftwareTransform)
+			buf.Take(StdStrBuf("#define OC_WA_FORCE_SOFTWARE_TRANSFORM\n") + buf);
 
 		if (LowMaxVertexUniformCount)
 			return StdStrBuf("#define OC_WA_LOW_MAX_VERTEX_UNIFORM_COMPONENTS\n") + buf;
@@ -395,7 +398,7 @@ bool CStdGL::PrepareMaterial(StdMeshMatManager& mat_manager, StdMeshMaterialLoad
 			{
 				StdStrBuf buf = GetVertexShaderCodeForPass(pass, Workarounds.LowMaxVertexUniformCount);
 				StdStrBuf hash = GetSHA1HexDigest(buf.getData(), buf.getLength());
-				pass.VertexShader.Shader = mat_manager.AddShader("auto-generated vertex shader", hash.getData(), "glsl", SMMS_VERTEX, buf.getData(), true);
+				pass.VertexShader.Shader = mat_manager.AddShader("auto-generated vertex shader", hash.getData(), "glsl", SMMS_VERTEX, buf.getData(), StdMeshMatManager::SMM_AcceptExisting);
 				custom_shader = false;
 			}
 
@@ -404,7 +407,7 @@ bool CStdGL::PrepareMaterial(StdMeshMatManager& mat_manager, StdMeshMaterialLoad
 				// TODO: Should use shared_params once we introduce them
 				StdStrBuf buf = GetFragmentShaderCodeForPass(pass, pass.FragmentShader.Parameters);
 				StdStrBuf hash = GetSHA1HexDigest(buf.getData(), buf.getLength());
-				pass.FragmentShader.Shader = mat_manager.AddShader("auto-generated fragment shader", hash.getData(), "glsl", SMMS_FRAGMENT, buf.getData(), true);
+				pass.FragmentShader.Shader = mat_manager.AddShader("auto-generated fragment shader", hash.getData(), "glsl", SMMS_FRAGMENT, buf.getData(), StdMeshMatManager::SMM_AcceptExisting);
 			}
 
 			// Then, link the program, and resolve parameter locations
@@ -418,7 +421,7 @@ bool CStdGL::PrepareMaterial(StdMeshMatManager& mat_manager, StdMeshMaterialLoad
 				{
 					StdStrBuf buf = GetVertexShaderCodeForPass(pass, true);
 					StdStrBuf hash = GetSHA1HexDigest(buf.getData(), buf.getLength());
-					pass.VertexShader.Shader = mat_manager.AddShader("auto-generated vertex shader", hash.getData(), "glsl", SMMS_VERTEX, buf.getData(), true);
+					pass.VertexShader.Shader = mat_manager.AddShader("auto-generated vertex shader", hash.getData(), "glsl", SMMS_VERTEX, buf.getData(), StdMeshMatManager::SMM_AcceptExisting);
 
 					added_program = mat_manager.AddProgram(name.getData(), loader, pass.FragmentShader, pass.VertexShader, pass.GeometryShader);
 					if(added_program)
@@ -538,6 +541,9 @@ namespace
 			pFoW->getFoW()->Ambient.GetFragTransform(pFoW->getViewportRegion(), clipRect, outRect, ambientTransform);
 			call.SetUniformMatrix2x3fv(C4SSU_AmbientTransform, 1, ambientTransform);
 		}
+
+		// Current frame counter
+		call.SetUniform1i(C4SSU_FrameCounter, ::Game.FrameCounter);
 	}
 
 	bool ResolveAutoParameter(C4ShaderCall& call, StdMeshMaterialShaderParameter& parameter, StdMeshMaterialShaderParameter::Auto value, DWORD dwModClr, DWORD dwPlayerColor, DWORD dwBlitMode, const C4FoWRegion* pFoW, const C4Rect& clipRect)
@@ -610,25 +616,16 @@ namespace
 		return matrix;
 	}
 
-	void RenderSubMeshImpl(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, const StdMeshInstance& mesh_instance, const StdSubMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
+	struct BoneTransform
 	{
-		const StdMeshMaterial& material = instance.GetMaterial();
-		assert(material.BestTechniqueIndex != -1);
-		const StdMeshMaterialTechnique& technique = material.Techniques[material.BestTechniqueIndex];
+		float m[3][4];
+	};
 
-		bool using_shared_vertices = instance.GetSubMesh().GetVertices().empty();
-		GLuint vbo = mesh_instance.GetMesh().GetVBO();
-		GLuint ibo = mesh_instance.GetIBO();
-		unsigned int vaoid = mesh_instance.GetVAOID();
-		size_t vertex_buffer_offset = using_shared_vertices ? 0 : instance.GetSubMesh().GetOffsetInVBO();
-		size_t index_buffer_offset = instance.GetSubMesh().GetOffsetInIBO(); // note this is constant
-
+	std::vector<BoneTransform> CookBoneTransforms(const StdMeshInstance& mesh_instance)
+	{
 		// Cook the bone transform matrixes into something that OpenGL can use. This could be moved into RenderMeshImpl.
 		// Or, even better, we could upload them into a UBO, but Intel doesn't support them prior to Sandy Bridge.
-		struct BoneTransform
-		{
-			float m[3][4];
-		};
+
 		std::vector<BoneTransform> bones;
 		if (mesh_instance.GetBoneCount() == 0)
 		{
@@ -654,10 +651,101 @@ namespace
 				bones.push_back(cooked_bone);
 			}
 		}
+		return bones;
+	}
 
+	struct PretransformedMeshVertex
+	{
+		float nx, ny, nz;
+		float x, y, z;
+	};
+
+	void PretransformMeshVertex(PretransformedMeshVertex *out, const StdMeshVertex &in, const StdMeshInstance &mesh_instance)
+	{
+		// If the first bone assignment has a weight of 0, all others are zero
+		// as well, or the loader would have overwritten the assignment
+		if (in.bone_weight[0] == 0.0f || mesh_instance.GetBoneCount() == 0)
+		{
+			out->x = in.x;
+			out->y = in.y;
+			out->z = in.z;
+			out->nx = in.nx;
+			out->ny = in.ny;
+			out->nz = in.nz;
+		}
+		else
+		{
+			PretransformedMeshVertex vtx{ 0, 0, 0, 0, 0, 0 };
+			for (int i = 0; i < StdMeshVertex::MaxBoneWeightCount && in.bone_weight[i] > 0; ++i)
+			{
+				float weight = in.bone_weight[i];
+				const auto &bone = mesh_instance.GetBoneTransform(in.bone_index[i]);
+				auto vertex = weight * (bone * in);
+				vtx.nx += vertex.nx;
+				vtx.ny += vertex.ny;
+				vtx.nz += vertex.nz;
+				vtx.x += vertex.x;
+				vtx.y += vertex.y;
+				vtx.z += vertex.z;
+			}
+			*out = vtx;
+		}
+	}
+
+	void PretransformMeshVertices(const StdMeshInstance &mesh_instance, const StdSubMeshInstance& instance, GLuint vbo)
+	{
+		assert(pGL->Workarounds.ForceSoftwareTransform);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+		const auto &original_vertices = mesh_instance.GetSharedVertices().empty() ? instance.GetSubMesh().GetVertices() : mesh_instance.GetSharedVertices();
+		const size_t vertex_count = original_vertices.size();
+
+		// Unmapping the buffer may fail for certain reasons, in which case we need to try again.
+		do
+		{
+			glBufferData(GL_ARRAY_BUFFER, vertex_count * sizeof(PretransformedMeshVertex), NULL, GL_STREAM_DRAW);
+			void *map = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+			PretransformedMeshVertex *buffer = new (map) PretransformedMeshVertex[vertex_count];
+
+			for (size_t i = 0; i < vertex_count; ++i)
+			{
+				PretransformMeshVertex(&buffer[i], original_vertices[i], mesh_instance);
+			}
+		} while (glUnmapBuffer(GL_ARRAY_BUFFER) == GL_FALSE);
+		// Unbind the buffer so following rendering calls do not use it
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	void RenderSubMeshImpl(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, const StdMeshInstance& mesh_instance, const StdSubMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity)
+	{
 		// Don't render with degenerate matrix
 		if (fabs(modelviewMatrix.Determinant()) < 1e-6)
 			return;
+
+		const StdMeshMaterial& material = instance.GetMaterial();
+		assert(material.BestTechniqueIndex != -1);
+		const StdMeshMaterialTechnique& technique = material.Techniques[material.BestTechniqueIndex];
+
+		bool using_shared_vertices = instance.GetSubMesh().GetVertices().empty();
+		GLuint vbo = mesh_instance.GetMesh().GetVBO();
+		GLuint ibo = mesh_instance.GetIBO();
+		unsigned int vaoid = mesh_instance.GetVAOID();
+		size_t vertex_buffer_offset = using_shared_vertices ? 0 : instance.GetSubMesh().GetOffsetInVBO();
+		size_t index_buffer_offset = instance.GetSubMesh().GetOffsetInIBO(); // note this is constant
+
+		const bool ForceSoftwareTransform = pGL->Workarounds.ForceSoftwareTransform;
+		GLuint pretransform_vbo;
+
+		std::vector<BoneTransform> bones;
+		if (!ForceSoftwareTransform)
+		{
+			bones = CookBoneTransforms(mesh_instance);
+		}
+		else
+		{
+			glGenBuffers(1, &pretransform_vbo);
+			PretransformMeshVertices(mesh_instance, instance, pretransform_vbo);
+		}
 		// Modelview matrix does not change between passes, so cache it here
 		const StdMeshMatrix normalMatrixTranspose = StdMeshMatrix::Inverse(modelviewMatrix);
 
@@ -666,18 +754,18 @@ namespace
 		{
 			const StdMeshMaterialPass& pass = technique.Passes[i];
 
-			if(!pass.DepthCheck)
+			if (!pass.DepthCheck)
 				glDisable(GL_DEPTH_TEST);
 
 			glDepthMask(pass.DepthWrite ? GL_TRUE : GL_FALSE);
 
-			if(pass.AlphaToCoverage)
+			if (pass.AlphaToCoverage)
 				glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
 			else
 				glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
 
 			glFrontFace(parity ? GL_CW : GL_CCW);
-			if(mesh_instance.GetCompletion() < 1.0f)
+			if (mesh_instance.GetCompletion() < 1.0f)
 			{
 				// Backfaces might be visible when completion is < 1.0f since front
 				// faces might be omitted.
@@ -705,17 +793,17 @@ namespace
 			// is <255. This makes sure that normal non-blended meshes can have
 			// blending disabled in their material script (which disables expensive
 			// face ordering) but when they are made translucent via clrmod
-			if(!(dwBlitMode & C4GFXBLIT_ADDITIVE))
+			if (!(dwBlitMode & C4GFXBLIT_ADDITIVE))
 			{
-				if( ((dwModClr >> 24) & 0xff) < 0xff) // && (!(dwBlitMode & C4GFXBLIT_MOD2)) )
+				if (((dwModClr >> 24) & 0xff) < 0xff) // && (!(dwBlitMode & C4GFXBLIT_MOD2)) )
 					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 				else
 					glBlendFunc(OgreBlendTypeToGL(pass.SceneBlendFactors[0]),
-					            OgreBlendTypeToGL(pass.SceneBlendFactors[1]));
+						OgreBlendTypeToGL(pass.SceneBlendFactors[1]));
 			}
 			else
 			{
-				if( ((dwModClr >> 24) & 0xff) < 0xff) // && (!(dwBlitMode & C4GFXBLIT_MOD2)) )
+				if (((dwModClr >> 24) & 0xff) < 0xff) // && (!(dwBlitMode & C4GFXBLIT_MOD2)) )
 					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 				else
 					glBlendFunc(OgreBlendTypeToGL(pass.SceneBlendFactors[0]), GL_ONE);
@@ -725,8 +813,8 @@ namespace
 
 			// Upload all parameters to the shader
 			int ssc = 0;
-			if(dwBlitMode & C4GFXBLIT_MOD2) ssc |= C4SSC_MOD2;
-			if(pFoW != NULL) ssc |= C4SSC_LIGHT;
+			if (dwBlitMode & C4GFXBLIT_MOD2) ssc |= C4SSC_MOD2;
+			if (pFoW != NULL) ssc |= C4SSC_LIGHT;
 			const C4Shader* shader = pass.Program->Program->GetShader(ssc);
 			if (!shader) return;
 			C4ShaderCall call(shader);
@@ -746,12 +834,15 @@ namespace
 			call.SetUniform1f(C4SSU_MaterialShininess, pass.Shininess);
 
 			// Upload the current bone transformation matrixes (if there are any)
-			if (!bones.empty())
+			if (!ForceSoftwareTransform)
 			{
-				if (pGL->Workarounds.LowMaxVertexUniformCount)
-					glUniformMatrix3x4fv(shader->GetUniform(C4SSU_Bones), bones.size(), GL_FALSE, &bones[0].m[0][0]);
-				else
-					glUniformMatrix4x3fv(shader->GetUniform(C4SSU_Bones), bones.size(), GL_TRUE, &bones[0].m[0][0]);
+				if (!bones.empty())
+				{
+					if (pGL->Workarounds.LowMaxVertexUniformCount)
+						glUniformMatrix3x4fv(shader->GetUniform(C4SSU_Bones), bones.size(), GL_FALSE, &bones[0].m[0][0]);
+					else
+						glUniformMatrix4x3fv(shader->GetUniform(C4SSU_Bones), bones.size(), GL_TRUE, &bones[0].m[0][0]);
+				}
 			}
 
 			GLuint vao;
@@ -769,23 +860,40 @@ namespace
 				glBindBuffer(GL_ARRAY_BUFFER, vbo);
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
 #define VERTEX_OFFSET(field) reinterpret_cast<const uint8_t *>(offsetof(StdMeshVertex, field))
-				glVertexAttribPointer(shader->GetAttribute(C4SSA_Position), 3, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(x));
-				glVertexAttribPointer(shader->GetAttribute(C4SSA_Normal), 3, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(nx));
 				if (shader->GetAttribute(C4SSA_TexCoord) != -1)
 					glVertexAttribPointer(shader->GetAttribute(C4SSA_TexCoord), 2, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(u));
-				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneWeights0), 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_weight));
-				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneWeights1), 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_weight) + 4 * sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_weight)>::type));
-				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneIndices0), 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_index));
-				glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneIndices1), 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_index) + 4 * sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_index)>::type));
-				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Position));
-				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Normal));
+				if (!ForceSoftwareTransform)
+				{
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_Position), 3, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(x));
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_Normal), 3, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(nx));
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Position));
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Normal));
+
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneWeights0), 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_weight));
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneWeights1), 4, GL_FLOAT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_weight) + 4 * sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_weight)>::type));
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneIndices0), 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_index));
+					glVertexAttribPointer(shader->GetAttribute(C4SSA_BoneIndices1), 4, GL_SHORT, GL_FALSE, sizeof(StdMeshVertex), VERTEX_OFFSET(bone_index) + 4 * sizeof(std::remove_all_extents<decltype(StdMeshVertex::bone_index)>::type));
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneWeights0));
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneWeights1));
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneIndices0));
+					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneIndices1));
+				}
 				if (shader->GetAttribute(C4SSA_TexCoord) != -1)
 					glEnableVertexAttribArray(shader->GetAttribute(C4SSA_TexCoord));
-				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneWeights0));
-				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneWeights1));
-				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneIndices0));
-				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_BoneIndices1));
+
 #undef VERTEX_OFFSET
+			}
+
+			if (ForceSoftwareTransform)
+			{
+				glBindBuffer(GL_ARRAY_BUFFER, pretransform_vbo);
+#define VERTEX_OFFSET(field) reinterpret_cast<const uint8_t *>(offsetof(PretransformedMeshVertex, field))
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_Position), 3, GL_FLOAT, GL_FALSE, sizeof(PretransformedMeshVertex), VERTEX_OFFSET(x));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Position));
+				glVertexAttribPointer(shader->GetAttribute(C4SSA_Normal), 3, GL_FLOAT, GL_FALSE, sizeof(PretransformedMeshVertex), VERTEX_OFFSET(nx));
+				glEnableVertexAttribArray(shader->GetAttribute(C4SSA_Normal));
+#undef VERTEX_OFFSET
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
 			}
 
 			// Bind textures
@@ -856,6 +964,9 @@ namespace
 			if(!pass.DepthCheck)
 				glEnable(GL_DEPTH_TEST);
 		}
+
+		if (ForceSoftwareTransform)
+			glDeleteBuffers(1, &pretransform_vbo);
 	}
 
 	void RenderMeshImpl(const StdProjectionMatrix& projectionMatrix, const StdMeshMatrix& modelviewMatrix, StdMeshInstance& instance, DWORD dwModClr, DWORD dwBlitMode, DWORD dwPlayerColor, const C4FoWRegion* pFoW, const C4Rect& clipRect, const C4Rect& outRect, bool parity); // Needed by RenderAttachedMesh

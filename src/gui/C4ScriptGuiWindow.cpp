@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2014-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2014-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -26,20 +26,21 @@
 	serialized correctly and cleaned up if necessary when a menu window is closed or the property is overwritten by a script call!
 */
 
-#include <C4Include.h>
-#include <C4ScriptGuiWindow.h>
+#include "C4Include.h"
+#include "gui/C4ScriptGuiWindow.h"
 
-#include <C4Application.h>
-#include <C4DefList.h>
-#include <C4GraphicsSystem.h>
-#include <C4GraphicsResource.h>
-#include <C4Game.h>
-#include <C4Control.h>
-#include <C4MouseControl.h>
-#include <C4Object.h>
-#include <C4Player.h>
-#include <C4PlayerList.h>
-#include <C4Viewport.h>
+#include "game/C4Application.h"
+#include "object/C4Def.h"
+#include "object/C4DefList.h"
+#include "game/C4GraphicsSystem.h"
+#include "graphics/C4GraphicsResource.h"
+#include "game/C4Game.h"
+#include "control/C4Control.h"
+#include "gui/C4MouseControl.h"
+#include "object/C4Object.h"
+#include "player/C4Player.h"
+#include "player/C4PlayerList.h"
+#include "game/C4Viewport.h"
 #include "lib/StdColors.h"
 
 #include <cmath>
@@ -1495,7 +1496,12 @@ bool C4ScriptGuiWindow::DrawChildren(C4TargetFacet &cgo, int32_t player, int32_t
 
 	if (clipping)
 	{
-		myClippingRect = C4Rect(targetClipX1, targetClipY1, targetClipX2, targetClipY2);
+		// Take either the parent rectangle or restrict it additionally by the child's geometry.
+		myClippingRect = C4Rect(
+			std::max(currentClippingRect->x, targetClipX1),
+			std::max(currentClippingRect->y, targetClipY1),
+			std::min(currentClippingRect->Wdt, targetClipX2),
+			std::min(currentClippingRect->Hgt, targetClipY2));
 		currentClippingRect = &myClippingRect;
 	}
 

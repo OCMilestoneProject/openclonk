@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,8 +20,8 @@
 #ifndef INC_C4Scenario
 #define INC_C4Scenario
 
-#include <C4NameList.h>
-#include <C4IDList.h>
+#include "lib/C4NameList.h"
+#include "object/C4IDList.h"
 
 class C4SVal
 {
@@ -32,6 +32,7 @@ public:
 public:
 	void Default();
 	void Set(int32_t std=0, int32_t rnd=0, int32_t min=0, int32_t max=100);
+	void SetConstant(int32_t val);
 	int32_t Evaluate();
 	void CompileFunc(StdCompiler *pComp);
 public:

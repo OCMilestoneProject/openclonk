@@ -1,33 +1,61 @@
-/*-- Sword --*/
+/**
+	Sword
+	Standard melee weapon.
+*/
 
 #include Library_MeleeWeapon
 
 static const Sword_Standard_StrikingLength = 15; // in frames
 
 local movement_effect;
+local magic_number;
+local carry_bone;
+
+/*-- Engine Callbacks --*/
+
+func Initialize()
+{
+	PlayAnimation("Base", 5, Anim_Const(0), Anim_Const(1000));
+	return _inherited(...);
+}
 
 func Hit()
 {
 	Sound("Hits::Materials::Metal::LightMetalHit?");
 }
 
-public func Initialize()
+func Departure(object container)
 {
-	PlayAnimation("Base", 5, Anim_Const(0), Anim_Const(1000));
-	return _inherited(...);
+	// Always end the movement impairing effect when exiting
+	if (movement_effect)
+	{
+		RemoveEffect(nil, container, movement_effect);
+		movement_effect = nil;
+	}
 }
 
-public func GetCarryMode() { return CARRY_HandBack; }
-public func GetCarryBone() { return "main"; }
-public func GetCarrySpecial(clonk) { return carry_bone; }
-public func GetCarryTransform(clonk, sec, back)
+/*-- Callbacks --*/
+
+public func OnWeaponHitCheckStop(clonk)
 {
-	if(back) return Trans_Mul(Trans_Rotate(180,0,1,0), Trans_Rotate(-90,1,0,0), Trans_Translate(-7000,0,0));
-	return Trans_Rotate(-90, 1, 0, 0);
+	carry_bone = nil;
+	clonk->UpdateAttach();
+	if(GetEffect("SwordStrikeSpeedUp", clonk))
+		RemoveEffect("SwordStrikeSpeedUp", clonk);
+
+	if(clonk->IsJumping())
+	{
+		if(!GetEffect("Fall", clonk))
+			AddEffect("Fall",clonk,1,1,clonk);
+	}
+	
+	if(GetEffect("SwordStrikeStop", clonk))
+		RemoveEffect("SwordStrikeStop", clonk);
+	
+	return;
 }
 
-local magic_number;
-local carry_bone;
+/*-- Usage --*/
 
 public func RejectUse(object clonk)
 {
@@ -55,7 +83,7 @@ public func ControlUse(object clonk, int x, int y)
 	if(clonk->IsWalking())
 	{
 		if(!GetEffect("SwordStrikeStop", clonk))
-			movement_effect = AddEffect("SwordStrikeStop", clonk, 2, length, nil, GetID());
+			movement_effect = AddEffect("SwordStrikeStop", clonk, 2, length, this);
 	}
 	else
 	if(clonk->IsJumping())
@@ -139,31 +167,6 @@ func FxVisualJumpStrikeStop(target, effect, reason, temp)
 	effect.visual->FadeOut();
 }
 
-func OnWeaponHitCheckStop(clonk)
-{
-	carry_bone = nil;
-	clonk->UpdateAttach();
-	if(GetEffect("SwordStrikeSpeedUp", clonk))
-		RemoveEffect("SwordStrikeSpeedUp", clonk);
-
-	if(clonk->IsJumping())
-	{
-		if(!GetEffect("Fall", clonk))
-			AddEffect("Fall",clonk,1,1,clonk);
-	}
-	
-	if(GetEffect("SwordStrikeStop", clonk))
-		RemoveEffect("SwordStrikeStop", clonk);
-	
-	return;
-}
-
-// called when the strike expired before end of length (aborted)
-func WeaponStrikeExpired()
-{
-
-}
-
 func SwordDamage(int shield)
 {
 	return ((100-shield)*9*1000 / 100);
@@ -206,7 +209,7 @@ func CheckStrike(iTime)
 			// don't hit objects twice
 			if(!GetEffect(effect_name, obj))
 			{
-				AddEffect(effect_name, obj, 1, Sword_Standard_StrikingLength, nil, 0);
+				AddEffect(effect_name, obj, 1, Sword_Standard_StrikingLength);
 				
 				if(GetEffect(sword_name, obj))
 				{
@@ -216,7 +219,7 @@ func CheckStrike(iTime)
 				else
 				{
 					//Log("first hit overall");
-					AddEffect(sword_name, obj, 1, 40, nil, 0);
+					AddEffect(sword_name, obj, 1, 40);
 				}
 
 				
@@ -325,23 +328,38 @@ func FxSwordStrikeSlowStop(pTarget, effect, iCause, iTemp)
 	pTarget->PopActionSpeed("Walk");
 }
 
-private func Departure(object container)
-{
-	// Always end the movement impairing effect when exiting
-	if (movement_effect)
-	{
-		RemoveEffect(nil, container, movement_effect);
-		movement_effect = nil;
-	}
-}
+/*-- Production --*/
 
 public func IsWeapon() { return true; }
 public func IsArmoryProduct() { return true; }
+
+/*-- Display --*/
+
+public func GetCarryMode(object clonk, bool idle, bool nohand)
+{
+	if (idle)
+		return CARRY_Sword;
+
+	return CARRY_HandBack;
+}
+
+public func GetCarrySpecial(clonk) { return carry_bone; }
+
+public func GetCarryTransform(clonk, sec, back)
+{
+	if (sec) return Trans_Mul(Trans_Rotate(130, 0, 0, 1), Trans_Translate(-3500, 0, 2800));
+
+	if(back) return Trans_Mul(Trans_Rotate(180,0,1,0), Trans_Rotate(-90,1,0,0), Trans_Translate(-7000,0,0));
+	return Trans_Rotate(-90, 1, 0, 0);
+}
 
 func Definition(def) {
 	SetProperty("PictureTransformation",Trans_Rotate(20, 0, 0, 1),def);
 }
 
+/*-- Properties --*/
+
 local Name = "$Name$";
 local Description = "$Description$";
-local Collectible = 1;
+local Collectible = true;
+local Components = {Wood = 1, Metal = 1};

@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2013, The OpenClonk Team and contributors
+ * Copyright (c) 2013-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -13,10 +13,12 @@
  * for the above references.
  */
 
-#include <C4FacetEx.h>
+#include "graphics/C4FacetEx.h"
+#include "lib/C4Random.h"
 
-#include <StdScheduler.h>
+#include "platform/StdScheduler.h"
 
+#include <pcg/pcg_random.hpp>
 
 #ifndef INC_C4Particles
 #define INC_C4Particles
@@ -28,6 +30,7 @@ enum C4ParticleValueProviderID
 	C4PV_Random,
 	C4PV_KeyFrames,
 	C4PV_Sin,
+	C4PV_Cos,
 	C4PV_Direction,
 	C4PV_Step,
 	C4PV_Speed,
@@ -121,6 +124,8 @@ private:
 		float maxValue; // for Step & Sin
 	};
 
+	pcg32 rng; // for Random
+
 	size_t keyFrameCount;
 	std::vector<float> keyFrames;
 
@@ -156,7 +161,6 @@ public:
 	}
 	C4ParticleValueProvider(const C4ParticleValueProvider &other) { *this = other; }
 	C4ParticleValueProvider & operator= (const C4ParticleValueProvider &other);
-	void RollRandom();
 
 	// divides by denominator
 	void Floatify(float denominator);
@@ -178,6 +182,7 @@ private:
 	float Random(C4Particle *forParticle);
 	float KeyFrames(C4Particle *forParticle);
 	float Sin(C4Particle *forParticle);
+	float Cos(C4Particle *forParticle);
 	float Direction(C4Particle *forParticle);
 	float Step(C4Particle *forParticle);
 	float Speed(C4Particle *forParticle);
@@ -448,6 +453,7 @@ private:
 	GLuint ibo;
 	size_t ibo_size;
 	std::list<C4ParticleList> particleLists;
+	void PreparePrimitiveRestartIndices(uint32_t forSize);
 
 	CStdCSec particleListAccessMutex;
 	CStdEvent frameCounterAdvancedEvent;
@@ -499,9 +505,9 @@ public:
 	C4ParticleSystemDefinitionList definitions;
 
 #ifndef USE_CONSOLE
-	// usually, the following methods are used for drawing
-	GLuint GetIBO() const { return ibo; }
-	void PreparePrimitiveRestartIndices(uint32_t forSize);
+	// Returns the IBO ID that contains the PRI data.
+	// This makes sure that the IBO contains enough indices for at least 'forParticleAmount' particles.
+	GLuint GetIBO(size_t forParticleAmount);
 
 	// creates a new particle
 	void Create(C4ParticleDef *of_def, C4ParticleValueProvider &x, C4ParticleValueProvider &y, C4ParticleValueProvider &speedX, C4ParticleValueProvider &speedY, C4ParticleValueProvider &lifetime, C4PropList *properties, int amount = 1, C4Object *object=NULL);

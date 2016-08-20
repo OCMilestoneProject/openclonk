@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,18 +17,19 @@
 
 /* In-game menu as used by objects, players, and fullscreen options */
 
-#include <C4Include.h>
-#include <C4Menu.h>
+#include "C4Include.h"
+#include "gui/C4Menu.h"
 
-#include <C4DefList.h>
-#include <C4Object.h>
-#include <C4Viewport.h>
-#include <C4Player.h>
-#include <C4MouseControl.h>
-#include <C4GraphicsResource.h>
-#include <C4Game.h>
-#include <C4PlayerList.h>
-#include <C4GameControl.h>
+#include "object/C4Def.h"
+#include "object/C4DefList.h"
+#include "object/C4Object.h"
+#include "game/C4Viewport.h"
+#include "player/C4Player.h"
+#include "gui/C4MouseControl.h"
+#include "graphics/C4GraphicsResource.h"
+#include "game/C4Game.h"
+#include "player/C4PlayerList.h"
+#include "control/C4GameControl.h"
 #include "lib/StdColors.h"
 
 const int32_t     C4MN_DefInfoWdt     = 270, // default width of info windows
@@ -60,12 +61,6 @@ C4MenuItem::C4MenuItem(C4Menu *pMenu, int32_t iIndex, const char *szCaption,
 	// some info caption corrections
 	SReplaceChar(InfoCaption, 10, ' '); SReplaceChar(InfoCaption, 13, '|');
 	SetToolTip(InfoCaption);
-	// components initialization
-	if (idID)
-	{
-		C4Def *pDef = C4Id2Def(idID);
-		if (pDef) pDef->GetComponents(&Components, NULL);
-	}
 }
 
 C4MenuItem::~C4MenuItem()
@@ -848,9 +843,6 @@ void C4Menu::DrawElement(C4TargetFacet &cgo)
 	// Draw specified extra
 	switch (Extra)
 	{
-	case C4MN_Extra_Components:
-		if (pItem) pItem->Components.Draw(cgoExtra,-1,::Definitions,C4D_All,true,C4FCT_Right | C4FCT_Triple | C4FCT_Half);
-		break;
 	case C4MN_Extra_Value:
 	{
 		if (pDef) ::GraphicsResource.fctWealth.DrawValue(cgoExtra,iValue,0,0,C4FCT_Right);

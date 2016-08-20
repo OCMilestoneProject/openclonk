@@ -16,14 +16,16 @@ public func GetRope() { return rope; }
 
 public func New(object new_clonk, object new_rope)
 {
-	SetObjDrawTransform(0, 1, 0, 0, 0, 0, 0); // Hide
+	// Hook graphics are handled by rope.
+	this.Visibility = VIS_None;
 	clonk = new_clonk;
 	rope = new_rope;
 }
 
 public func Launch(int angle, int str, object shooter, object bow)
 {
-	SetObjDrawTransform(0, 1, 0, 0, 0, 0, 0); // Hide
+	// Hook graphics are handled by rope.
+	this.Visibility = VIS_None;
 	Exit();
 
 	pull = false;
@@ -167,8 +169,10 @@ public func OnRopeBreak()
 
 /*-- Grapple rope controls --*/
 
-public func FxIntGrappleControlControl(object target, proplist effect, int ctrl, int x, int y, int strength, repeat, release)
+public func FxIntGrappleControlControl(object target, proplist effect, int ctrl, int x, int y, int strength, bool repeat, int status)
 {
+	if (status == CONS_Moved) return false;
+	var release = status == CONS_Up;
 	// Cancel this effect if clonk is now attached to something.
 	if (target->GetProcedure() == "ATTACH") 
 	{

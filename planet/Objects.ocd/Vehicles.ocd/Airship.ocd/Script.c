@@ -113,7 +113,7 @@ public func FxIntAirshipMovementTimer(object target, proplist effect, int time)
 		{
 			// Fade pitch from -45 to 0
 			enginesound += 5;
-			Sound("Structures::FanLoop",nil,nil,nil, 1, 0, enginesound - 50);
+			Sound("Structures::FanLoop", {loop_count = 1, pitch = enginesound - 50});
 		}
 	}
 	else if(enginesound)
@@ -121,9 +121,9 @@ public func FxIntAirshipMovementTimer(object target, proplist effect, int time)
 		// Fade pitch from 0 to minimum -45, then turn off
 		enginesound = Max(enginesound - 10);
 		if (enginesound)
-			Sound("Structures::FanLoop", nil, nil, nil, 1, 0, enginesound - 50);
+			Sound("Structures::FanLoop", {loop_count = 1, pitch = enginesound - 50});
 		else
-			Sound("Structures::FanLoop", nil, nil, nil, -1);
+			Sound("Structures::FanLoop", {loop_count = -1});
 	}
 
 	// Wind movement if in the air
@@ -358,3 +358,4 @@ local Plane = 500;
 local SolidMaskPlane = 275;
 local BorderBound = C4D_Border_Sides | C4D_Border_Top | C4D_Border_Bottom;
 local HitPoints = 30;
+local Components = {Metal = 4, Wood = 4, Cloth = 2};

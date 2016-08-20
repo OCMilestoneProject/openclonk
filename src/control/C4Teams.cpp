@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2005-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,15 +15,15 @@
  */
 // player team management for teamwork melees
 
-#include <C4Include.h>
-#include <C4Teams.h>
+#include "C4Include.h"
+#include "control/C4Teams.h"
 
-#include <C4Game.h>
-#include <C4Random.h>
-#include <C4Components.h>
-#include <C4Player.h>
-#include <C4PlayerList.h>
-#include <C4GameControl.h>
+#include "game/C4Game.h"
+#include "lib/C4Random.h"
+#include "c4group/C4Components.h"
+#include "player/C4Player.h"
+#include "player/C4PlayerList.h"
+#include "control/C4GameControl.h"
 
 // ---------------------------------------------------------------
 // C4Team
@@ -338,7 +338,9 @@ void C4TeamList::AddTeam(C4Team *pNewTeam)
 	// add team; grow vector if necessary
 	if (iTeamCount >= iTeamCapacity)
 	{
-		C4Team **ppNewTeams = new C4Team*[(iTeamCapacity = iTeamCount+4)&~3];
+		// grow up to the nearest multiple of 4 elements
+		// (TODO: Replace the whole thing e.g. with a simple std::vector<C4Team>)
+		C4Team **ppNewTeams = new C4Team*[(iTeamCapacity = ((iTeamCount+4)&~3))];
 		if (iTeamCount) memcpy(ppNewTeams, ppList, iTeamCount*sizeof(C4Team *));
 		delete [] ppList; ppList = ppNewTeams;
 	}
@@ -444,7 +446,7 @@ C4Team *C4TeamList::GetRandomSmallestTeam() const
 			iLowestTeamCount = 1;
 		}
 		else if (pLowestTeam->GetPlayerCount() == (*ppCheck)->GetPlayerCount())
-			if (!SafeRandom(++iLowestTeamCount))
+			if (!UnsyncedRandom(++iLowestTeamCount))
 				pLowestTeam = *ppCheck;
 	}
 	return pLowestTeam;
@@ -892,7 +894,7 @@ StdStrBuf C4TeamList::GetScriptPlayerName() const
 		if (!Game.PlayerInfos.GetActivePlayerInfoByName(sOut.getData()))
 			return sOut;
 	// none are available: Return a random name
-	sScriptPlayerNames.GetSection(SafeRandom(iNameIdx-1), &sOut, '|');
+	sScriptPlayerNames.GetSection(UnsyncedRandom(iNameIdx-1), &sOut, '|');
 	return sOut;
 }
 

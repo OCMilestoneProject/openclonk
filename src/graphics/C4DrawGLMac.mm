@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2009-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -13,24 +13,24 @@
  * for the above references.
  */
 
-#include <C4Include.h>
-#include <C4GraphicsSystem.h>
-#include <C4MouseControl.h>
-#include <C4Gui.h>
-#include <C4Game.h>
-#include <C4Viewport.h>
-#include <C4ViewportWindow.h>
-#include <C4Console.h>
-#include <C4FullScreen.h>
-#include <C4PlayerList.h>
-#include <C4Gui.h>
-#include <C4Landscape.h>
+#include "C4Include.h"
+#include "game/C4GraphicsSystem.h"
+#include "gui/C4MouseControl.h"
+#include "gui/C4Gui.h"
+#include "game/C4Game.h"
+#include "game/C4Viewport.h"
+#include "editor/C4ViewportWindow.h"
+#include "editor/C4Console.h"
+#include "game/C4FullScreen.h"
+#include "player/C4PlayerList.h"
+#include "gui/C4Gui.h"
+#include "landscape/C4Landscape.h"
 
-#include <C4DrawGL.h>
+#include "graphics/C4DrawGL.h"
 
-#import "C4DrawGLMac.h"
-#import "C4WindowController.h"
-#import "C4AppDelegate+MainMenuActions.h"
+#import "graphics/C4DrawGLMac.h"
+#import "platform/C4WindowController.h"
+#import "platform/C4AppDelegate+MainMenuActions.h"
 
 #ifdef USE_COCOA
 
@@ -229,7 +229,7 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 		switch (button)
 		{
 		case C4MC_Button_LeftDown:
-			Console.EditCursor.Move(viewport->GetViewX()+x/viewport->GetZoom(), viewport->GetViewY()+y/viewport->GetZoom(), flags);
+			Console.EditCursor.Move(viewport->GetViewX()+x/viewport->GetZoom(), viewport->GetViewY()+y/viewport->GetZoom(), viewport->GetZoom(), flags);
 			Console.EditCursor.LeftButtonDown(flags);
 			break;
 		case C4MC_Button_LeftUp:
@@ -242,7 +242,7 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 			Console.EditCursor.RightButtonUp(flags);
 			break;
 		case C4MC_Button_None:
-			Console.EditCursor.Move(viewport->GetViewX()+x/viewport->GetZoom(),viewport->GetViewY()+y/viewport->GetZoom(), flags);
+			Console.EditCursor.Move(viewport->GetViewX()+x/viewport->GetZoom(),viewport->GetViewY()+y/viewport->GetZoom(), viewport->GetZoom(), flags);
 			break;
 		}
 	}
@@ -397,7 +397,7 @@ int32_t mouseButtonFromEvent(NSEvent* event, DWORD* modifierFlags)
 	if (Application.isEditor && viewport && !viewport->GetPlayerLock())
 	{
 		NSScrollView* scrollView = self.controller.scrollView;
-		NSPoint p = NSMakePoint(2*-[event deltaX]/abs(GBackWdt-viewport->ViewWdt), 2*-[event deltaY]/abs(GBackHgt-viewport->ViewHgt));
+		NSPoint p = NSMakePoint(2*-[event deltaX]/abs(::Landscape.GetWidth()-viewport->ViewWdt), 2*-[event deltaY]/abs(::Landscape.GetHeight()-viewport->ViewHgt));
 		[scrollView.horizontalScroller setDoubleValue:scrollView.horizontalScroller.doubleValue+p.x];
 		[scrollView.verticalScroller setDoubleValue:scrollView.verticalScroller.doubleValue+p.y];
 		viewport->ViewPositionByScrollBars();

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,63 +17,68 @@
 
 /* Main class to run the game */
 
-#include <C4Include.h>
-#include <C4Game.h>
+#include "C4Include.h"
+#include "game/C4Game.h"
 
-#include <C4AulDebug.h>
-#include <C4DefList.h>
-#include <C4Effect.h>
-#include <C4FileMonitor.h>
-#include <C4GameSave.h>
-#include <C4Record.h>
-#include <C4Application.h>
-#include <C4Object.h>
-#include <C4ObjectInfo.h>
-#include <C4Random.h>
-#include <C4ObjectCom.h>
-#include <C4FullScreen.h>
-#include <C4Startup.h>
-#include <C4Viewport.h>
-#include <C4Command.h>
-#include <C4Stat.h>
-#include <C4League.h>
-#include <C4PlayerInfo.h>
-#include <C4LoaderScreen.h>
-#include <C4Network2Dialogs.h>
-#include <C4Console.h>
-#include <C4Network2Stats.h>
-#include <C4Log.h>
-#include <C4Player.h>
-#include <C4GameOverDlg.h>
-#include <C4GameParameters.h>
-#include <C4ObjectMenu.h>
-#include <C4GameLobby.h>
-#include <C4ChatDlg.h>
-#include <C4PlayerControl.h>
-#include <C4MouseControl.h>
-#include <C4PXS.h>
-#include <C4MessageInput.h>
-#include <C4MassMover.h>
-#include <C4RankSystem.h>
-#include <C4RoundResults.h>
-#include <C4GameMessage.h>
-#include <C4ScriptGuiWindow.h>
-#include <C4Material.h>
-#include <C4Network2Reference.h>
-#include <C4Weather.h>
-#include <C4GraphicsResource.h>
-#include <C4GraphicsSystem.h>
-#include <C4Texture.h>
-#include <C4Landscape.h>
-#include <C4PlayerList.h>
-#include <C4GameObjects.h>
-#include <C4GameControl.h>
-#include <C4Version.h>
-#include <C4AulExec.h>
-#include <StdFile.h>
-#include <C4MapScript.h>
-#include <C4SolidMask.h>
-#include <C4FoW.h>
+#include "script/C4AulDebug.h"
+#include "object/C4Def.h"
+#include "object/C4DefList.h"
+#include "script/C4Effect.h"
+#include "platform/C4FileMonitor.h"
+#include "control/C4GameSave.h"
+#include "control/C4Record.h"
+#include "game/C4Application.h"
+#include "object/C4Object.h"
+#include "object/C4ObjectInfo.h"
+#include "lib/C4Random.h"
+#include "object/C4ObjectCom.h"
+#include "game/C4FullScreen.h"
+#include "gui/C4Startup.h"
+#include "game/C4Viewport.h"
+#include "object/C4Command.h"
+#include "lib/C4Stat.h"
+#include "network/C4League.h"
+#include "control/C4PlayerInfo.h"
+#include "gui/C4LoaderScreen.h"
+#include "network/C4Network2Dialogs.h"
+#include "editor/C4Console.h"
+#include "network/C4Network2Stats.h"
+#include "lib/C4Log.h"
+#include "player/C4Player.h"
+#include "gui/C4GameOverDlg.h"
+#include "control/C4GameParameters.h"
+#include "object/C4ObjectMenu.h"
+#include "gui/C4GameLobby.h"
+#include "gui/C4ChatDlg.h"
+#include "control/C4PlayerControl.h"
+#include "gui/C4MouseControl.h"
+#include "landscape/C4PXS.h"
+#include "gui/C4MessageInput.h"
+#include "landscape/C4MassMover.h"
+#include "player/C4RankSystem.h"
+#include "control/C4RoundResults.h"
+#include "gui/C4GameMessage.h"
+#include "gui/C4ScriptGuiWindow.h"
+#include "landscape/C4Material.h"
+#include "network/C4Network2Reference.h"
+#include "landscape/C4Weather.h"
+#include "graphics/C4GraphicsResource.h"
+#include "game/C4GraphicsSystem.h"
+#include "landscape/C4Texture.h"
+#include "landscape/C4Landscape.h"
+#include "landscape/C4Sky.h"
+#include "player/C4PlayerList.h"
+#include "object/C4GameObjects.h"
+#include "control/C4GameControl.h"
+#include "C4Version.h"
+#include "script/C4AulExec.h"
+#include "platform/StdFile.h"
+#include "landscape/C4MapScript.h"
+#include "landscape/C4SolidMask.h"
+#include "landscape/fow/C4FoW.h"
+#include "landscape/C4Particles.h"
+
+#include <unordered_map>
 
 class C4GameSec1Timer : public C4ApplicationSec1Timer
 {
@@ -379,6 +384,12 @@ bool C4Game::Init()
 			if (!fSuccess)
 				return false;
 		}
+		else if (SEqual2(DirectJoinAddress, DirectJoinFilePrefix))
+		{
+			// By reference serialized to temp file
+			if (!InitNetworkFromReferenceFile(DirectJoinAddress + strlen(DirectJoinFilePrefix)))
+				return false;
+		}
 		else
 		{
 			// By address
@@ -570,13 +581,14 @@ void C4Game::Clear()
 	StartupScenarioParameters.Clear();
 	Weather.Clear();
 	GraphicsSystem.Clear();
+	// Clear the particles before cleaning up the objects.
+	Particles.Clear();
 	DeleteObjects(true);
+	::MapScript.Clear();
 	::Definitions.Clear();
 	Landscape.Clear();
 	PXS.Clear();
-	if (pGlobalEffects) { delete pGlobalEffects; pGlobalEffects=NULL; }
 	ScriptGuiRoot.reset();
-	Particles.Clear();
 	::MaterialMap.Clear();
 	TextureMap.Clear(); // texture map *MUST* be cleared after the materials, because of the patterns!
 	::Messages.Clear();
@@ -584,7 +596,6 @@ void C4Game::Clear()
 	Info.Clear();
 	Title.Clear();
 	pScenarioObjectsScript = NULL;
-	::MapScript.Clear();
 	::GameScript.Clear();
 	Names.Clear();
 	GameText.Clear();
@@ -597,6 +608,12 @@ void C4Game::Clear()
 	TransferZones.Clear();
 #ifndef USE_CONSOLE
 	::FontLoader.Clear();
+#endif
+
+#ifdef WITH_QT_EDITOR
+	// clear console pointers held into script engine
+	::Console.EditCursor.Clear();
+	::Console.ClearGamePointers();
 #endif
 
 	C4PropListNumbered::ClearShelve(); // may be nonempty if there was a fatal error during section load
@@ -721,8 +738,9 @@ bool C4Game::Execute() // Returns true if the game is over
 	// Game
 
 	EXEC_S(     ExecObjects();                    , ExecObjectsStat )
-	if (pGlobalEffects)
-		EXEC_S_DR(  pGlobalEffects->Execute(NULL);  , GEStats             , "GEEx\0");
+	EXEC_S_DR(  C4Effect::Execute(&ScriptEngine.pGlobalEffects);
+	            C4Effect::Execute(&GameScript.pScenarioEffects);
+	                                              , GEStats             , "GEEx\0");
 	EXEC_S_DR(  PXS.Execute();                    , PXSStat             , "PXSEx")
 	EXEC_S_DR(  MassMover.Execute();              , MassMoverStat       , "MMvEx")
 	EXEC_S_DR(  Weather.Execute();                , WeatherStat         , "WtrEx")
@@ -909,9 +927,11 @@ void C4Game::ClearPointers(C4Object * pObj)
 	::MouseControl.ClearPointers(pObj);
 	ScriptGuiRoot->ClearPointers(pObj);
 	TransferZones.ClearPointers(pObj);
-	if (pGlobalEffects)
-		pGlobalEffects->ClearPointers(pObj);
-	if (::Landscape.pFoW) ::Landscape.pFoW->Remove(pObj);
+	if (::ScriptEngine.pGlobalEffects)
+		::ScriptEngine.pGlobalEffects->ClearPointers(pObj);
+	if (::GameScript.pScenarioEffects)
+		::GameScript.pScenarioEffects->ClearPointers(pObj);
+	::Landscape.ClearPointers(pObj);
 }
 
 bool C4Game::TogglePause()
@@ -1372,7 +1392,7 @@ bool C4Game::DropDef(C4ID id, float X, float Y)
 	C4Def *pDef;
 	if ((pDef=C4Id2Def(id)))
 	{
-		::Control.DoInput(CID_EMMoveObj, C4ControlEMMoveObject::CreateObject(id, ftofix(X), ftofix(Y)), CDT_Decide);
+		::Control.DoInput(CID_EMMoveObj, C4ControlEMMoveObject::CreateObject(id, ftofix(X), ftofix(Y), NULL), CDT_Decide);
 		return true;
 	}
 	else
@@ -1421,7 +1441,7 @@ void C4Game::Default()
 	PointersDenumerated = false;
 	IsRunning = false;
 	FrameCounter=0;
-	GameOver=GameOverDlgShown=false;
+	GameOver=GameOverDlgShown=InitialPlayersJoined=false;
 	ScenarioFilename[0]=0;
 	PlayerFilenames[0]=0;
 	DefinitionFilenames[0]=0;
@@ -1464,7 +1484,6 @@ void C4Game::Default()
 	pParentGroup=NULL;
 	pScenarioSections=pCurrentScenarioSection=NULL;
 	*CurrentScenarioSection=0;
-	pGlobalEffects=NULL;
 	fResortAnyObject=false;
 	pNetworkStatistics.reset();
 	::Application.MusicSystem.ClearGame();
@@ -1652,6 +1671,7 @@ void C4Game::CompileFunc(StdCompiler *pComp, CompileSettings comp, C4ValueNumber
 		pComp->Value(mkNamingAdapt(iTick35,               "Tick35",                0));
 		pComp->Value(mkNamingAdapt(iTick255,              "Tick255",               0));
 		pComp->Value(mkNamingAdapt(iTick1000,             "Tick1000",              0));
+		pComp->Value(mkNamingAdapt(InitialPlayersJoined,  "InitialPlayersJoined", false));
 		pComp->Value(mkNamingAdapt(StartupPlayerCount,    "StartupPlayerCount",    0));
 		pComp->Value(mkNamingAdapt(StartupTeamCount,      "StartupTeamCount",      0));
 		pComp->Value(mkNamingAdapt(C4PropListNumbered::EnumerationIndex,"ObjectEnumerationIndex",0));
@@ -1678,7 +1698,7 @@ void C4Game::CompileFunc(StdCompiler *pComp, CompileSettings comp, C4ValueNumber
 	{
 		pComp->Value(mkNamingAdapt(Weather, "Weather"));
 		pComp->Value(mkNamingAdapt(Landscape, "Landscape"));
-		pComp->Value(mkNamingAdapt(Landscape.Sky, "Sky"));
+		pComp->Value(mkNamingAdapt(Landscape.GetSky(), "Sky"));
 
 		// save custom GUIs only if a real savegame and not for editor-scenario-saves or section changes
 		if (!comp.fScenarioSection)
@@ -1724,40 +1744,7 @@ void C4Game::CompileFunc(StdCompiler *pComp, CompileSettings comp, C4ValueNumber
 
 	pComp->Value(mkParAdapt(Objects, !comp.fExact, numbers));
 
-	pComp->Name("Script");
-	if (!comp.fScenarioSection)
-	{
-		pComp->Value(mkParAdapt(ScriptEngine, numbers));
-	}
-	if (comp.fScenarioSection && pComp->isCompiler())
-	{
-		// loading scenario section: Merge effects
-		// Must keep old effects here even if they're dead, because the LoadScenarioSection call typically came from execution of a global effect
-		// and otherwise dead pointers would remain on the stack
-		C4Effect *pOldGlobalEffects, *pNextOldGlobalEffects=pGlobalEffects;
-		pGlobalEffects = NULL;
-		try
-		{
-			pComp->Value(mkParAdapt(mkNamingPtrAdapt(pGlobalEffects, "Effects"), numbers));
-		}
-		catch (...)
-		{
-			delete pNextOldGlobalEffects;
-			throw;
-		}
-		while ((pOldGlobalEffects=pNextOldGlobalEffects))
-		{
-			pNextOldGlobalEffects = pOldGlobalEffects->pNext;
-			pOldGlobalEffects->Register(NULL, Abs(pOldGlobalEffects->iPriority));
-		}
-	}
-	else
-	{
-		// Otherwise, just compile effects
-		pComp->Value(mkParAdapt(mkNamingPtrAdapt(pGlobalEffects, "Effects"), numbers));
-	}
-	pComp->Value(mkNamingAdapt(*numbers, "Values"));
-	pComp->NameEnd();
+	pComp->Value(mkNamingAdapt(mkParAdapt(ScriptEngine, comp.fScenarioSection, numbers), "Script"));
 }
 
 bool C4Game::CompileRuntimeData(C4Group &hGroup, bool fLoadSection, bool exact, bool sync, C4ValueNumbers * numbers)
@@ -1874,21 +1861,14 @@ bool C4Game::SaveGameTitle(C4Group &hGroup)
 
 bool C4Game::DoKeyboardInput(C4KeyCode vk_code, C4KeyEventType eEventType, bool fAlt, bool fCtrl, bool fShift, bool fRepeated, class C4GUI::Dialog *pForDialog, bool fPlrCtrlOnly, int32_t iStrength)
 {
-#ifdef USE_GTK
-	static std::map<C4KeyCode, bool> PressedKeys;
-	// Keyrepeats are send as down, down, ..., down, up, where all downs are not distinguishable from the first.
-	if (eEventType == KEYEV_Down)
-	{
-		if (PressedKeys[vk_code]) fRepeated = true;
-		else PressedKeys[vk_code] = true;
-	}
-	else if (eEventType == KEYEV_Up)
-	{
-		PressedKeys[vk_code] = false;
-	}
-#endif
 	// compose key
 	C4KeyCodeEx Key(vk_code, C4KeyShiftState(fAlt*KEYS_Alt + fCtrl*KEYS_Control + fShift*KEYS_Shift), fRepeated);
+	return DoKeyboardInput(Key, eEventType, pForDialog, fPlrCtrlOnly, iStrength);
+}
+
+
+bool C4Game::DoKeyboardInput(C4KeyCodeEx Key, C4KeyEventType eEventType, class C4GUI::Dialog *pForDialog, bool fPlrCtrlOnly, int32_t iStrength)
+{
 	Key.FixShiftKeys();
 	// compose keyboard scope
 	DWORD InScope = 0;
@@ -2003,7 +1983,7 @@ bool C4Game::QuickSave(const char *strFilename, const char *strTitle, bool fForc
 
 bool LandscapeFree(int32_t x, int32_t y)
 {
-	if (!Inside<int32_t>(x,0,GBackWdt-1) || !Inside<int32_t>(y,0,GBackHgt-1)) return false;
+	if (!Inside<int32_t>(x,0,::Landscape.GetWidth()-1) || !Inside<int32_t>(y,0,::Landscape.GetHeight()-1)) return false;
 	return !DensitySolid(GBackDensity(x,y));
 }
 
@@ -2235,7 +2215,7 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 	if (fLoadSection && fLandscapeLoaded) { PXS.Clear(); MassMover.Clear(); }
 	SetInitProgress(89);
 	// Init main object list
-	Objects.Init(Landscape.Width, Landscape.Height);
+	Objects.Init(Landscape.GetWidth(), Landscape.GetHeight());
 
 	// Pathfinder
 	if (!fLoadSection) PathFinder.Init( &LandscapeFree, &TransferZones );
@@ -2278,7 +2258,6 @@ bool C4Game::InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4Value
 
 	// Denumerate game data pointers
 	if (!fLoadSection) ScriptEngine.Denumerate(numbers);
-	if (!fLoadSection && pGlobalEffects) pGlobalEffects->Denumerate(numbers);
 	if (!fLoadSection) GlobalSoundModifier.Denumerate(numbers);
 	numbers->Denumerate();
 	if (!fLoadSection) ScriptGuiRoot->Denumerate(numbers);
@@ -2610,7 +2589,7 @@ bool C4Game::PlaceInEarth(C4ID id)
 	int32_t cnt,tx,ty;
 	for (cnt=0; cnt<35; cnt++) // cheap trys
 	{
-		tx=Random(GBackWdt); ty=Random(GBackHgt);
+		tx=Random(::Landscape.GetWidth()); ty=Random(::Landscape.GetHeight());
 		if (GBackMat(tx,ty)==MEarth)
 			if (CreateObject(id,NULL,NO_OWNER,tx,ty,Random(360)))
 				return true;
@@ -2679,7 +2658,7 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 			// Above tunnel
 			while ((iTy>0) && Landscape.GetBackPix(iTx,iTy) == 0) iTy--;
 			// Above semi solid
-			if (!AboveSemiSolid(iTx,iTy) || !Inside<int32_t>(iTy,50,GBackHgt-50))
+			if (!AboveSemiSolid(iTx,iTy) || !Inside<int32_t>(iTy,50,::Landscape.GetHeight()-50))
 				continue;
 			// Still inside bounds?
 			if (!PlaceVegetation_IsPosInBounds(iTx, iTy, iX, iY, iWdt, iHgt, shape_proplist)) continue;
@@ -2748,7 +2727,7 @@ C4Object* C4Game::PlaceVegetation(C4PropList * PropList, int32_t iX, int32_t iY,
 			// Random hit within target area
 			if (!PlaceVegetation_GetRandomPoint(iX, iY, iWdt, iHgt, shape_proplist, out_pos_proplist, &iTx, &iTy)) break;
 			// Above semi solid
-			if (!AboveSemiSolid(iTx,iTy) || !Inside<int32_t>(iTy,50,GBackHgt-50))
+			if (!AboveSemiSolid(iTx,iTy) || !Inside<int32_t>(iTy,50,::Landscape.GetHeight()-50))
 				continue;
 			// Free above
 			if (GBackSemiSolid(iTx,iTy-pDef->Shape.Hgt) || GBackSemiSolid(iTx,iTy-pDef->Shape.Hgt/2))
@@ -2785,12 +2764,12 @@ C4Object* C4Game::PlaceAnimal(C4PropList* PropList)
 	{
 		// Running free
 	case C4D_Place_Surface:
-		iX=Random(GBackWdt); iY=Random(GBackHgt);
+		iX=Random(::Landscape.GetWidth()); iY=Random(::Landscape.GetHeight());
 		if (!FindSolidGround(iX,iY,pDef->Shape.Wdt)) return NULL;
 		break;
 		// In liquid
 	case C4D_Place_Liquid:
-		iX=Random(GBackWdt); iY=Random(GBackHgt);
+		iX=Random(::Landscape.GetWidth()); iY=Random(::Landscape.GetHeight());
 		if (!FindSurfaceLiquid(iX,iY,pDef->Shape.Wdt,pDef->Shape.Hgt))
 			if (!FindLiquid(iX,iY,pDef->Shape.Wdt,pDef->Shape.Hgt))
 				return NULL;
@@ -2798,8 +2777,8 @@ C4Object* C4Game::PlaceAnimal(C4PropList* PropList)
 		break;
 		// Floating in air
 	case C4D_Place_Air:
-		iX=Random(GBackWdt);
-		for (iY=0; (iY<GBackHgt) && !GBackSemiSolid(iX,iY); iY++) {}
+		iX=Random(::Landscape.GetWidth());
+		for (iY=0; (iY<::Landscape.GetHeight()) && !GBackSemiSolid(iX,iY); iY++) {}
 		if (iY<=0) return NULL;
 		iY=Random(iY);
 		break;
@@ -2816,7 +2795,7 @@ void C4Game::InitInEarth()
 	int32_t cnt,vidnum;
 	C4ID vidlist[maxvid];
 	// Amount
-	int32_t amt=(GBackWdt*GBackHgt/5000)*C4S.Landscape.InEarthLevel.Evaluate()/100;
+	int32_t amt=(::Landscape.GetWidth()*::Landscape.GetHeight()/5000)*C4S.Landscape.InEarthLevel.Evaluate()/100;
 	// List all valid IDs from C4S
 	vidnum=ListExpandValids(C4S.Landscape.InEarth,vidlist,maxvid);
 	// Place
@@ -2832,13 +2811,13 @@ void C4Game::InitVegetation()
 	int32_t cnt,vidnum;
 	C4ID vidlist[maxvid];
 	// Amount
-	int32_t amt=(GBackWdt/50)*C4S.Landscape.VegLevel.Evaluate()/100;
+	int32_t amt=(::Landscape.GetWidth()/50)*C4S.Landscape.VegLevel.Evaluate()/100;
 	// Get percentage vidlist from C4S
 	vidnum=ListExpandValids(C4S.Landscape.Vegetation,vidlist,maxvid);
 	// Place vegetation
 	if (vidnum>0)
 		for (cnt=0; cnt<amt; cnt++)
-			PlaceVegetation(C4Id2Def(vidlist[Random(vidnum)]),0,0,GBackWdt,GBackHgt,-1,NULL,NULL);
+			PlaceVegetation(C4Id2Def(vidlist[Random(vidnum)]),0,0,::Landscape.GetWidth(),::Landscape.GetHeight(),-1,NULL,NULL);
 }
 
 void C4Game::InitAnimals()
@@ -2966,25 +2945,25 @@ bool C4Game::InitKeyboard()
 
 	// fullscreen menu
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_LEFT));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_Left)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Left(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuLeft",     KEYSCOPE_FullSMenu,  new C4KeyCBEx<C4FullScreen, BYTE>   (FullScreen, COM_MenuLeft, &C4FullScreen::MenuKeyControl)));
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_RIGHT));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_Right)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Right(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuRight",    KEYSCOPE_FullSMenu,  new C4KeyCBEx<C4FullScreen, BYTE>   (FullScreen, COM_MenuRight, &C4FullScreen::MenuKeyControl)));
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_UP));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_Up)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Up(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuUp",       KEYSCOPE_FullSMenu,  new C4KeyCBEx<C4FullScreen, BYTE>   (FullScreen, COM_MenuUp, &C4FullScreen::MenuKeyControl)));
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_DOWN));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_Down)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Down(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuDown",     KEYSCOPE_FullSMenu,  new C4KeyCBEx<C4FullScreen, BYTE>   (FullScreen, COM_MenuDown, &C4FullScreen::MenuKeyControl)));
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_SPACE)); Keys.push_back(C4KeyCodeEx(K_RETURN));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_AnyLowButton)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Ok(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuOK",       KEYSCOPE_FullSMenu,  new C4KeyCBEx<C4FullScreen, BYTE>   (FullScreen, COM_MenuEnter, &C4FullScreen::MenuKeyControl))); // name used by PlrControlKeyName
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_ESCAPE));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_AnyHighButton)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Cancel(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuCancel",   KEYSCOPE_FullSMenu,  new C4KeyCBEx<C4FullScreen, BYTE>   (FullScreen, COM_MenuClose, &C4FullScreen::MenuKeyControl))); // name used by PlrControlKeyName
 	Keys.clear(); Keys.push_back(C4KeyCodeEx(K_SPACE));
-	if (Config.Controls.GamepadGuiControl) Keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_AnyButton)));
+	if (Config.Controls.GamepadGuiControl) ControllerKeys::Any(Keys);
 	KeyboardInput.RegisterKey(new C4CustomKey(Keys,                              "FullscreenMenuOpen",     KEYSCOPE_FreeView,   new C4KeyCB  <C4FullScreen>   (FullScreen, &C4FullScreen::ActivateMenuMain))); // name used by C4MainMenu!
 	KeyboardInput.RegisterKey(new C4CustomKey(C4KeyCodeEx(K_RIGHT             ), "FilmNextPlayer",         KEYSCOPE_FilmView,   new C4KeyCB  <C4ViewportList>(::Viewports, &C4ViewportList::ViewportNextPlayer)));
 
@@ -3085,7 +3064,7 @@ C4Player *C4Game::JoinPlayer(const char *szFilename, int32_t iAtClient, const ch
 	return pPlr;
 }
 
-void C4Game::FixRandom(int32_t iSeed)
+void C4Game::FixRandom(uint64_t iSeed)
 {
 	FixedRandom(iSeed);
 }
@@ -3209,6 +3188,22 @@ bool C4Game::InitNetworkFromAddress(const char *szAddress)
 		delete ppRefs[i];
 	delete[] ppRefs;
 	return fSuccess;
+}
+
+bool C4Game::InitNetworkFromReferenceFile(const char *temp_filename)
+{
+	// Load reference from temp file + delete the temp file
+	bool success = false;
+	C4Network2Reference ref;
+	StdBuf join_data;
+	if (join_data.LoadFromFile(temp_filename))
+	{
+		CompileFromBuf<StdCompilerBinRead>(ref, join_data);
+		success = true;
+	}
+	EraseFile(temp_filename);
+	if (!success) return false;
+	return InitNetworkFromReference(ref);
 }
 
 bool C4Game::InitNetworkFromReference(const C4Network2Reference &Reference)
@@ -3377,6 +3372,9 @@ void C4Game::SetInitProgress(float fToProgress)
 	}
 	// Cheap hack to get the Console window updated while loading
 	Application.FlushMessages();
+#ifdef WITH_QT_EDITOR
+	Application.ProcessQtEvents();
+#endif
 }
 
 void C4Game::OnResolutionChanged(unsigned int iXRes, unsigned int iYRes)
@@ -3406,6 +3404,13 @@ bool C4Game::LoadScenarioSection(const char *szSection, DWORD dwFlags)
 	// would leave those values in the altered state of the previous section
 	// scenario designers should regard this and always define any values, that are defined in subsections as well
 	C4Group hGroup, *pGrp;
+	// if current section was the loaded section (maybe main, but need not for resumed savegames)
+	if (!pCurrentScenarioSection)
+	{
+		pCurrentScenarioSection = new C4ScenarioSection(CurrentScenarioSection);
+		pCurrentScenarioSection->pObjectScripts = Game.pScenarioObjectsScript;
+		if (!*CurrentScenarioSection) SCopy(C4ScenSect_Main, CurrentScenarioSection, C4MaxName);
+	}
 	// find section to load
 	C4ScenarioSection *pLoadSect = pScenarioSections;
 	while (pLoadSect) if (SEqualNoCase(pLoadSect->szName, szSection)) break; else pLoadSect = pLoadSect->pNext;
@@ -3414,21 +3419,8 @@ bool C4Game::LoadScenarioSection(const char *szSection, DWORD dwFlags)
 		DebugLogF("LoadScenarioSection: scenario section %s not found!", szSection);
 		return false;
 	}
-	// don't load if it's current
-	if (pLoadSect == pCurrentScenarioSection)
-	{
-		DebugLogF("LoadScenarioSection: section %s is already current", szSection);
-		return false;
-	}
-	// if current section was the loaded section (maybe main, but need not for resumed savegames)
-	if (!pCurrentScenarioSection)
-	{
-		pCurrentScenarioSection = new C4ScenarioSection(CurrentScenarioSection);
-		pCurrentScenarioSection->pObjectScripts = Game.pScenarioObjectsScript;
-		if (!*CurrentScenarioSection) SCopy(C4ScenSect_Main, CurrentScenarioSection, C4MaxName);
-	}
 	// save current section state
-	if (dwFlags & (C4S_SAVE_LANDSCAPE | C4S_SAVE_OBJECTS))
+	if (pLoadSect != pCurrentScenarioSection && dwFlags & (C4S_SAVE_LANDSCAPE | C4S_SAVE_OBJECTS))
 	{
 		// ensure that the section file does point to temp store
 		if (!pCurrentScenarioSection->EnsureTempStore(!(dwFlags & C4S_SAVE_LANDSCAPE), !(dwFlags & C4S_SAVE_OBJECTS)))
@@ -3513,12 +3505,14 @@ bool C4Game::LoadScenarioSection(const char *szSection, DWORD dwFlags)
 		}
 	DeleteObjects(false);
 	// remove global effects
-	if (pGlobalEffects) if (!(dwFlags & C4S_KEEP_EFFECTS))
-		{
-			pGlobalEffects->ClearAll(NULL, C4FxCall_RemoveClear);
-			// scenario section call might have been done from a global effect
-			// rely on dead effect removal for actually removing the effects; do not clear the array here!
-		}
+	if (::ScriptEngine.pGlobalEffects && !(dwFlags & C4S_KEEP_EFFECTS))
+	{
+		::ScriptEngine.pGlobalEffects->ClearAll(C4FxCall_RemoveClear);
+		// scenario section call might have been done from a global effect
+		// rely on dead effect removal for actually removing the effects; do not clear the array here!
+	}
+	if (::GameScript.pScenarioEffects && !(dwFlags & C4S_KEEP_EFFECTS))
+		::GameScript.pScenarioEffects->ClearAll(C4FxCall_RemoveClear);
 	// del particles as well
 	Particles.ClearAllParticles();
 	// clear transfer zones
@@ -3538,6 +3532,11 @@ bool C4Game::LoadScenarioSection(const char *szSection, DWORD dwFlags)
 	// remove reference to FoW from viewports, so that we can safely
 	// reload the landscape and its FoW.
 	Viewports.DisableFoW();
+	// landscape initialization resets the RNG
+	// set a new seed here to get new dynamic landscapes
+	// TODO: add an option to disable this?
+	RandomSeed = Random(2147483647);
+	FixRandom(RandomSeed);
 	// re-init game in new section
 	C4ValueNumbers numbers;
 	if (!InitGame(*pGrp, true, fLoadNewSky, &numbers))
@@ -3609,6 +3608,33 @@ void C4Game::Abort(bool fApproved)
 	Application.QuitGame();
 }
 
+static const std::unordered_map<std::string, C4GUI::Icons> str_to_icon =
+{
+	{ "Locked",      C4GUI::Ico_Ex_LockedFrontal },
+	{ "League",      C4GUI::Ico_Ex_League        },
+	{ "GameRunning", C4GUI::Ico_GameRunning      },
+	{ "Lobby",       C4GUI::Ico_Lobby            },
+	{ "RuntimeJoin", C4GUI::Ico_RuntimeJoin      },
+
+	{ "A",             C4GUI::Ico_Controller_A             },
+	{ "B",             C4GUI::Ico_Controller_B             },
+	{ "X",             C4GUI::Ico_Controller_X             },
+	{ "Y",             C4GUI::Ico_Controller_Y             },
+	{ "Back",          C4GUI::Ico_Controller_Back          },
+	{ "Start",         C4GUI::Ico_Controller_Start         },
+	{ "Dpad",          C4GUI::Ico_Controller_Dpad          },
+	{ "DpadLeft",      C4GUI::Ico_Controller_DpadLeft      },
+	{ "DpadRight",     C4GUI::Ico_Controller_DpadRight     },
+	{ "DpadDown",      C4GUI::Ico_Controller_DpadDown      },
+	{ "DpadUp",        C4GUI::Ico_Controller_DpadUp        },
+	{ "LeftShoulder",  C4GUI::Ico_Controller_LeftShoulder  },
+	{ "RightShoulder", C4GUI::Ico_Controller_RightShoulder },
+	{ "LeftTrigger",   C4GUI::Ico_Controller_LeftTrigger   },
+	{ "RightTrigger",  C4GUI::Ico_Controller_RightTrigger  },
+	{ "LeftStick",     C4GUI::Ico_Controller_LeftStick     },
+	{ "RightStick",    C4GUI::Ico_Controller_RightStick    },
+};
+
 bool GetTextSpecFacet(const char* szSpec, C4Facet& fct)
 {
 	// safety
@@ -3618,19 +3644,12 @@ bool GetTextSpecFacet(const char* szSpec, C4Facet& fct)
 	if (SEqual2(szSpec, "@Ico:"))
 	{
 		szSpec += 5;
-		if (SEqual2(szSpec, "Locked"))
-			fct = C4GUI::Icon::GetIconFacet(C4GUI::Ico_Ex_LockedFrontal);
-		else if (SEqual2(szSpec, "League"))
-			fct = C4GUI::Icon::GetIconFacet(C4GUI::Ico_Ex_League);
-		else if (SEqual2(szSpec, "GameRunning"))
-			fct = C4GUI::Icon::GetIconFacet(C4GUI::Ico_GameRunning);
-		else if (SEqual2(szSpec, "Lobby"))
-			fct = C4GUI::Icon::GetIconFacet(C4GUI::Ico_Lobby);
-		else if (SEqual2(szSpec, "RuntimeJoin"))
-			fct = C4GUI::Icon::GetIconFacet(C4GUI::Ico_RuntimeJoin);
-		else
-			return false;
-		return true;
+		auto it = str_to_icon.find(szSpec);
+		if (it != str_to_icon.end())
+		{
+			fct = C4GUI::Icon::GetIconFacet(it->second);
+			return true;
+		}
 	}
 
 	return false;
@@ -3747,12 +3766,16 @@ bool C4Game::ToggleChat()
 
 C4Value C4Game::GRBroadcast(const char *szFunction, C4AulParSet *pPars, bool fPassError, bool fRejectTest)
 {
+	std::string func{ szFunction };
+	if (func[0] != '~')
+		func.insert(0, 1, '~');
+
 	// call objects first - scenario script might overwrite hostility, etc...
-	C4Value vResult = ::Objects.GRBroadcast(szFunction, pPars, fPassError, fRejectTest);
+	C4Value vResult = ::Objects.GRBroadcast(func.c_str(), pPars, fPassError, fRejectTest);
 	// rejection tests abort on first nonzero result
 	if (fRejectTest) if (!!vResult) return vResult;
 	// scenario script call
-	return ::GameScript.Call(szFunction, pPars, fPassError);
+	return ::GameScript.Call(func.c_str(), pPars, fPassError);
 }
 
 void C4Game::SetDefaultGamma()

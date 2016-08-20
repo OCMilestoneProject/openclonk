@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -19,11 +19,11 @@
 
 /* Needs to be compilable as Objective C++ on OS X */
 
-#include <C4Include.h>
-#include <C4Group.h>
+#include "C4Include.h"
+#include "c4group/C4Group.h"
 
-#include <C4Components.h>
-#include <C4InputValidation.h>
+#include "c4group/C4Components.h"
+#include "lib/C4InputValidation.h"
 #include <zlib.h>
 
 
@@ -422,7 +422,7 @@ void C4GroupEntry::Set(const DirectoryIterator &iter, const char * path)
 
 	SCopy(GetFilename(*iter),FileName,_MAX_FNAME);
 	SCopy(*iter, DiskPath, _MAX_PATH-1);
-	Size = FileSize(*iter);
+	Size = iter.GetFileSize();
 	Status=C4GRES_OnDisk;
 	Packed=false;
 	ChildGroup=false;

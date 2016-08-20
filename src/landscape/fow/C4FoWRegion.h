@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2014-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2014-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -16,10 +16,10 @@
 #ifndef C4FOWREGION_H
 #define C4FOWREGION_H
 
-#include "C4Rect.h"
-#include "C4FacetEx.h"
-#include "C4Player.h"
-#include "C4FoW.h"
+#include "lib/C4Rect.h"
+#include "graphics/C4FacetEx.h"
+#include "player/C4Player.h"
+#include "landscape/fow/C4FoW.h"
 
 class C4Surface;
 
@@ -59,7 +59,7 @@ public:
 	// Fills a 2x3 matrix to transform fragment coordinates to light texture coordinates
 	void GetFragTransform(const C4Rect& clipRect, const C4Rect& outRect, float lightTransform[6]) const;
 private:
-	bool BindFramebuf();
+	bool BindFramebuf(GLuint prev_fb);
 
 };
 

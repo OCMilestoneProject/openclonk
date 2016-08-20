@@ -3,13 +3,14 @@
 	Cutscene to be watched by all players.
 	Start calling global func StartSequence, stop using StopSequence
 	
+	Can also be used as a trigger object for UserActions.
+	
 	@author Sven
 */
 
 local seq_name;
 local seq_progress;
 local started;
-
 
 /* Start and stop */
 
@@ -44,16 +45,44 @@ public func Start(string name, int progress, ...)
 
 protected func InitializePlayer(int plr)
 {
-	JoinPlayer(plr);
+	if (seq_name)
+	{
+		// Scripted sequence
+		JoinPlayer(plr);
+	}
+	else
+	{
+		// Editor-made sequence
+		if (trigger && trigger.Trigger == "player_join") OnTrigger(nil, plr);
+	}
+	return true;
+}
+
+protected func InitializePlayers(int plr)
+{
+	if (!seq_name)
+	{
+		// Editor-made sequence
+		if (trigger && trigger.Trigger == "game_start") OnTrigger();
+	}
 	return true;
 }
 
 public func RemovePlayer(int plr)
 {
-	// Called by sequence if it ends and by engine if player leaves.
-	var fn_remove = Format("~%s_RemovePlayer", seq_name);
-	if (!Call(fn_remove, plr))
-		GameCall(fn_remove, this, plr);
+	if (seq_name)
+	{
+		// Scripted sequence
+		// Called by sequence if it ends and by engine if player leaves.
+		var fn_remove = Format("~%s_RemovePlayer", seq_name);
+		if (!Call(fn_remove, plr))
+			GameCall(fn_remove, this, plr);
+	}
+	else
+	{
+		// Editor-made sequence
+		if (trigger && trigger.Trigger == "player_remove") OnTrigger(nil, plr);
+	}
 	return true;
 }
 
@@ -187,10 +216,6 @@ private func UpdateViewTarget(object view_target)
 	return;
 }
 
-/*-- Saving --*/
-
-// No scenario saving.
-public func SaveScenarioObject(props) { return false; }
 
 
 /*-- Message function forwards --*/
@@ -297,4 +322,365 @@ global func GetActiveSequence()
 {
 	var seq = FindObject(Find_ID(Sequence));
 	return seq;
+}
+
+
+/* User-made sequences from the editor */
+
+local Name="$Name$";
+local Description="$Description$";
+local trigger, condition, action, action_progress_mode, action_allow_parallel;
+local active=true;
+local check_interval=12;
+local deactivate_after_action; // If true, finished is set to true after the first execution and the trigger deactivated
+local Visibility=VIS_Editor;
+local trigger_started;
+public func IsSequence() { return true; }
+
+// finished: Disables the trigger. true if trigger has run and deactivate_after_action is set to true.
+// Note that this flag is not saved in scenarios, so saving as scenario and reloading will re-enable all triggers (for editor mode)
+local finished;
+
+public func Definition(def)
+{
+	// EditorActions
+	if (!def.EditorActions) def.EditorActions = {};
+	def.EditorActions.Test = { Name="$Test$", Command="OnTrigger(nil, nil, true)" };
+	// UserActions
+	UserAction->AddEvaluator("Action", "$Name$", "$SetActive$", "$SetActiveDesc$", "sequence_set_active", [def, def.EvalAct_SetActive], { Target = { Function="action_object" }, Status = { Function="bool_constant", Value=true } }, { Type="proplist", Display="{{Target}}: {{Status}}", EditorProps = {
+		Target = UserAction->GetObjectEvaluator("IsSequence", "$Name$"),
+		Status = new UserAction.Evaluator.Boolean { Name="$Status$", EditorHelp="$SetActiveStatusHelp$" }
+		} } );
+	// EditorProps
+	if (!def.EditorProps) def.EditorProps = {};
+	def.EditorProps.active = { Name="$Active$", Type="bool", Set="SetActive" };
+	def.EditorProps.finished = { Name="$Finished$", Type="bool", Set="SetFinished" };
+	def.EditorProps.trigger = { Name="$Trigger$", Type="enum", OptionKey="Trigger", Set="SetTrigger", Priority=110, Options = [
+		{ Name="$None$" },
+		{ Name="$PlayerEnterRegionRect$", EditorHelp="$PlayerEnterRegionHelp$", Value={ Trigger="player_enter_region_rect", Rect=[-20, -20, 40, 40] }, ValueKey="Rect", Delegate={ Type="rect", Color=0xff8000, Relative=true, Set="SetTriggerRect", SetRoot=true } },
+		{ Name="$PlayerEnterRegionCircle$", EditorHelp="$PlayerEnterRegionHelp$", Value={ Trigger="player_enter_region_circle", Radius=25 }, ValueKey="Radius", Delegate={ Type="circle", Color=0xff8000, Relative=true, Set="SetTriggerRadius", SetRoot=true } },
+		{ Name="$ObjectEnterRegionRect$", EditorHelp="$ObjectEnterRegionHelp$", Value={ Trigger="object_enter_region_rect", Rect=[-20, -20, 40, 40] }, Delegate={ Name="$ObjectEnterRegionRect$", EditorHelp="$ObjectEnterRegionHelp$", Type="proplist", EditorProps = {
+			ID = { Name="$ID$", EditorHelp="$IDHelp$", Type="def", Set="SetTriggerID", SetRoot=true },
+			Rect = { Type="rect", Color=0xff8000, Relative=true, Set="SetTriggerRect", SetRoot=true }
+			} } },
+		{ Name="$ObjectEnterRegionCircle$", EditorHelp="$ObjectEnterRegionHelp$", Value={ Trigger="object_enter_region_circle", Radius=25 }, Delegate={ Name="$ObjectEnterRegionCircle$", EditorHelp="$ObjectEnterRegionHelp$", Type="proplist", EditorProps = {
+			ID = { Name="$ID$", EditorHelp="$IDHelp$", Type="def", Set="SetTriggerID", SetRoot=true },
+			Radius = { Type="circle", Color=0xff8000, Relative=true, Set="SetTriggerRadius", SetRoot=true }
+			} } },
+		{ Name="$ObjectCountInContainer$", EditorHelp="$ObjectCountInContainerHelp$", Value={ Trigger="contained_object_count", Count=1 }, Delegate={ Name="$ObjectCountInContainer$", EditorHelp="$ObjectCountInContainerHelp$", Type="proplist", EditorProps = {
+			Container = { Name="$Container$", EditorHelp="$CountContainerHelp$", Type="object" },
+			ID = { Name="$ID$", EditorHelp="$CountIDHelp$", Type="def", EmptyName="$AnyID$" },
+			Count = { Name="$Count$", Type="int", Min=1 },
+			Operation = { Name="$Operation$", EditorHelp="$CountOperationHelp$", Type="enum", Options = [
+				{ Name="$GreaterEqual$", EditorHelp="$GreaterEqualHelp$" },
+				{ Name="$LessThan$", EditorHelp="$LessThanHelp$", Value="lt" }
+				] }
+			} } },
+		{ Name="$Interval$", EditorHelp="$IntervalHelp$", Value={ Trigger="interval", Interval=60 }, ValueKey="Interval", Delegate={ Name="$IntervalTime$", Type="int", Min=1, Set="SetIntervalTimer", SetRoot=true } },
+		{ Name="$GameStart$", Value={ Trigger="game_start" } },
+		{ Name="$PlayerJoin$", Value={ Trigger="player_join" } },
+		{ Name="$PlayerRemove$", Value={ Trigger="player_remove" } },
+		{ Name="$GoalsFulfilled$", Value={ Trigger="goals_fulfilled" } },
+		{ Group="$ClonkDeath$", Name="$AnyClonkDeath$", Value={ Trigger="any_clonk_death" } },
+		{ Group="$ClonkDeath$", Name="$PlayerClonkDeath$", Value={ Trigger="player_clonk_death" } },
+		{ Group="$ClonkDeath$", Name="$NeutralClonkDeath$", Value={ Trigger="neutral_clonk_death" } },
+		{ Group="$ClonkDeath$", Name="$SpecificClonkDeath$", Value={ Trigger="specific_clonk_death" }, ValueKey="Object", Delegate={ Type="object", Filter="IsClonk" } },
+		{ Name="$Construction$", Value={ Trigger="construction" }, ValueKey="ID", Delegate={ Type="def", Filter="IsStructure", EmptyName="$Anything$" } },
+		{ Name="$Production$", Value={ Trigger="production" }, ValueKey="ID", Delegate={ Type="def", EmptyName="$Anything$" } },
+		] };
+	def.EditorProps.condition = new UserAction.Evaluator.Boolean { Name="$Condition$" };
+	def.EditorProps.action = new UserAction.Prop { Priority=105 };
+	def.EditorProps.action_progress_mode = UserAction.PropProgressMode;
+	def.EditorProps.action_allow_parallel = UserAction.PropParallel;
+	def.EditorProps.deactivate_after_action = { Name="$DeactivateAfterAction$", Type="bool" };
+	def.EditorProps.check_interval = { Name="$CheckInterval$", EditorHelp="$CheckIntervalHelp$", Type="int", Set="SetCheckInterval", Save="Interval" };
+}
+
+public func SetTrigger(proplist new_trigger)
+{
+	trigger = new_trigger;
+	// Set trigger: Restart any specific trigger timers
+	if (active && !finished) StartTrigger();
+	return true;
+}
+
+public func SetTriggerRect(array new_trigger_rect)
+{
+	if (trigger && trigger.Rect)
+	{
+		trigger.Rect = new_trigger_rect;
+		SetTrigger(trigger); // restart trigger
+	}
+	return true;
+}
+
+public func SetTriggerRadius(int new_trigger_radius)
+{
+	if (trigger)
+	{
+		trigger.Radius = new_trigger_radius;
+		SetTrigger(trigger); // restart trigger
+	}
+	return true;
+}
+
+public func SetTriggerID(id new_id)
+{
+	if (trigger)
+	{
+		trigger.ID = new_id;
+		SetTrigger(trigger); // restart trigger
+	}
+	return true;
+}
+
+public func SetAction(new_action, new_action_progress_mode, new_action_allow_parallel)
+{
+	action = new_action;
+	action_progress_mode = new_action_progress_mode;
+	action_allow_parallel = new_action_allow_parallel;
+	return true;
+}
+
+public func SetCondition(new_condition)
+{
+	condition = new_condition;
+	return true;
+}
+
+public func SetActive(bool new_active, bool force_triggers)
+{
+	if (active == new_active && !force_triggers) return true;
+	active = new_active;
+	if (active && !finished)
+	{
+		// Activated: Start trigger
+		StartTrigger();
+	}
+	else
+	{
+		// Inactive or inactive by editor run: Stop trigger
+		StopTrigger();
+	}
+	return true;
+}
+
+public func SetFinished(bool new_finished)
+{
+	finished = new_finished;
+	return SetActive(active, true);
+}
+
+public func SetDeactivateAfterAction(bool new_val)
+{
+	deactivate_after_action = new_val;
+	return true;
+}
+
+public func StartTrigger()
+{
+	if (!trigger) return false;
+	if (trigger_started) StopTrigger();
+	trigger_started = true;
+	SetGraphics("Active");
+	var fn = trigger.Trigger;
+	var id_search;
+	if (trigger.ID) id_search = Find_ID(trigger.ID);
+	if (fn == "player_enter_region_rect")
+	{
+		this.search_mask = Find_And(Find_InRect(trigger.Rect[0], trigger.Rect[1], trigger.Rect[2], trigger.Rect[3]), Find_OCF(OCF_Alive), Find_Func("IsClonk"), Find_Not(Find_Owner(NO_OWNER)));
+		AddTimer(this.EnterRegionTimer, check_interval);
+	}
+	else if (fn == "player_enter_region_circle")
+	{
+		this.search_mask = Find_And(Find_Distance(trigger.Radius), Find_OCF(OCF_Alive), Find_Func("IsClonk"), Find_Not(Find_Owner(NO_OWNER)));
+		AddTimer(this.EnterRegionTimer, check_interval);
+	}
+	else if (fn == "object_enter_region_rect")
+	{
+		this.search_mask = Find_And(Find_InRect(trigger.Rect[0], trigger.Rect[1], trigger.Rect[2], trigger.Rect[3]), id_search);
+		AddTimer(this.EnterRegionTimer, check_interval);
+	}
+	else if (fn == "object_enter_region_circle")
+	{
+		this.search_mask = Find_And(Find_Distance(trigger.Radius), Find_OCF(OCF_Alive), Find_Func("IsClonk"), id_search);
+		AddTimer(this.EnterRegionTimer, check_interval);
+	}
+	else if (fn == "contained_object_count")
+	{
+		AddTimer(this.CountContainedObjectsTimer, check_interval);
+	}
+	else if (fn == "interval")
+	{
+		AddTimer(this.OnTrigger, trigger.Interval);
+	}
+	else return false;
+	return true;
+}
+
+public func StopTrigger()
+{
+	SetGraphics();
+	// Remove any timers that may have been added
+	RemoveTimer(this.EnterRegionTimer);
+	RemoveTimer(this.CountContainedObjectsTimer);
+	RemoveTimer(this.OnTrigger);
+	trigger_started = false;
+	return true;
+}
+
+public func SetCheckInterval(new_interval)
+{
+	check_interval = Max(1, new_interval);
+	return SetTrigger(trigger); // restart trigger
+}
+
+public func SetIntervalTimer(int new_interval)
+{
+	if (trigger) trigger.Interval = new_interval;
+	return SetTrigger(trigger); // restart trigger
+}
+
+private func EnterRegionTimer()
+{
+	for (var clonk in FindObjects(this.search_mask))
+	{
+		if (!clonk) continue; // deleted by previous execution
+		OnTrigger(clonk, clonk->GetOwner());
+		if (active != true) break; // deactivated by trigger
+	}
+}
+
+private func CountContainedObjectsTimer()
+{
+	if (trigger.Container)
+	{
+		var n = trigger.Container->ContentsCount(trigger.ID), f;
+		if (!trigger.Operation) 
+			f = (n >= trigger.Count); // Operation == nil: greater than
+		else
+			f = (n < trigger.Count); // Operation == "lt": less than
+		if (f) OnTrigger(nil, NO_OWNER);
+	}
+}
+
+public func OnTrigger(object triggering_clonk, int triggering_player, bool is_editor_test)
+{
+	// Editor test: Triggered by first player
+	if (is_editor_test)
+	{
+		if (GetPlayerCount(C4PT_User)) triggering_player = GetPlayerByIndex();
+	}
+	// Check condition
+	if (condition && !UserAction->EvaluateCondition(condition, this, triggering_clonk, triggering_player)) return false;
+	// Only one action at the time
+	if (!action_allow_parallel) StopTrigger();
+	// Execute action
+	return UserAction->EvaluateAction(action, this, triggering_clonk, triggering_player, action_progress_mode, action_allow_parallel, this.OnActionFinished);
+}
+
+private func OnActionFinished(context)
+{
+	// Callback from EvaluateAction: Action finished. Deactivate action if desired.
+	if (deactivate_after_action)
+		SetFinished(true);
+	else if (active && !finished && !trigger_started)
+		StartTrigger();
+	return true;
+}
+
+public func OnClonkDeath(object clonk, int killer)
+{
+	// Is this a clonk death trigger?
+	if (!trigger || !clonk) return false;
+	var t = trigger.Trigger;
+	if (!WildcardMatch(t, "*_clonk_death")) return false;
+	// Specific trigger check
+	if (t == "player_clonk_death")
+	{
+		if (clonk->GetOwner() == NO_OWNER) return false;
+	}
+	else if (t == "neutral_clonk_death")
+	{
+		if (clonk->GetOwner() != NO_OWNER) return false;
+	}
+	else if (t == "specific_clonk_death")
+	{
+		if (trigger.Object != clonk) return false;
+	}
+	// OK, trigger it!
+	return OnTrigger(clonk, killer);
+}
+
+public func OnConstructionFinished(object structure, int constructing_player)
+{
+	// Is this a structure finished trigger?
+	if (!trigger || !structure) return false;
+	if (trigger.Trigger != "construction") return false;
+	if (trigger.ID) if (structure->GetID() != trigger.ID) return false;
+	// OK, trigger it!
+	return OnTrigger(structure, constructing_player);
+}
+
+public func OnProductionFinished(object product, int producing_player)
+{
+	// Is this a structure finished trigger?
+	if (!trigger || !product) return false;
+	if (trigger.Trigger != "production") return false;
+	if (trigger.ID) if (product->GetID() != trigger.ID) return false;
+	// OK, trigger it!
+	return OnTrigger(product, producing_player);
+}
+
+public func OnGoalsFulfilled()
+{
+	// All goals fulfilled: Return true if any action is executed (stops regular GameOver)
+	if (!trigger) return false;
+	if (trigger.Trigger != "goals_fulfilled") return false;
+	return OnTrigger();
+}
+
+public func SetName(string new_name, ...)
+{
+	if (new_name == GetID()->GetName())
+	{
+		Message("");
+	}
+	else
+	{
+		if (trigger)
+			Message(Format("@<c ff8000>%s</c>", new_name));
+		else
+			Message(Format("@<c 808080>%s</c>", new_name));
+	}
+	return inherited(new_name, ...);
+}
+
+private func EvalAct_SetActive(proplist props, proplist context)
+{
+	// User action: Enable/disable sequence
+	var target = UserAction->EvaluateValue("Object", props.Target, context);
+	var status = UserAction->EvaluateValue("Boolean", props.Status, context);
+	if (!target) return;
+	if (status && target.finished) target->~SetFinished(false);
+	target->~SetActive(status);
+}
+
+/*-- Saving --*/
+
+// No scenario saving.
+public func SaveScenarioObject(props, ...)
+{
+	if (!_inherited(props, ...)) return false;
+	// Do not save script-created sequences
+	if (this.seq_name) return false;
+	// Save editor-made sequences
+	if (save_scenario_dup_objects && finished) // finished flag only copied for object duplication; not saved in savegames
+		props->AddCall("Active", this, "SetFinished", finished);
+	if (!active) props->AddCall("Active", this, "SetActive", active);
+	if (trigger) props->AddCall("Trigger", this, "SetTrigger", trigger);
+	if (condition) props->AddCall("Condition", this, "SetCondition", condition);
+	if (action || action_progress_mode || action_allow_parallel) props->AddCall("Action", this, "SetAction", action, action_progress_mode, action_allow_parallel);
+	if (deactivate_after_action) props->AddCall("DeactivateAfterAction", this, "SetDeactivateAfterAction", deactivate_after_action);
+	return true;
 }

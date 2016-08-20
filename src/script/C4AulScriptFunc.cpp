@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2009-2014, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -13,11 +13,11 @@
  * for the above references.
  */
 
-#include <C4Include.h>
-#include <C4AulScriptFunc.h>
+#include "C4Include.h"
+#include "script/C4AulScriptFunc.h"
 
-#include <C4AulExec.h>
-#include <C4ScriptHost.h>
+#include "script/C4AulExec.h"
+#include "script/C4ScriptHost.h"
 
 C4AulScriptFunc::C4AulScriptFunc(C4PropListStatic * Parent, C4ScriptHost *pOrgScript, const char *pName, const char *Script):
 		C4AulFunc(Parent, pName),
@@ -62,38 +62,12 @@ void C4AulScriptFunc::SetOverloaded(C4AulFunc * f)
 void C4AulScriptFunc::AddBCC(C4AulBCCType eType, intptr_t X, const char * SPos)
 {
 	// store chunk
-	C4AulBCC bcc;
-	bcc.bccType = eType;
-	bcc.Par.X = X;
-	Code.push_back(bcc);
+	Code.emplace_back(eType, X);
 	PosForCode.push_back(SPos);
-
-	switch (eType)
-	{
-	case AB_STRING: case AB_CALL: case AB_CALLFS: case AB_LOCALN: case AB_PROP:
-	/* case AB_LOCALN_SET/AB_PROP_SET: -- expected to already have a reference upon creation, see MakeSetter */
-		bcc.Par.s->IncRef();
-		break;
-	case AB_CARRAY:
-		bcc.Par.a->IncRef();
-		break;
-	default: break;
-	}
 }
 
 void C4AulScriptFunc::RemoveLastBCC()
 {
-	C4AulBCC *pBCC = &Code.back();
-	switch (pBCC->bccType)
-	{
-	case AB_STRING: case AB_CALL: case AB_CALLFS: case AB_LOCALN: case AB_LOCALN_SET: case AB_PROP: case AB_PROP_SET:
-		pBCC->Par.s->DecRef();
-		break;
-	case AB_CARRAY:
-		pBCC->Par.a->DecRef();
-		break;
-	default: break;
-	}
 	Code.pop_back();
 	PosForCode.pop_back();
 }

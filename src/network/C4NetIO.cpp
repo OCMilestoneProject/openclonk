@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -14,10 +14,11 @@
  * for the above references.
  */
 #include "C4Include.h"
-#include "C4NetIO.h"
+#include "network/C4NetIO.h"
+#include "lib/C4Random.h"
 
-#include "C4Constants.h"
-#include "C4Config.h"
+#include "config/C4Constants.h"
+#include "config/C4Config.h"
 
 #include <utility>
 #include <assert.h>
@@ -1887,7 +1888,7 @@ bool C4NetIOUDP::InitBroadcast(addr_t *pBroadcastAddr)
 		{
 			// create new - random - address
 			MCAddr.sin_addr.s_addr =
-			   0x000000ef | ((rand() & 0xff) << 24) | ((rand() & 0xff) << 16) | ((rand() & 0xff) << 8);
+			   0x000000ef | (UnsyncedRandom(0x1000000) << 8);
 			// init broadcast
 			if (!C4NetIOSimpleUDP::InitBroadcast(&MCAddr))
 				return false;
@@ -3016,7 +3017,7 @@ bool C4NetIOUDP::SendDirect(C4NetIOPacket &&rPacket) // (mt-safe)
 
 #ifdef C4NETIO_SIMULATE_PACKETLOSS
 	if ((rPacket.getStatus() & 0x7F) != IPID_Test)
-		if (SafeRandom(100) < C4NETIO_SIMULATE_PACKETLOSS) return true;
+		if (UnsyncedRandom(100) < C4NETIO_SIMULATE_PACKETLOSS) return true;
 #endif
 
 	// send it
@@ -3031,7 +3032,7 @@ bool C4NetIOUDP::DoLoopbackTest()
 	if (!C4NetIOSimpleUDP::getMCLoopback()) return false;
 
 	// send test packet
-	const PacketHdr TestPacket = { uint8_t(IPID_Test | 0x80), static_cast<uint32_t>(rand()) };
+	const PacketHdr TestPacket = { uint8_t(IPID_Test | 0x80), UnsyncedRandom(UINT32_MAX) };
 	if (!C4NetIOSimpleUDP::Broadcast(C4NetIOPacket(&TestPacket, sizeof(TestPacket))))
 		return false;
 

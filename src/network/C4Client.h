@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2010-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2010-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -16,9 +16,9 @@
 #ifndef C4CLIENT_H
 #define C4CLIENT_H
 
-#include "C4NetIO.h"
-#include "C4PacketBase.h"
-#include "C4InputValidation.h"
+#include "network/C4NetIO.h"
+#include "network/C4PacketBase.h"
+#include "lib/C4InputValidation.h"
 
 // special ids
 const int32_t C4ClientIDUnknown = -1,
@@ -169,6 +169,7 @@ public:
 	const C4ClientCore &getLocalCore() const { return getLocal()->getCore(); }
 	const char *getLocalName() const { return pLocal ? getLocalCore().getName() : "???"; }
 	int32_t getLocalID() const { return pLocal ? getLocalCore().getID() : C4ClientIDUnknown; }
+	StdStrBuf GetAllClientNames() const;
 
 	bool Init(int32_t iLocalClientID = C4ClientIDHost);
 	void InitNetwork(class C4Network2ClientList *pNetClients);

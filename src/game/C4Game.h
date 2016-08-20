@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,12 +20,12 @@
 #ifndef INC_C4Game
 #define INC_C4Game
 
-#include <C4Scenario.h>
-#include <C4PathFinder.h>
-#include <C4Extra.h>
-#include "C4Scoreboard.h"
-#include <C4PlayerControl.h>
-#include <C4TransferZone.h>
+#include "landscape/C4Scenario.h"
+#include "landscape/C4PathFinder.h"
+#include "c4group/C4Extra.h"
+#include "gui/C4Scoreboard.h"
+#include "control/C4PlayerControl.h"
+#include "landscape/C4TransferZone.h"
 
 #include <memory>
 
@@ -83,7 +83,6 @@ public:
 	C4Extra             Extra;
 	class C4ScenarioObjectsScriptHost *pScenarioObjectsScript;
 	C4ScenarioSection   *pScenarioSections, *pCurrentScenarioSection;
-	C4Effect            *pGlobalEffects;
 	C4PlayerControlDefs PlayerControlDefs;
 	C4PlayerControlAssignmentSets PlayerControlUserAssignmentSets, PlayerControlDefaultAssignmentSets;
 	C4Scoreboard        Scoreboard;
@@ -99,11 +98,13 @@ public:
 	char PlayerFilenames[20*_MAX_PATH+1];
 	char DefinitionFilenames[20*_MAX_PATH+1];
 	char DirectJoinAddress[_MAX_PATH+1];
+	char DirectJoinTempFilename[_MAX_PATH + 1];
 	std::unique_ptr<C4Network2Reference> pJoinReference;
 	int32_t StartupPlayerCount;
 	int32_t StartupTeamCount;
 	int32_t FPS,cFPS;
 	int32_t HaltCount;
+	bool InitialPlayersJoined; // true after the InitializeFinal callback has been made
 	bool GameOver;
 	bool Evaluated;
 	bool GameOverDlgShown;
@@ -146,8 +147,9 @@ public:
 	void Evaluate();
 	void ShowGameOverDlg();
 	bool DoKeyboardInput(C4KeyCode vk_code, C4KeyEventType eEventType, bool fAlt, bool fCtrl, bool fShift, bool fRepeated, class C4GUI::Dialog *pForDialog=NULL, bool fPlrCtrlOnly=false, int32_t iStrength=-1);
+	bool DoKeyboardInput(C4KeyCodeEx Key, C4KeyEventType eEventType, class C4GUI::Dialog *pForDialog=NULL, bool fPlrCtrlOnly=false, int32_t iStrength=-1);
 	void DrawCrewOverheadText(C4TargetFacet &cgo, int32_t iPlayer);
-	void FixRandom(int32_t iSeed);
+	void FixRandom(uint64_t iSeed);
 	bool Init();
 	bool PreInit();
 	void SetScenarioFilename(const char*);
@@ -243,6 +245,7 @@ protected:
 	bool InitGame(C4Group &hGroup, bool fLoadSection, bool fLoadSky, C4ValueNumbers *);
 	bool InitGameFinal();
 	bool InitNetworkFromAddress(const char *szAddress);
+	bool InitNetworkFromReferenceFile(const char *temp_filename);
 	bool InitNetworkFromReference(const C4Network2Reference &Reference);
 	bool InitNetworkHost();
 	bool InitControl();
@@ -276,6 +279,8 @@ protected:
 public:
 	bool ToggleChart(); // chart dlg on/off
 	void SetGlobalSoundModifier(C4PropList *modifier_props);
+
+	static constexpr const char * DirectJoinFilePrefix = "file:";
 };
 
 extern C4Game         Game;

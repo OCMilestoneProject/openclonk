@@ -4,7 +4,7 @@
  * Copyright (c) 2005, Sven Eberhardt
  * Copyright (c) 2005-2006, Günther Brammer
  * Copyright (c) 2006, Armin Burgmeier
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -19,12 +19,16 @@
 #ifndef INC_STDAPP
 #define INC_STDAPP
 
-#include <StdScheduler.h>
-#include <StdSync.h>
-#include <C4StdInProc.h>
+#include "platform/StdScheduler.h"
+#include "platform/StdSync.h"
+#include "platform/C4StdInProc.h"
 
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
+#endif
+
+#ifdef USE_SDL_MAINLOOP
+#include <SDL.h>
 #endif
 
 #ifdef USE_WIN32_WINDOWS
@@ -67,6 +71,9 @@ public:
 
 	virtual bool DoScheduleProcs(int iTimeout);
 	bool FlushMessages();
+#ifdef WITH_QT_EDITOR
+	void ProcessQtEvents();
+#endif
 	C4Window * pWindow;
 	bool fQuitMsgReceived; // if true, a quit message has been received and the application should terminate
 
@@ -118,11 +125,7 @@ public:
 	pthread_t MainThread;
 #endif
 
-#if defined(USE_GTK)
-protected:
-	class C4X11AppImpl * Priv;
-
-#elif defined(USE_SDL_MAINLOOP)
+#if defined(USE_SDL_MAINLOOP)
 public:
 	void HandleSDLEvent(SDL_Event& event);
 

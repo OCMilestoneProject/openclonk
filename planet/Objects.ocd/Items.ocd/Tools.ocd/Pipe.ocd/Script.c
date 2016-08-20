@@ -1,83 +1,99 @@
-/*-- Pipe
+/**
+	Pipe
 
-	Author: ST-DDT
---*/
+	Author: ST-DDT, Marky
 
-local Name = "$Name$";
-local Description = "$Description$";
-local Collectible = 1;
-local PipeState = nil;
+	The pipe has several states:
+	- neutral
+	- source (green line)
+	- drain (red line)
+
+	By default a pipe is neutral, and stays neutral if you connect it to a liquid tank.
+	- Connected neutral pipes cannot be connected to another (neutral) liquid tank
+	  (this would not make any sense, or maybe it does if you want to have a liquid
+	   tank array, but this would lead to all kinds of complications and special
+	   cases eventually).
+
+	However, a pipe can be connected to a liquid transferring structure (pump), too.
+	- Neutral pipes can be connected to a pump. They then become a drain or source pipe.
+	- Connected neutral pipes can be connected to a pump. See above.
+	- Source pipes can be connected to liquid tanks only.
+	- Drain pipes can be connected to liquid tanks only.
+
+	Logic for object use from inventory and interaction menu:
+	- Both know the using Clonk (interaction menu: the container of the pipe)
+	- The user may want to connect a drain pipe before connecting a source pipe
+	- The user may want to connect a neutral pipe
+	=> separate functions are necessary	
+*/
+
+static const PIPE_STATE_Neutral = nil;
+static const PIPE_STATE_Source = "Source";
+static const PIPE_STATE_Drain = "Drain";
+static const PIPE_STATE_Air = "Air";
+
+local ApertureOffsetX = 0;
+local ApertureOffsetY = 3;
+
+/* ---------- Callbacks ---------- */
 
 protected func Hit()
 {
 	Sound("Hits::GeneralHit?");
 }
 
-public func IsToolProduct() { return true; }
-
-/*-- Line connection --*/
-
-/** Will connect power line to building at the clonk's position. */
-protected func ControlUse(object clonk, int x, int y)
+private func Destruction()
 {
-	// Is this already connected to a liquid pump?
-	if (FindObject(Find_Func("IsConnectedTo",this)))
-		return false;
-		
-	// Is there an object which accepts power lines?
-	var liquid_pump = FindObject(Find_AtPoint(), Find_Func("IsLiquidPump"));
-	// No liquid pump, display message.
-	if (!liquid_pump)
-	{
-		clonk->Message("$MsgNoNewPipe$");
-		return true;
-	}
-	
-	// already two pipes connected
-	if(liquid_pump->GetSource() && liquid_pump->GetDrain())
-	{
-		clonk->Message("$MsgHasPipes$");
-		return true;
-	}
-	
-	// Create and connect pipe.
-	var pipe = CreateObjectAbove(PipeLine, 0, 0, NO_OWNER);
-	pipe->SetActionTargets(this, liquid_pump);
-	Sound("Objects::Connect");
-	
-	// If liquid pump has no source yet, create one.
-	if (!liquid_pump->GetSource())
-	{
-		liquid_pump->SetSource(pipe);
-		clonk->Message("$MsgCreatedSource$");
-		SetGraphics("Source", Pipe, GFX_Overlay, GFXOV_MODE_Picture);
-		Description = "$DescriptionSource$";
-		Name = "$NameSource$";
-		pipe->SetSource();
-		PipeState = "Source";
-	}
-	// Otherwise if liquid pump has no drain, create one.
-	else
-	{
-		liquid_pump->SetDrain(pipe);
-		clonk->Message("$MsgCreatedDrain$");
-		SetGraphics("Drain", Pipe, GFX_Overlay, GFXOV_MODE_Picture);
-		Description = "$DescriptionDrain$";
-		Name = "$NameDrain$";
-		pipe->SetDrain();
-		PipeState = "Drain";
-	}
-	return true;
+	// remove the line first, so that it does not provoke errors on destruction
+	var line = GetConnectedLine();
+	if (line) line->RemoveObject();
 }
 
-// Line broke or something
-public func ResetPicture()
+
+public func IsToolProduct() { return true;}
+
+public func OnPipeLineRemoval()
 {
-	SetGraphics("", nil, GFX_Overlay, GFXOV_MODE_Picture);
-	Description = "$Description$";
-	Name = "$Name$";
-	PipeState = nil;
-	return true;
+	SetNeutralPipe();
+	OnPipeLengthChange();
+	return;
+}
+
+public func OnPipeLengthChange()
+{
+	// Update usage bar for a possible carrier (the clonk).
+	var carrier = Contained();
+	if (carrier)
+		carrier->~OnInventoryChange();
+	return;
+}
+
+// Display the line length bar over the pipe icon.
+public func GetInventoryIconOverlay()
+{
+	var pipe = GetConnectedLine();
+	if (!pipe) return;
+
+	var percentage = 100 * pipe->GetPipeLength() / pipe.PipeMaxLength;
+	var red = percentage * 255 / 100;
+	var green = 255 - red;
+	// Overlay a usage bar.
+	var overlay = 
+	{
+		Bottom = "0.75em",
+		Margin = ["0.1em", "0.25em"],
+		BackgroundColor = RGB(0, 0, 0),
+		margin = 
+		{
+			Margin = "0.05em",
+			bar = 
+			{
+				BackgroundColor = RGB(red, green, 0),
+				Right = Format("%d%%", percentage),
+			}
+		}
+	};
+	return overlay;
 }
 
 public func CanBeStackedWith(object other)
@@ -86,12 +102,13 @@ public func CanBeStackedWith(object other)
 	return inherited(other) && (PipeState == other.PipeState);
 }
 
-/* Cycling through several aperture offset indices to prevent easy clogging */
 
-// default: pump from bottom vertex
-local ApertureOffsetX = 0;
-local ApertureOffsetY = 3;
-
+/**
+ The pump calls this function to prevent clogging of the intake.
+ Cycles through several aperture offset indices.
+ */
+public func HasAperture() { return true; }
+ 
 public func CycleApertureOffset()
 {
 	// Cycle in three steps of three px each through X and Y
@@ -101,9 +118,230 @@ public func CycleApertureOffset()
 	return true;
 }
 
-/* Container dies: Drop connected pipes so they don't draw huge lines over the landscape */
-
-public func IsDroppedOnDeath(object clonk)
+/**
+  Container dies: Drop connected pipes so they don't
+  draw huge lines over the landscape
+ */
+func IsDroppedOnDeath(object clonk)
 {
-	return !!FindObject(Find_Func("IsConnectedTo",this));
+	return !!GetConnectedLine();
 }
+
+
+/* ---------- Pipe States ---------- */
+
+
+public func IsNeutralPipe(){ return PipeState == PIPE_STATE_Neutral; }
+public func IsDrainPipe(){ return PipeState == PIPE_STATE_Drain; }
+public func IsSourcePipe(){ return PipeState == PIPE_STATE_Source; }
+public func IsAirPipe(){ return PipeState == PIPE_STATE_Air; }
+
+public func SetNeutralPipe()
+{
+	PipeState = PIPE_STATE_Neutral;
+
+	SetGraphics("", nil, GFX_Overlay, GFXOV_MODE_Picture);
+	Description = "$Description$";
+	Name = "$Name$";
+
+	var line = GetConnectedLine();
+	if (line)
+	{
+		line->SetNeutral();
+	}
+}
+
+public func SetDrainPipe()
+{
+	PipeState = PIPE_STATE_Drain;
+	
+	SetGraphics("Drain", Pipe, GFX_Overlay, GFXOV_MODE_Picture);
+	SetObjDrawTransform(1000, 0, 0, 0, 1000, 10000, GFX_Overlay);
+	Description = "$DescriptionDrain$";
+	Name = "$NameDrain$";
+
+	var line = GetConnectedLine();
+	if (line)
+	{
+		line->SetDrain();
+	}
+}
+
+public func SetSourcePipe()
+{
+	PipeState = PIPE_STATE_Source;
+
+	SetGraphics("Source", Pipe, GFX_Overlay, GFXOV_MODE_Picture);
+	SetObjDrawTransform(1000, 0, 0, 0, 1000, 10000, GFX_Overlay);
+	Description = "$DescriptionSource$";
+	Name = "$NameSource$";
+
+	var line = GetConnectedLine();
+	if (line)
+	{
+		line->SetSource();
+	}
+}
+
+public func SetAirPipe()
+{
+	PipeState = PIPE_STATE_Air;
+
+	SetGraphics("Air", Pipe, GFX_Overlay, GFXOV_MODE_Picture);
+	SetObjDrawTransform(1000, 0, 0, 0, 1000, 10000, GFX_Overlay);
+	Description = "$DescriptionAir$";
+	Name = "$NameAir$";
+
+	var line = GetConnectedLine();
+	if (line)
+	{
+		line->SetAir();
+	}
+}
+
+/* ---------- Pipe Connection ---------- */
+
+
+func ConnectPipeTo(object target, string specific_pipe_state)
+{
+	if (!target || target->~QueryConnectPipe(this)) return false;
+	AddLineConnectionTo(target);
+	target->OnPipeConnect(this, specific_pipe_state);
+	Sound("Objects::Connect");
+	return true;
+}
+
+/* ---------- Line Connection ---------- */
+
+
+/**
+ Finds a line that is connected to this pipe kit.
+ @return object the pipe, or nil if nothing was found.
+ */
+func GetConnectedLine()
+{
+	return FindObject(Find_Func("IsConnectedTo", this));
+}
+
+
+/**
+ Connects a line to an object.
+
+ The pipe kit will connect the line to the target object and itself first.
+ Otherwise, if the pipe kit already has a line, it connects that line to the target.
+
+ Note: Reports a fatal error if the line would be connected to more than two targets
+       at the same time.
+      
+ @par target the target object
+ */
+func AddLineConnectionTo(object target)
+{
+	var line = GetConnectedLine();
+	if (line)
+	{
+		if (line->IsConnectedTo(this, true))
+		{
+			line->SwitchConnection(this, target);
+			ScheduleCall(this, this.Enter, 1, nil, line); // delayed entrance, so that the message is still displayed above the clonk
+			return line;
+		}
+		else
+		{
+			FatalError("This line is connected to two objects already!");
+		}
+	}
+	else
+	{
+		return CreateLine(target);
+	}
+}
+
+
+/**
+ Cuts the connection between the line and an object.
+ 
+ Note: Reports a fatal error if the target was not
+       connected to the line.
+ 
+ @par target the target object
+ */
+func CutLineConnection(object target)
+{
+	var line = GetConnectedLine();
+	if (!line) return;
+
+	// connected only to the kit and a structure
+	if (line->IsConnectedTo(this, true)) 
+	{
+		target->OnPipeDisconnect(this);
+		line->RemoveObject();
+	}
+	// connected to the target and another structure
+	else if (line->IsConnectedTo(target, true))
+	{
+		target->OnPipeDisconnect(this);
+		Exit(); // the kit was inside the line at this point.
+		SetPosition(target->GetX(), target->GetY());
+		line->SwitchConnection(target, this);
+	}
+	else
+	{
+		FatalError(Format("An object %v is trying to cut the pipe connection, but only objects %v and %v may request a disconnect", target, line->GetActionTarget(0), line->GetActionTarget(1)));
+	}
+}
+
+
+/**
+ Creates a new pipe line that is connected to this pipe kit.
+ @par target the target object.
+ @return object the line that was created
+ */
+func CreateLine(object target)
+{
+	// Create and connect pipe line.
+	var line = CreateObject(PipeLine, 0, 0, NO_OWNER);
+	line->SetActionTargets(this, target);
+	line->SetPipeKit(this);
+	return line;
+}
+
+
+/** Will connect liquid line to building at the clonk's position. */
+protected func ControlUse(object clonk, int x, int y)
+{
+	var target = FindObject(Find_AtPoint(), Find_Func("CanConnectPipe"));
+	if (target)
+	{
+		ConnectPipeTo(target);
+	}
+	return true;
+}
+
+
+/**
+ Displays a message at top-level container of this object.
+ @par message the message
+ */
+func Report(string message)
+{
+	var reporter = this;
+	var next = Contained();
+	
+	while(next)
+	{
+		reporter = next;
+		next = reporter->Contained();
+	}
+	
+	reporter->Message(message, ...);
+}
+
+
+/*-- Properties --*/
+
+local Name = "$Name$";
+local Description = "$Description$";
+local Collectible = 1;
+local PipeState = nil;
+local Components = {Metal = 1};

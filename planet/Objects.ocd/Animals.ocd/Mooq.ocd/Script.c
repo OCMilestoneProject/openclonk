@@ -62,8 +62,6 @@ func Construction()
 	CheckTurn(GetDir());
 
 	SetTailOnFire();
-
-	SetCreatureControlled();
 }
 
 func Death()
@@ -72,12 +70,12 @@ func Death()
 	RemoveTimer("UpdateFood");
 	RemoveEffect("IntActivity", this);
 
-	Sound("MooqDie*");
+	Sound("Animals::Mooq::Die*");
 }
 
 func CatchBlow(int damage, object from)
 {
-	Schedule(this, "Sound(\"MooqHurt*\")", RandomX(5, 20));
+	Schedule(this, "Sound(\"Animals::Mooq::Hurt*\")", RandomX(5, 20));
 }
 
 /* Action Callbacks */
@@ -130,9 +128,9 @@ func SpitPhase()
 		if (!GetDir()) iXDir = -iXDir;
 		iYDir = -300;
 
-		Sound("MooqSpit*");
+		Sound("Animals::Mooq::Spit*");
 
-		var obj = CreateContents(MooqFirebomb);
+		var obj = CreateContents(Mooq_Firebomb);
 		obj->Exit(iX, iY);
 		obj->SetXDir(iXDir,100);
 		obj->SetYDir(iYDir,100);
@@ -158,7 +156,7 @@ func EatPhase()
 	{
 		if (!food) return;
 
-		Sound("MooqMunch*");
+		Sound("Animals::Mooq::Munch*");
 		DoEnergy(food->GetMass());
 		food->RemoveObject();
 	}
@@ -283,7 +281,7 @@ func FxIntActivityDamage(target, effect, dmg)
 
 func TaskIdle()
 {
-	Sound("MooqSnorting*");
+	Sound("Animals::Mooq::Snorting*");
 
 	if (!Random(3)) return SetAction("IdleSit");
 	if (!Random(2)) return SetAction("IdleStand");
@@ -466,13 +464,13 @@ func DoJump(bool swimming)
 		if (!GetDir()) iXDir = -iXDir;
 		iYDir = -200;
 
-		if (Random(2)) Sound("MooqSnort*");
+		if (Random(2)) Sound("Animals::Mooq::Snort*");
 
 		SetSpeed(iXDir + GetXDir(100), iYDir + GetYDir(100), 100);
 		return true;
 	}
 
-	if (Random(2)) Sound("MooqSnort*");
+	if (Random(2)) Sound("Animals::Mooq::Snort*");
 	return Jump();
 }
 
@@ -508,7 +506,7 @@ func UpdateEnemy()
 
 	var x = GetX();
 	var y = GetY();
-	for (var obj in FindObjects(Find_Distance(200), Find_OCF(OCF_Alive), Find_Hostile(GetOwner()), Sort_Distance()))
+	for (var obj in FindObjects(Find_Distance(200), Find_OCF(OCF_Alive), Find_AnimalHostile(GetOwner()), Sort_Distance()))
 	{
 		if (!PathFree(x, y, obj->GetX(), obj->GetY())) continue;
 		if (obj->GBackLiquid()) continue;
@@ -923,3 +921,5 @@ local Speed = MaxSpeed;
 local MaxJumpSpeed = 300;
 local JumpSpeed = MaxJumpSpeed;
 local NoBurnDecay = 1;
+local BorderBound = C4D_Border_Sides;
+local ContactCalls = true;

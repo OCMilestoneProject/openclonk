@@ -51,10 +51,24 @@ protected func ControlUse(object clonk)
 // Nutritional value depends on the completion of the mushroom.
 public func NutritionalValue() { return GetCon() / 10; }
 
+/*-- Display --*/
+
+public func GetCarryMode()
+{
+	return CARRY_Hand;
+}
+
+public func GetCarryTransform()
+{
+	return Trans_Scale(750);
+}
+
 public func IsAnimalFood()
 {
 	return true;
 }
+
+/*-- Properties --*/
 
 local Name = "$Name$";
 local Description = "$Description$";

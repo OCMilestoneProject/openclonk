@@ -32,6 +32,8 @@ public func NoConstructionFlip() { return true; }
 // Is a construction that is built just below the surface.
 public func IsBelowSurfaceConstruction() { return true; }
 
+public func IsHammerBuildable() { return true; }
+
 public func ConstructionCombineWith()
 {
 	return "ConnectWoodenBridge";
@@ -130,3 +132,4 @@ local BlastIncinerate = 2;
 local ContactIncinerate = 8;
 local NoBurnDecay = true;
 local HitPoints = 80;
+local Components = {Wood = 3};

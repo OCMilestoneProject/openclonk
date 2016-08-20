@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,22 +17,23 @@
 
 /* Mouse input */
 
-#include <C4Include.h>
-#include <C4MouseControl.h>
+#include "C4Include.h"
+#include "gui/C4MouseControl.h"
 
-#include <C4Viewport.h>
-#include <C4Object.h>
-#include <C4Application.h>
-#include <C4FullScreen.h>
-#include <C4Gui.h>
-#include <C4Landscape.h>
-#include <C4Game.h>
-#include <C4Player.h>
-#include "C4ChatDlg.h"
-#include <C4GraphicsResource.h>
-#include <C4PlayerList.h>
-#include <C4GameControl.h>
-#include <C4ScriptGuiWindow.h>
+#include "game/C4Viewport.h"
+#include "object/C4Def.h"
+#include "object/C4Object.h"
+#include "game/C4Application.h"
+#include "game/C4FullScreen.h"
+#include "gui/C4Gui.h"
+#include "landscape/C4Landscape.h"
+#include "game/C4Game.h"
+#include "player/C4Player.h"
+#include "gui/C4ChatDlg.h"
+#include "graphics/C4GraphicsResource.h"
+#include "player/C4PlayerList.h"
+#include "control/C4GameControl.h"
+#include "gui/C4ScriptGuiWindow.h"
 
 const int32_t C4MC_Drag_None            = 0,
               C4MC_Drag_Script          = 6,
@@ -347,6 +348,11 @@ void C4MouseControl::DoMoveInput()
 void C4MouseControl::Draw(C4TargetFacet &cgo, const ZoomData &GameZoom)
 {
 	int32_t iOffsetX,iOffsetY;
+	float wdt = GfxR->fctMouseCursor.Wdt, hgt = GfxR->fctMouseCursor.Hgt;
+	// Cursor size relative to height - does not matter with current square graphics.
+	float zoom = Config.Graphics.MouseCursorSize / hgt;
+	hgt *= zoom;
+	wdt *= zoom;
 
 	ZoomData GuiZoom;
 	pDraw->GetZoom(&GuiZoom);
@@ -366,19 +372,19 @@ void C4MouseControl::Draw(C4TargetFacet &cgo, const ZoomData &GameZoom)
 		//------------------------------------------------------------------------------------------
 	case C4MC_Drag_None: case C4MC_Drag_Script: case C4MC_Drag_Unhandled:
 		// Hotspot offset: Usually, hotspot is in center
-		iOffsetX = GfxR->fctMouseCursor.Wdt/2;
-		iOffsetY = GfxR->fctMouseCursor.Hgt/2;
+		iOffsetX = wdt/2;
+		iOffsetY = hgt/2;
 		// calculate the hotspot for the scrolling cursors
 		switch (Cursor)
 		{
-		case C4MC_Cursor_Up: iOffsetY += -GfxR->fctMouseCursor.Hgt/2; break;
-		case C4MC_Cursor_Down:iOffsetY += +GfxR->fctMouseCursor.Hgt/2; break;
-		case C4MC_Cursor_Left: iOffsetX += -GfxR->fctMouseCursor.Wdt/2; break;
-		case C4MC_Cursor_Right: iOffsetX += +GfxR->fctMouseCursor.Wdt/2; break;
-		case C4MC_Cursor_UpLeft: iOffsetX += -GfxR->fctMouseCursor.Wdt/2; iOffsetY += -GfxR->fctMouseCursor.Hgt/2; break;
-		case C4MC_Cursor_UpRight: iOffsetX += +GfxR->fctMouseCursor.Wdt/2; iOffsetY += -GfxR->fctMouseCursor.Hgt/2; break;
-		case C4MC_Cursor_DownLeft: iOffsetX += -GfxR->fctMouseCursor.Wdt/2; iOffsetY += +GfxR->fctMouseCursor.Hgt/2; break;
-		case C4MC_Cursor_DownRight: iOffsetX += +GfxR->fctMouseCursor.Wdt/2; iOffsetY += +GfxR->fctMouseCursor.Hgt/2; break;
+		case C4MC_Cursor_Up: iOffsetY += -hgt/2; break;
+		case C4MC_Cursor_Down:iOffsetY += +hgt/2; break;
+		case C4MC_Cursor_Left: iOffsetX += -wdt/2; break;
+		case C4MC_Cursor_Right: iOffsetX += +wdt/2; break;
+		case C4MC_Cursor_UpLeft: iOffsetX += -wdt/2; iOffsetY += -hgt/2; break;
+		case C4MC_Cursor_UpRight: iOffsetX += +wdt/2; iOffsetY += -hgt/2; break;
+		case C4MC_Cursor_DownLeft: iOffsetX += -wdt/2; iOffsetY += +hgt/2; break;
+		case C4MC_Cursor_DownRight: iOffsetX += +wdt/2; iOffsetY += +hgt/2; break;
 		}
 		// Drag image
 		if (DragImageObject || DragImageDef)
@@ -461,12 +467,14 @@ void C4MouseControl::Draw(C4TargetFacet &cgo, const ZoomData &GameZoom)
 
 			if (fIsGameZoom) pDraw->SetZoom(GuiZoom);
 			// reset cursor hotspot offset for script drawing
-			iOffsetX = GfxR->fctMouseCursor.Wdt/2;
-			iOffsetY = GfxR->fctMouseCursor.Hgt/2;
+			iOffsetX = wdt/2;
+			iOffsetY = hgt/2;
 		}
 		// Cursor
 		if ( (!DragImageDef && !DragImageObject) || (Drag == C4MC_Drag_Script))
-			GfxR->fctMouseCursor.Draw(cgo.Surface,cgo.X+GuiX-iOffsetX,cgo.Y+GuiY-iOffsetY,Cursor);
+		{
+			GfxR->fctMouseCursor.DrawX(cgo.Surface, cgo.X+GuiX-iOffsetX, cgo.Y+GuiY-iOffsetY, wdt, hgt,  Cursor);
+		}
 		break;
 		//------------------------------------------------------------------------------------------
 	}
@@ -804,7 +812,7 @@ void C4MouseControl::UpdateFogOfWar()
 	// Check for fog of war
 	// TODO: Check C4FoWRegion... should maybe be passed as a parameter?
 	// pDraw->GetFoW() might not be current at this time.
-	if (/*(pPlayer->fFogOfWar && !pPlayer->FoWIsVisible(int32_t(GameX),int32_t(GameY))) || */GameX<0 || GameY<0 || int32_t(GameX)>=GBackWdt || int32_t(GameY)>=GBackHgt)
+	if (/*(pPlayer->fFogOfWar && !pPlayer->FoWIsVisible(int32_t(GameX),int32_t(GameY))) || */GameX<0 || GameY<0 || int32_t(GameX)>=::Landscape.GetWidth() || int32_t(GameY)>=::Landscape.GetHeight())
 	{
 		FogOfWar=true;
 		// allow dragging, scrolling, region selection and manipulations of objects not affected by FoW
@@ -876,11 +884,12 @@ bool C4MouseControl::IsDragging()
 	return Active && Drag == C4MC_Drag_Script;
 }
 
-bool C4MouseControl::GetLastGUIPos(int32_t *x_out, int32_t *y_out) const
+bool C4MouseControl::GetLastCursorPos(int32_t *x_out_gui, int32_t *y_out_gui, int32_t *x_out_game, int32_t *y_out_game) const
 {
 	// safety
 	if (!Active || !fMouseOwned) return false;
 	// OK; assign last known pos
-	*x_out = GuiX; *y_out = GuiY;
+	*x_out_gui = GuiX; *y_out_gui = GuiY;
+	*x_out_game = GameX; *y_out_game = GameY;
 	return true;
 }

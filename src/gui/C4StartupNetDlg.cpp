@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2006-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,16 +15,16 @@
  */
 // Startup screen for non-parameterized engine start: Network game selection dialog
 
-#include <C4Include.h>
-#include <C4StartupNetDlg.h>
+#include "C4Include.h"
+#include "gui/C4StartupNetDlg.h"
 
-#include <C4Application.h>
-#include <C4UpdateDlg.h>
-#include <C4StartupScenSelDlg.h>
-#include <C4Game.h>
-#include "C4ChatDlg.h"
-#include <C4GraphicsResource.h>
-#include <C4Network2Reference.h>
+#include "game/C4Application.h"
+#include "gui/C4UpdateDlg.h"
+#include "gui/C4StartupScenSelDlg.h"
+#include "game/C4Game.h"
+#include "gui/C4ChatDlg.h"
+#include "graphics/C4GraphicsResource.h"
+#include "network/C4Network2Reference.h"
 
 // ----------- C4StartupNetListEntry -----------------------------------------------------------------------
 
@@ -391,14 +391,23 @@ void C4StartupNetListEntry::SetReference(C4Network2Reference *pRef)
 	pIcon->SetFacet(C4Startup::Get()->Graphics.fctScenSelIcons.GetPhase(iIcon));
 	pIcon->SetAnimated(false, 0);
 	pIcon->SetBounds(rctIconSmall);
-	int32_t iPlrCnt = pRef->Parameters.PlayerInfos.GetActivePlayerCount(false);
+	int32_t iPlrCnt = pRef->isEditor() ? pRef->Parameters.PlayerInfos.GetActivePlayerCount(false) : pRef->Parameters.Clients.getClientCnt();
 	C4Client *pHost = pRef->Parameters.Clients.getHost();
 	sInfoText[0].Format(LoadResStr("IDS_NET_REFONCLIENT"), pRef->getTitle(), pHost ? pHost->getName() : "unknown");
-	sInfoText[1].Format( LoadResStr("IDS_NET_INFOPLRSGOALDESC"),
-	                     (int)iPlrCnt,
-	                     (int)pRef->Parameters.MaxPlayers,
-	                     pRef->getGameGoalString().getData(),
-	                     StdStrBuf(pRef->getGameStatus().getDescription(), true).getData() );
+	if (pRef->isEditor())
+	{
+		sInfoText[1].Format(LoadResStr("IDS_NET_INFOEDITOR"),
+			(int)iPlrCnt,
+			StdStrBuf(pRef->getGameStatus().getDescription(), true).getData());
+	}
+	else
+	{
+		sInfoText[1].Format(LoadResStr("IDS_NET_INFOPLRSGOALDESC"),
+			(int)iPlrCnt,
+			(int)pRef->Parameters.MaxPlayers,
+			pRef->getGameGoalString().getData(),
+			StdStrBuf(pRef->getGameStatus().getDescription(), true).getData());
+	}
 	if (pRef->getTime() > 0)
 	{
 		StdStrBuf strDuration; strDuration.Format("%02d:%02d:%02d", pRef->getTime()/3600, (pRef->getTime() % 3600) / 60, pRef->getTime() % 60);
@@ -412,6 +421,9 @@ void C4StartupNetListEntry::SetReference(C4Network2Reference *pRef)
 		if (i) sAddress.Append(", ");
 		sAddress.Append(pRef->getAddr(i).toString());
 	}
+	// editor reference
+	if (pRef->isEditor())
+		AddStatusIcon(C4GUI::Ico_Editor, LoadResStr("IDS_CNS_CONSOLE"));
 	// password
 	if (pRef->isPasswordNeeded())
 		AddStatusIcon(C4GUI::Ico_Ex_LockedFrontal, LoadResStr("IDS_NET_INFOPASSWORD"));
@@ -433,8 +445,15 @@ void C4StartupNetListEntry::SetReference(C4Network2Reference *pRef)
 		fIsImportant = true;
 		AddStatusIcon(C4GUI::Ico_OfficialServer, LoadResStr("IDS_NET_OFFICIALSERVER"));
 	}
-	// list participating player names
-	sInfoText[4].Format("%s: %s", LoadResStr("IDS_CTL_PLAYER"), iPlrCnt ? pRef->Parameters.PlayerInfos.GetActivePlayerNames(false).getData() : LoadResStr("IDS_CTL_NONE"));
+	// list participating player/client names
+	if (pRef->isEditor())
+	{
+		sInfoText[4].Format("%s%s", LoadResStr("IDS_DESC_CLIENTS"), iPlrCnt ? pRef->Parameters.Clients.GetAllClientNames().getData() : LoadResStr("IDS_CTL_NONE"));
+	}
+	else
+	{
+		sInfoText[4].Format("%s: %s", LoadResStr("IDS_CTL_PLAYER"), iPlrCnt ? pRef->Parameters.PlayerInfos.GetActivePlayerNames(false).getData() : LoadResStr("IDS_CTL_NONE"));
+	}
 	// disabled if join is not possible for some reason
 	C4GameVersion verThis;
 	if (!pRef->isJoinAllowed() || !(pRef->getGameVersion() == verThis))
@@ -1093,18 +1112,54 @@ bool C4StartupNetDlg::DoOK()
 			}
 		}
 	}
-	// OK; joining! Take over reference
-	pRefEntry->GrabReference();
-	// Set join parameters
-	*Game.ScenarioFilename = '\0';
-	if (szDirectJoinAddress) SCopy(szDirectJoinAddress, Game.DirectJoinAddress, _MAX_PATH); else *Game.DirectJoinAddress = '\0';
-	SCopy("Objects.ocd", Game.DefinitionFilenames);
-	Game.NetworkActive = true;
-	Game.fObserve = false;
-	Game.pJoinReference.reset(pRef);
-	// start with this set!
-	Application.OpenGame();
-	return true;
+	// OK; joining!
+	if (pRef->isEditor())
+	{
+		bool success = false;
+		// Editor mode join: Serialize reference to temp file and join on that
+		// (could pass through environment, but that's hard to do platform-independent
+		// (QProcessEnvironment? But then there's a Qt dependency in the network init code))
+		StdStrBuf tmpfn;
+		MakeTempFilename(&tmpfn);
+		StdBuf join_data = DecompileToBuf<StdCompilerBinWrite>(*pRef);
+		if (join_data.getSize())
+		{
+			if (join_data.SaveToFile(tmpfn.getData()))
+			{
+				if (RestartApplication({"--editor", FormatString("--join=%s%s", C4Game::DirectJoinFilePrefix, tmpfn.getData()).getData()})) // hope for no " in temp path
+				{
+					// Application.Quit() has been called. Will quit after returning from this callback.
+					// The temp file will be deleted by the new instance
+					success = true;
+				}
+				else
+				{
+					EraseFile(tmpfn.getData());
+				}
+			}
+		}
+		if (!success)
+		{
+			C4GUI::TheScreen.ShowErrorMessage(LoadResStr("IDS_ERR_STARTEDITOR"));
+		}
+		return true;
+	}
+	else
+	{
+		// Player mode join
+		// Take over reference
+		pRefEntry->GrabReference();
+		// Set join parameters
+		*Game.ScenarioFilename = '\0';
+		if (szDirectJoinAddress) SCopy(szDirectJoinAddress, Game.DirectJoinAddress, _MAX_PATH); else *Game.DirectJoinAddress = '\0';
+		SCopy("Objects.ocd", Game.DefinitionFilenames);
+		Game.NetworkActive = true;
+		Game.fObserve = false;
+		Game.pJoinReference.reset(pRef);
+		// start with this set!
+		Application.OpenGame();
+		return true;
+	}
 }
 
 bool C4StartupNetDlg::DoBack()

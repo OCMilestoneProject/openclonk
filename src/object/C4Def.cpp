@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,20 +17,21 @@
 
 /* Object definition */
 
-#include <C4Include.h>
-#include <C4Def.h>
-#include <C4DrawGL.h>
-#include <C4GraphicsResource.h>
+#include "C4Include.h"
+#include "object/C4Def.h"
+#include "graphics/C4DrawGL.h"
+#include "graphics/C4GraphicsResource.h"
 
-#include <C4Components.h>
-#include <C4Config.h>
-#include <C4FileMonitor.h>
-#include <C4Language.h>
-#include <C4Object.h>
-#include <C4RankSystem.h>
-#include <C4SoundSystem.h>
-#include <C4SolidMask.h>
-#include <CSurface8.h>
+#include "c4group/C4Components.h"
+#include "config/C4Config.h"
+#include "platform/C4FileMonitor.h"
+#include "c4group/C4Language.h"
+#include "object/C4Object.h"
+#include "player/C4RankSystem.h"
+#include "platform/C4SoundSystem.h"
+#include "landscape/C4SolidMask.h"
+#include "landscape/C4Particles.h"
+#include "graphics/CSurface8.h"
 #include "lib/StdColors.h"
 
 // Helper class to load additional resources required for meshes from
@@ -93,7 +94,6 @@ void C4Def::DefaultDefCore()
 	PictureRect.Default();
 	SolidMask.Default();
 	TopFace.Default();
-	Component.Default();
 	BurnTurnTo=C4ID::None;
 	GrowthType=0;
 	CrewMember=0;
@@ -121,7 +121,7 @@ void C4Def::DefaultDefCore()
 	Projectile=0;
 	VehicleControl=0;
 	Pathfinder=0;
-	NoComponentMass=0;
+	NoMassFromContents=0;
 	MoveToRange=0;
 	NoStabilize=0;
 	ClosedContainer=0;
@@ -132,6 +132,7 @@ void C4Def::DefaultDefCore()
 	ConSizeOff=0;
 	NoGet=0;
 	NoTransferZones=0;
+	HideInCreator = false;
 }
 
 bool C4Def::LoadDefCore(C4Group &hGroup)
@@ -211,7 +212,6 @@ void C4Def::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkParAdapt(Shape, static_cast<C4Shape*>(NULL)));
 	pComp->Value(mkNamingAdapt(Value,                         "Value",              0                 ));
 	pComp->Value(mkNamingAdapt(Mass,                          "Mass",               0                 ));
-	pComp->Value(mkNamingAdapt(Component,                     "Components",         C4IDList()        ));
 	pComp->Value(mkNamingAdapt(SolidMask,                     "SolidMask",          TargetRect0       ));
 	pComp->Value(mkNamingAdapt(TopFace,                       "TopFace",            TargetRect0       ));
 	pComp->Value(mkNamingAdapt(PictureRect,                   "Picture",            Rect0             ));
@@ -257,7 +257,7 @@ void C4Def::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(VehicleControl,                "VehicleControl",     0                 ));
 	pComp->Value(mkNamingAdapt(Pathfinder,                    "Pathfinder",         0                 ));
 	pComp->Value(mkNamingAdapt(MoveToRange,                   "MoveToRange",        0                 ));
-	pComp->Value(mkNamingAdapt(NoComponentMass,               "NoComponentMass",    0                 ));
+	pComp->Value(mkNamingAdapt(NoMassFromContents,            "NoMassFromContents", 0                 ));
 	pComp->Value(mkNamingAdapt(NoStabilize,                   "NoStabilize",        0                 ));
 	pComp->Value(mkNamingAdapt(ClosedContainer,               "ClosedContainer",    0                 ));
 	pComp->Value(mkNamingAdapt(SilentCommands,                "SilentCommands",     0                 ));
@@ -280,6 +280,7 @@ void C4Def::CompileFunc(StdCompiler *pComp)
 
 	pComp->Value(mkNamingAdapt(mkBitfieldAdapt<int32_t>(AllowPictureStack, AllowPictureStackModes),		//undocumented
 	                           "AllowPictureStack",   0                ));
+	pComp->Value(mkNamingAdapt(HideInCreator, "HideInCreator", false));
 }
 
 //-------------------------------- C4Def -------------------------------------------------------
@@ -318,11 +319,11 @@ C4Def::~C4Def()
 
 void C4Def::Clear()
 {
+	Script.Clear();
 	C4PropList::Clear();
 
 	Graphics.Clear();
 
-	Script.Clear();
 	StringTable.Clear();
 	if (pClonkNames && fClonkNamesOwned) delete pClonkNames; pClonkNames=NULL;
 	if (pRankNames && fRankNamesOwned) delete pRankNames; pRankNames=NULL;
@@ -332,10 +333,12 @@ void C4Def::Clear()
 }
 
 bool C4Def::Load(C4Group &hGroup,
-				 StdMeshSkeletonLoader &loader,
-                 DWORD dwLoadWhat,
-                 const char *szLanguage,
-                 C4SoundSystem *pSoundSystem)
+	StdMeshSkeletonLoader &loader,
+	DWORD dwLoadWhat,
+	const char *szLanguage,
+	C4SoundSystem *pSoundSystem,
+	C4DefGraphicsPtrBackup *gfx_backup
+	)
 {
 	bool AddFileMonitoring = false;
 	if (Game.pFileMonitor && !SEqual(hGroup.GetFullName().getData(),Filename) && !hGroup.IsPacked())
@@ -354,7 +357,7 @@ bool C4Def::Load(C4Group &hGroup,
 	hGroup.PreCacheEntries(C4CFN_ShaderFiles);
 	hGroup.PreCacheEntries(C4CFN_ImageFiles);
 
-	LoadMeshMaterials(hGroup);
+	LoadMeshMaterials(hGroup, gfx_backup);
 	bool fSuccess = LoadParticleDef(hGroup);
 
 	// Read DefCore
@@ -400,12 +403,18 @@ bool C4Def::Load(C4Group &hGroup,
 	return true;
 }
 
-void C4Def::LoadMeshMaterials(C4Group &hGroup)
+void C4Def::LoadMeshMaterials(C4Group &hGroup, C4DefGraphicsPtrBackup *gfx_backup)
 {
 	// Load all mesh materials from this folder
 	C4DefAdditionalResourcesLoader loader(hGroup);
 	hGroup.ResetSearch();
 	char MaterialFilename[_MAX_PATH + 1]; *MaterialFilename = 0;
+	
+	for (const auto &mat : mesh_materials)
+	{
+		::MeshMaterialManager.Remove(mat, &gfx_backup->GetUpdater());
+	}
+	mesh_materials.clear();
 	while (hGroup.FindNextEntry(C4CFN_DefMaterials, MaterialFilename, NULL, !!*MaterialFilename))
 	{
 		StdStrBuf material;
@@ -416,7 +425,8 @@ void C4Def::LoadMeshMaterials(C4Group &hGroup)
 				StdStrBuf buf;
 				buf.Copy(hGroup.GetName());
 				buf.Append("/"); buf.Append(MaterialFilename);
-				::MeshMaterialManager.Parse(material.getData(), buf.getData(), loader);
+				auto new_materials = ::MeshMaterialManager.Parse(material.getData(), buf.getData(), loader);
+				mesh_materials.insert(new_materials.begin(), new_materials.end());
 			}
 			catch (const StdMeshMaterialError& ex)
 			{
@@ -614,27 +624,6 @@ int32_t C4Def::GetValue(C4Object *pInBase, int32_t iBuyPlayer)
 
 void C4Def::Synchronize()
 {
-}
-
-int32_t C4Def::GetComponentCount(C4ID idComponent)
-{
-	return Component.GetIDCount(idComponent);
-}
-
-C4ID C4Def::GetIndexedComponent(int32_t idx)
-{
-	return Component.GetID(idx);
-}
-
-void C4Def::GetComponents(C4IDList *pOutList, C4Object *pObjInstance)
-{
-	assert(pOutList);
-	assert(!pOutList->GetNumberOfIDs());
-	// no valid script overload: Assume object or definition components
-	if (pObjInstance)
-		*pOutList = pObjInstance->Component;
-	else
-		*pOutList = Component;
 }
 
 void C4Def::IncludeDefinition(C4Def *pIncludeDef)

@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2005-2009, RedWolf Design GmbH, http://www.clonk.de
- * Copyright (c) 2009-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -19,16 +19,16 @@
 #include <GL/glew.h>
 #include <string>
 
-#include <C4Include.h>
-#include <C4Window.h>
-#include <C4Draw.h>
+#include "C4Include.h"
+#include "platform/C4Window.h"
+#include "graphics/C4Draw.h"
 
-#include "C4App.h"
+#include "platform/C4App.h"
 #import <Cocoa/Cocoa.h>
 
 #ifndef USE_CONSOLE
-#import "C4WindowController.h"
-#import "C4DrawGLMac.h"
+#import "platform/C4WindowController.h"
+#import "graphics/C4DrawGLMac.h"
 
 bool C4AbstractApp::Copy(const StdStrBuf & text, bool fClipboard)
 {

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -18,8 +18,8 @@
 /* Value to identify object definitions */
 
 #include "C4Include.h"
-#include "C4Id.h"
-#include "StdCompiler.h"
+#include "object/C4Id.h"
+#include "lib/StdCompiler.h"
 
 #include <utility>
 
@@ -29,6 +29,7 @@ C4ID::LookupTable C4ID::lookup;
 const C4ID C4ID::None(std::string("None"));
 const C4ID C4ID::Clonk(std::string("Clonk"));
 const C4ID C4ID::Bubble(std::string("Fx_Bubble"));
+const C4ID C4ID::EditorBase(std::string("EditorBase"));
 
 // TODO: Remove these eventually, since they are deprecated.
 const C4ID C4ID::Flag(std::string("FLAG"));

@@ -9,8 +9,8 @@ func Initialize() {
 func Hit() {
     var dmg = FIREBOMB_DAMAGE;
 
-    BlastObjects(GetX(), GetY(), dmg/2, 0, GetOwner() + 1);
-    BlastObjects(GetX(), GetY(), dmg/2, 0, GetOwner() + 1);
+    BlastObjects(GetX(), GetY(), dmg/2, nil, GetOwner() + 1);
+    BlastObjects(GetX(), GetY(), dmg/2, nil, GetOwner() + 1);
 
     var blast = {
         R = 255,
@@ -50,6 +50,9 @@ func Sparkle() {
 
     CreateParticle("Clusterflight", 0, 0, RandomX(-2,2),RandomX(-2,2), 36, clusterflight, 1);
 }
+
+
+local BorderBound = C4D_Border_Sides;
 
 /* Act Map */
 

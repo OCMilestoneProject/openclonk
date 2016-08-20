@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,26 +15,27 @@
  * for the above references.
  */
 
-#include <C4Include.h>
+#include "C4Include.h"
 
-#include <C4Aul.h>
-#include <C4AulDefFunc.h>
-#include <C4Command.h>
-#include <C4DefList.h>
-#include <C4Draw.h>
-#include <C4GameMessage.h>
-#include <C4GraphicsResource.h>
-#include <C4Material.h>
-#include <C4MeshAnimation.h>
-#include <C4ObjectCom.h>
-#include <C4ObjectInfo.h>
-#include <C4ObjectMenu.h>
-#include <C4Player.h>
-#include <C4PlayerList.h>
-#include <C4Random.h>
-#include <C4RankSystem.h>
-#include <C4Teams.h>
-#include <StdMeshMath.h>
+#include "script/C4Aul.h"
+#include "script/C4AulDefFunc.h"
+#include "object/C4Command.h"
+#include "object/C4DefList.h"
+#include "graphics/C4Draw.h"
+#include "gui/C4GameMessage.h"
+#include "graphics/C4GraphicsResource.h"
+#include "landscape/C4Material.h"
+#include "landscape/C4Particles.h"
+#include "object/C4MeshAnimation.h"
+#include "object/C4ObjectCom.h"
+#include "object/C4ObjectInfo.h"
+#include "object/C4ObjectMenu.h"
+#include "player/C4Player.h"
+#include "player/C4PlayerList.h"
+#include "lib/C4Random.h"
+#include "player/C4RankSystem.h"
+#include "control/C4Teams.h"
+#include "lib/StdMeshMath.h"
 
 bool C4ValueToMatrix(C4Value& value, StdMeshMatrix* matrix)
 {
@@ -91,7 +92,7 @@ static void FnDeathAnnounce(C4Object *Obj)
 	}
 	else
 	{
-		char idDeathMsg[128+1]; sprintf(idDeathMsg, "IDS_OBJ_DEATH%d", 1 + SafeRandom(MaxDeathMsg));
+		char idDeathMsg[128+1]; sprintf(idDeathMsg, "IDS_OBJ_DEATH%d", 1 + UnsyncedRandom(MaxDeathMsg));
 		GameMsgObject(FormatString(LoadResStr(idDeathMsg), Obj->GetName()).getData(), Obj);
 	}
 }
@@ -194,14 +195,6 @@ static long FnGetCon(C4Object *Obj, long iPrec)
 {
 	if (!iPrec) iPrec = 100;
 	return iPrec*Obj->GetCon()/FullCon;
-}
-
-static C4String *FnGetName(C4PropList * _this)
-{
-	if (!_this)
-		throw NeedNonGlobalContext("GetName");
-	else
-		return String(_this->GetName());
 }
 
 static bool FnSetName(C4PropList * _this, C4String *pNewName, bool fSetInInfo, bool fMakeValidIfExists)
@@ -638,6 +631,7 @@ enum VertexUpdateMode
 static Nillable<long> FnGetVertex(C4Object *Obj, long iIndex, long iValueToGet)
 {
 	if (Obj->Shape.VtxNum<1) return C4Void();
+	if (iIndex < 0 || iIndex >= Obj->Shape.VtxNum) return C4Void();
 	iIndex=std::min<long>(iIndex,Obj->Shape.VtxNum-1);
 	switch (static_cast<VertexDataIndex>(iValueToGet))
 	{
@@ -691,6 +685,11 @@ static bool FnSetVertex(C4Object *Obj, long iIndex, long iValueToSet, long iValu
 static bool FnAddVertex(C4Object *Obj, long iX, long iY)
 {
 	return !!Obj->Shape.AddVertex(iX,iY);
+}
+
+static bool FnInsertVertex(C4Object *Obj, long iIndex, long iX, long iY)
+{
+	return !!Obj->Shape.InsertVertex(iIndex,iX,iY);
 }
 
 static bool FnRemoveVertex(C4Object *Obj, long iIndex)
@@ -1223,18 +1222,6 @@ static bool FnOnFire(C4Object *Obj)
 	return !!Obj->pEffects->Get(C4Fx_AnyFire);
 }
 
-static bool FnComponentAll(C4Object *Obj, C4ID c_id)
-{
-	long cnt;
-	C4IDList Components;
-	Obj->Def->GetComponents(&Components, Obj);
-	for (cnt=0; Components.GetID(cnt); cnt++)
-		if (Components.GetID(cnt)!=c_id)
-			if (Components.GetCount(cnt)>0)
-				return false;
-	return true;
-}
-
 static C4Object *FnCreateContents(C4Object *Obj, C4PropList * PropList, Nillable<long> iCount)
 {
 	// default amount parameter
@@ -1245,16 +1232,6 @@ static C4Object *FnCreateContents(C4Object *Obj, C4PropList * PropList, Nillable
 	// controller will automatically be set upon entrance
 	// return last created
 	return pNewObj;
-}
-
-static C4Object *FnComposeContents(C4Object *Obj, C4ID c_id)
-{
-	return Obj->ComposeContents(c_id);
-}
-
-static C4String *FnGetNeededMatStr(C4Object *Obj)
-{
-	return String(Obj->GetNeededMatStr().getData());
 }
 
 static bool FnMakeCrewMember(C4Object *Obj, long iPlayer)
@@ -1269,11 +1246,6 @@ static bool FnGrabObjectInfo(C4Object *Obj, C4Object *pFrom)
 	if (!pFrom) return false;
 	// grab info
 	return !!Obj->GrabInfo(pFrom);
-}
-
-static bool FnSetComponent(C4Object *Obj, C4ID idComponent, long iCount)
-{
-	return Obj->Component.SetIDCount(idComponent,iCount,true);
 }
 
 static bool FnSetCrewStatus(C4Object *Obj, long iPlr, bool fInCrew)
@@ -2263,9 +2235,9 @@ static bool FnCreateParticleAtBone(C4Object* Obj, C4String* szName, C4String* sz
 	{
 		if(Pos->GetSize() != 3)
 			throw C4AulExecError("CreateParticleAtBone: Pos is not a three-vector");
-		x.x = (*Pos)[0].getInt();
-		x.y = (*Pos)[1].getInt();
-		x.z = (*Pos)[2].getInt();
+		x.x = (*Pos).GetItem(0).getInt();
+		x.y = (*Pos).GetItem(1).getInt();
+		x.z = (*Pos).GetItem(2).getInt();
 	}
 	else { x.x = x.y = x.z = 0.0f; }
 
@@ -2273,9 +2245,9 @@ static bool FnCreateParticleAtBone(C4Object* Obj, C4String* szName, C4String* sz
 	{
 		if(Dir->GetSize() != 3)
 			throw C4AulExecError("CreateParticleAtBone: Dir is not a three-vector");
-		dir.x = (*Dir)[0].getInt() / 10.0f;
-		dir.y = (*Dir)[1].getInt() / 10.0f;
-		dir.z = (*Dir)[2].getInt() / 10.0f;
+		dir.x = (*Dir).GetItem(0).getInt() / 10.0f;
+		dir.y = (*Dir).GetItem(1).getInt() / 10.0f;
+		dir.z = (*Dir).GetItem(2).getInt() / 10.0f;
 	}
 	else { dir.x = dir.y = dir.z = 0.0f; }
 	// Apply the bone transformation to them, to go from bone coordinates
@@ -2463,6 +2435,7 @@ C4ScriptConstDef C4ScriptObjectConstMap[]=
 	{ "VIS_God"                ,C4V_Int,          VIS_God},
 	{ "VIS_LayerToggle"        ,C4V_Int,          VIS_LayerToggle},
 	{ "VIS_OverlayOnly"        ,C4V_Int,          VIS_OverlayOnly},
+	{ "VIS_Editor"             ,C4V_Int,          VIS_Editor},
 
 	{ "C4MN_Style_Normal"      ,C4V_Int,          C4MN_Style_Normal},
 	{ "C4MN_Style_Context"     ,C4V_Int,          C4MN_Style_Context},
@@ -2471,7 +2444,6 @@ C4ScriptConstDef C4ScriptObjectConstMap[]=
 	{ "C4MN_Style_EqualItemHeight",C4V_Int,       C4MN_Style_EqualItemHeight},
 
 	{ "C4MN_Extra_None"        ,C4V_Int,          C4MN_Extra_None},
-	{ "C4MN_Extra_Components"  ,C4V_Int,          C4MN_Extra_Components},
 	{ "C4MN_Extra_Value"       ,C4V_Int,          C4MN_Extra_Value},
 	{ "C4MN_Extra_Info"        ,C4V_Int,          C4MN_Extra_Info},
 
@@ -2607,11 +2579,11 @@ void InitObjectFunctionMap(C4AulScriptEngine *pEngine)
 	F(GetVertex);
 	F(SetVertex);
 	F(AddVertex);
+	F(InsertVertex);
 	F(RemoveVertex);
 	::AddFunc(p, "SetContactDensity", FnSetContactDensity, false);
 	F(GetController);
 	F(SetController);
-	F(GetName);
 	F(SetName);
 	F(GetKiller);
 	F(SetKiller);
@@ -2622,7 +2594,6 @@ void InitObjectFunctionMap(C4AulScriptEngine *pEngine)
 	F(SetAlive);
 	F(GetAlive);
 	F(GetDamage);
-	::AddFunc(p, "ComponentAll", FnComponentAll, false);
 	F(SetComDir);
 	F(GetComDir);
 	F(SetDir);
@@ -2645,8 +2616,6 @@ void InitObjectFunctionMap(C4AulScriptEngine *pEngine)
 	F(GrabObjectInfo);
 	F(CreateContents);
 	F(ShiftContents);
-	F(ComposeContents);
-	F(GetNeededMatStr);
 	F(GetID);
 	F(Contents);
 	F(ScrollContents);
@@ -2657,7 +2626,6 @@ void InitObjectFunctionMap(C4AulScriptEngine *pEngine)
 	F(RemoveObject);
 	F(GetActionTarget);
 	F(SetActionTargets);
-	F(SetComponent);
 	::AddFunc(p, "SetCrewStatus", FnSetCrewStatus, false);
 	F(SetPosition);
 	F(CreateMenu);

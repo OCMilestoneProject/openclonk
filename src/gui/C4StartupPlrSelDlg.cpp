@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2005-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -16,20 +16,20 @@
 // Startup screen for non-parameterized engine start: Player selection dialog
 // Also contains player creation, editing and crew management
 
-#include <C4Include.h>
+#include "C4Include.h"
 
 #include <utility>
 
-#include <C4StartupPlrSelDlg.h>
+#include "gui/C4StartupPlrSelDlg.h"
 
-#include <C4StartupMainDlg.h>
-#include <C4Random.h>
-#include <C4Game.h>
-#include <C4Language.h>
-#include <C4FileSelDlg.h>
-#include <C4Log.h>
-#include <C4GraphicsResource.h>
-#include <C4RankSystem.h>
+#include "gui/C4StartupMainDlg.h"
+#include "lib/C4Random.h"
+#include "game/C4Game.h"
+#include "c4group/C4Language.h"
+#include "gui/C4FileSelDlg.h"
+#include "lib/C4Log.h"
+#include "graphics/C4GraphicsResource.h"
+#include "player/C4RankSystem.h"
 #include "gui/C4MouseControl.h"
 #include "lib/StdColors.h"
 #include <cctype>
@@ -527,7 +527,7 @@ C4StartupPlrSelDlg::C4StartupPlrSelDlg() : C4StartupDlg("W"), eMode(PSDM_Player)
 	keys.push_back(C4KeyCodeEx(K_ESCAPE));
 	if (Config.Controls.GamepadGuiControl)
 	{
-		keys.push_back(C4KeyCodeEx(KEY_Gamepad(0, KEY_JOY_AnyHighButton)));
+		ControllerKeys::Cancel(keys);
 	}
 	pKeyBack = new C4KeyBinding(keys, "StartupPlrSelBack", KEYSCOPE_Gui,
 	                            new C4GUI::DlgKeyCB<C4StartupPlrSelDlg>(*this, &C4StartupPlrSelDlg::KeyBack), C4CustomKey::PRIO_CtrlOverride);
@@ -1326,7 +1326,7 @@ C4StartupPlrPropertiesDlg::C4StartupPlrPropertiesDlg(C4StartupPlrSelDlg::PlayerL
 		C4P.Default(&::DefaultRanks);
 		// Set name, color, comment
 		SCopy(LoadResStr("IDS_PLR_NEWCOMMENT"), C4P.Comment, C4MaxComment);
-		C4P.PrefColor = SafeRandom(8);
+		C4P.PrefColor = UnsyncedRandom(8);
 		C4P.PrefColorDw = C4P.GetPrefColorValue(C4P.PrefColor);
 		C4P.OldPrefControlStyle = 1;
 		C4P.OldPrefAutoContextMenu = 1;

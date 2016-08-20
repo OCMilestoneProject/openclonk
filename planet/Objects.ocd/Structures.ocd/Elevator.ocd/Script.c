@@ -78,6 +78,8 @@ private func Construction()
 	return _inherited(...);
 }
 
+public func IsHammerBuildable() { return true; }
+
 private func Initialize()
 {
 	SetCategory(C4D_StaticBack);
@@ -144,7 +146,7 @@ public func StartEngine(int direction, bool silent)
 
 	if (!silent)
 	{
-		Sound("Structures::Elevator::Start", nil, nil, nil, nil, 400);
+		Sound("Structures::Elevator::Start", {custom_falloff_distance = 400});
 		ScheduleCall(this, "EngineLoop", 34);
 	}
 	if (wheel_anim == nil) // If for some reason the animation has stopped
@@ -169,16 +171,16 @@ public func StartEngine(int direction, bool silent)
 
 public func EngineLoop()
 {
-	Sound("Structures::Elevator::Moving", nil, nil, nil, 1, 400);
+	Sound("Structures::Elevator::Moving", {loop_count = 1, custom_falloff_distance = 400});
 }
 
 public func StopEngine(bool silent)
 {
 	if (!silent)
 	{
-		Sound("Structures::Elevator::Moving", nil, nil, nil, -1);
+		Sound("Structures::Elevator::Moving", {loop_count = -1});
 		ClearScheduleCall(this, "EngineLoop");
-		Sound("Structures::Elevator::Stop", nil, nil, nil, nil, 400);
+		Sound("Structures::Elevator::Stop", {custom_falloff_distance = 400});
 	}
 
 	if (wheel_anim == nil) return;
@@ -225,11 +227,19 @@ public func ConstructionPreview(object previewer, int overlay, int dir)
 }
 
 // Sticking to other elevators
-public func ConstructionCombineWith() { return "IsElevator"; }
-public func ConstructionCombineDirection() { return CONSTRUCTION_STICK_Left | CONSTRUCTION_STICK_Right; }
+public func ConstructionCombineWith() { return "CanCombineElevator"; }
+public func ConstructionCombineDirection(object other)
+{
+	if (!other) return CONSTRUCTION_STICK_Left | CONSTRUCTION_STICK_Right;
+
+	// Only combine when facing correctly
+	if (other->GetDir() == DIR_Left)
+		return CONSTRUCTION_STICK_Right;
+	return CONSTRUCTION_STICK_Left;
+}
 
 // Called to determine if sticking is possible
-public func IsElevator(object previewer)
+public func CanCombineElevator(object previewer)
 {
 	if (!previewer) return true;
 
@@ -327,3 +337,4 @@ local Description = "$Description$";
 local BlastIncinerate = 100;
 local HitPoints = 70;
 local Plane = 249;
+local Components = {Wood = 3, Metal = 1};

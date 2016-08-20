@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,38 +17,40 @@
 
 /* Control packets contain all player input in the message queue */
 
-#include <C4Include.h>
-#include <C4Control.h>
+#include "C4Include.h"
+#include "control/C4Control.h"
 
-#include <C4AulExec.h>
-#include <C4Object.h>
-#include <C4GameSave.h>
-#include <C4GameLobby.h>
-#include <C4Network2Dialogs.h>
-#include <C4Random.h>
-#include <C4Console.h>
-#include <C4Log.h>
-#include <C4GraphicsSystem.h>
-#include <C4Player.h>
-#include <C4RankSystem.h>
-#include <C4RoundResults.h>
-#include <C4PXS.h>
-#include <C4MassMover.h>
-#include <C4GameMessage.h>
-#include <C4Landscape.h>
-#include <C4Game.h>
-#include <C4PlayerList.h>
-#include <C4GameObjects.h>
-#include <C4GameControl.h>
-#include <C4ScriptGuiWindow.h>
+#include "script/C4AulExec.h"
+#include "object/C4Object.h"
+#include "control/C4GameSave.h"
+#include "gui/C4GameLobby.h"
+#include "network/C4Network2Dialogs.h"
+#include "lib/C4Random.h"
+#include "editor/C4Console.h"
+#include "lib/C4Log.h"
+#include "game/C4GraphicsSystem.h"
+#include "player/C4Player.h"
+#include "player/C4RankSystem.h"
+#include "control/C4RoundResults.h"
+#include "landscape/C4PXS.h"
+#include "landscape/C4MassMover.h"
+#include "gui/C4GameMessage.h"
+#include "landscape/C4Landscape.h"
+#include "game/C4Game.h"
+#include "game/C4GameScript.h"
+#include "player/C4PlayerList.h"
+#include "object/C4GameObjects.h"
+#include "control/C4GameControl.h"
+#include "gui/C4ScriptGuiWindow.h"
 #include "gui/C4MessageInput.h"
+#include "object/C4Def.h"
 #include "object/C4DefList.h"
 
 #ifndef NOAULDEBUG
-#include <C4AulDebug.h>
+#include "script/C4AulDebug.h"
 #endif
 
-#include <C4AulExec.h>
+#include "script/C4AulExec.h"
 
 // *** C4ControlPacket
 C4ControlPacket::C4ControlPacket()
@@ -236,7 +238,7 @@ void C4ControlScript::Execute() const
 	// execute
 	C4PropList *pPropList = NULL;
 	if (iTargetObj == SCOPE_Console)
-		pPropList = ::GameScript.GetPropList();
+		pPropList = ::GameScript.ScenPropList.getPropList();
 	else if (iTargetObj == SCOPE_Global)
 		pPropList = ::ScriptEngine.GetPropList();
 	else if (!(pPropList = ::Objects.SafeObjectPointer(iTargetObj)))
@@ -254,11 +256,18 @@ void C4ControlScript::Execute() const
 	// print script
 	LogF("-> %s::%s", pPropList->GetName(), szScript);
 	// print result
+	bool is_local_script = true;
 	if (!LocalControl())
 	{
 		C4Network2Client *pClient = NULL;
 		if (::Network.isEnabled())
+		{
 			pClient = ::Network.Clients.GetClientByID(iByClient);
+			if (pClient != ::Network.Clients.GetLocal())
+			{
+				is_local_script = false;
+			}
+		}
 		if (pClient)
 			LogF(" = %s (by %s)", rVal.GetDataString().getData(), pClient->getName());
 		else
@@ -266,12 +275,26 @@ void C4ControlScript::Execute() const
 	}
 	else
 		LogF(" = %s", rVal.GetDataString().getData());
+	// Editor update
+	if (::Console.Active)
+	{
+		C4Object *returned_object = rVal.getObj();
+		if (editor_select_result && is_local_script && returned_object)
+		{
+			::Console.EditCursor.ClearSelection(returned_object);
+			::Console.EditCursor.AddToSelection(returned_object);
+			::Console.EditCursor.OnSelectionChanged();
+		}
+		// Always: refresh property view after script command
+		::Console.EditCursor.InvalidateSelection();
+	}
 }
 
 void C4ControlScript::CompileFunc(StdCompiler *pComp)
 {
 	pComp->Value(mkNamingAdapt(iTargetObj, "TargetObj", -1));
 	pComp->Value(mkNamingAdapt(fUseVarsFromCallerContext, "UseVarsFromCallerContext", false));
+	pComp->Value(mkNamingAdapt(editor_select_result, "EditorSelectResult", false));
 	pComp->Value(mkNamingAdapt(Script, "Script", ""));
 	C4ControlPacket::CompileFunc(pComp);
 }
@@ -423,7 +446,7 @@ void C4ControlPlayerControl::ControlItem::CompileFunc(StdCompiler *pComp)
 void C4ControlPlayerControl::CompileFunc(StdCompiler *pComp)
 {
 	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iPlr), "Player", -1));
-	pComp->Value(mkNamingAdapt(fRelease, "Release", false));
+	pComp->Value(mkNamingAdapt(mkIntAdapt(state), "State", 0));
 	pComp->Value(mkNamingAdapt(ExtraData, "ExtraData", C4KeyEventData()));
 	pComp->Value(mkNamingAdapt(mkSTLContainerAdapt(ControlItems), "Controls", ControlItemVec()));
 	C4ControlPacket::CompileFunc(pComp);
@@ -917,6 +940,8 @@ void C4ControlClientUpdate::Execute() const
 		break;
 		}
 	}
+	// Update console net menu to reflect activation/etc.
+	::Console.UpdateNetMenu();
 }
 
 void C4ControlClientUpdate::CompileFunc(StdCompiler *pComp)
@@ -1041,65 +1066,71 @@ void C4ControlJoinPlayer::Execute() const
 
 	// get client
 	C4Client *pClient = Game.Clients.getClientByID(iAtClient);
-	if (!pClient) return;
-
-	// get info
-	C4PlayerInfo *pInfo = Game.PlayerInfos.GetPlayerInfoByID(idInfo);
-	if (!pInfo)
+	if (pClient)
 	{
-		LogF("ERROR: Ghost player join: No info for %d", idInfo);
-		assert(false);
-		return;
-	}
-
-	else if (LocalControl())
-	{
-		// Local player: Just join from local file
-		Game.JoinPlayer(szFilename, iAtClient, pClient->getName(), pInfo);
-	}
-	else if (!fByRes)
-	{
-		if (PlrData.getSize())
+		// get info
+		C4PlayerInfo *pInfo = Game.PlayerInfos.GetPlayerInfoByID(idInfo);
+		if (!pInfo)
 		{
-			// create temp file
-			StdStrBuf PlayerFilename; PlayerFilename.Format("%s-%s",pClient->getName(),GetFilename(szFilename));
-			PlayerFilename = Config.AtTempPath(PlayerFilename.getData());
-			// copy to it
-			if (PlrData.SaveToFile(PlayerFilename.getData()))
+			LogF("ERROR: Ghost player join: No info for %d", idInfo);
+			assert(false);
+		}
+		else if (LocalControl())
+		{
+			// Local player: Just join from local file
+			Game.JoinPlayer(szFilename, iAtClient, pClient->getName(), pInfo);
+		}
+		else if (!fByRes)
+		{
+			if (PlrData.getSize())
 			{
-				Game.JoinPlayer(PlayerFilename.getData(), iAtClient, pClient->getName(), pInfo);
-				EraseFile(PlayerFilename.getData());
+				// create temp file
+				StdStrBuf PlayerFilename; PlayerFilename.Format("%s-%s", pClient->getName(), GetFilename(szFilename));
+				PlayerFilename = Config.AtTempPath(PlayerFilename.getData());
+				// copy to it
+				if (PlrData.SaveToFile(PlayerFilename.getData()))
+				{
+					Game.JoinPlayer(PlayerFilename.getData(), iAtClient, pClient->getName(), pInfo);
+					EraseFile(PlayerFilename.getData());
+				}
+			}
+			else if (pInfo->GetType() == C4PT_Script)
+			{
+				// script players may join without data
+				Game.JoinPlayer(NULL, iAtClient, pClient->getName(), pInfo);
+			}
+			else
+			{
+				// no player data for user player present: Must not happen
+				LogF("ERROR: Ghost player join: No player data for %s", (const char*)pInfo->GetName());
+				assert(false);
 			}
 		}
-		else if (pInfo->GetType() == C4PT_Script)
+		else if (::Control.isNetwork())
 		{
-			// script players may join without data
-			Game.JoinPlayer(NULL, iAtClient, pClient->getName(), pInfo);
+			// Find resource
+			C4Network2Res::Ref pRes = ::Network.ResList.getRefRes(ResCore.getID());
+			if (pRes && pRes->isComplete())
+				Game.JoinPlayer(pRes->getFile(), iAtClient, pClient->getName(), pInfo);
+		}
+		else if (::Control.isReplay())
+		{
+			// Expect player in scenario file
+			StdStrBuf PlayerFilename; PlayerFilename.Format("%s" DirSep "%d-%s", Game.ScenarioFilename, ResCore.getID(), GetFilename(ResCore.getFileName()));
+			Game.JoinPlayer(PlayerFilename.getData(), iAtClient, pClient ? pClient->getName() : "Unknown", pInfo);
 		}
 		else
 		{
-			// no player data for user player present: Must not happen
-			LogF("ERROR: Ghost player join: No player data for %s", (const char*)pInfo->GetName());
+			// Shouldn't happen
 			assert(false);
-			return;
 		}
 	}
-	else if (::Control.isNetwork())
+	// After last of the initial player joins, do a game callback
+	if (!::Game.InitialPlayersJoined && !::Game.PlayerInfos.GetJoinPendingPlayerCount())
 	{
-		// Find resource
-		C4Network2Res::Ref pRes = ::Network.ResList.getRefRes(ResCore.getID());
-		if (pRes && pRes->isComplete())
-			Game.JoinPlayer(pRes->getFile(), iAtClient, pClient->getName(), pInfo);
+		::Game.InitialPlayersJoined = true;
+		::Game.GRBroadcast(PSF_InitializePlayers);
 	}
-	else if (::Control.isReplay())
-	{
-		// Expect player in scenario file
-		StdStrBuf PlayerFilename; PlayerFilename.Format("%s" DirSep "%d-%s", Game.ScenarioFilename, ResCore.getID(), GetFilename(ResCore.getFileName()));
-		Game.JoinPlayer(PlayerFilename.getData(), iAtClient, pClient ? pClient->getName() : "Unknown", pInfo);
-	}
-	else
-		// Shouldn't happen
-		assert(false);
 }
 
 void C4ControlJoinPlayer::Strip()
@@ -1196,9 +1227,12 @@ C4ControlEMMoveObject::C4ControlEMMoveObject(C4ControlEMObjectAction eAction, C4
 
 }
 
-C4ControlEMMoveObject *C4ControlEMMoveObject::CreateObject(const C4ID &id, C4Real x, C4Real y)
+C4ControlEMMoveObject *C4ControlEMMoveObject::CreateObject(const C4ID &id, C4Real x, C4Real y, C4Object *container)
 {
-	auto ctl = new C4ControlEMMoveObject(EMMO_Create, x, y, nullptr);
+#ifdef WITH_QT_EDITOR
+	::StartSoundEffect("UI::Click2");
+#endif
+	auto ctl = new C4ControlEMMoveObject(EMMO_Create, x, y, container);
 	ctl->StringParam = id.ToString();
 	return ctl;
 }
@@ -1264,31 +1298,7 @@ void C4ControlEMMoveObject::Execute() const
 	{
 		if (!pObjects) break;
 		// perform duplication
-		C4Object *pOldObj, *pObj;
-		for (int i=0; i<iObjectNum; ++i)
-			if ((pOldObj = ::Objects.SafeObjectPointer(pObjects[i])))
-			{
-				pObj = Game.CreateObject(pOldObj->GetPrototype(), pOldObj, pOldObj->Owner, pOldObj->GetX(), pOldObj->GetY());
-				if (pObj && pObj->Status)
-				{
-					// local call? adjust selection then
-					// do callbacks for all clients for sync reasons
-					if (fLocalCall) Console.EditCursor.GetSelection().Add(pObj, C4ObjectList::stNone);
-					C4AulParSet pars(C4VObj(pObj));
-					if (pOldObj->Status) pOldObj->Call(PSF_EditCursorDeselection, &pars);
-					if (pObj->Status) pObj->Call(PSF_EditCursorSelection);
-				}
-			}
-		// update status
-		if (fLocalCall)
-		{
-			if (fLocalCall)
-				for (int i = 0; i<iObjectNum; ++i)
-					if ((pOldObj = ::Objects.SafeObjectPointer(pObjects[i])))
-						Console.EditCursor.GetSelection().Remove(pOldObj);
-			Console.EditCursor.SetHold(true);
-			Console.EditCursor.OnSelectionChanged();
-		}
+		::Console.EditCursor.PerformDuplication(pObjects, iObjectNum, fLocalCall);
 	}
 	break;
 	case EMMO_Script:
@@ -1346,12 +1356,52 @@ void C4ControlEMMoveObject::Execute() const
 	break;
 	case EMMO_Create:
 	{
-		::Game.CreateObject(C4ID(StringParam), nullptr, NO_OWNER, fixtoi(tx), fixtoi(ty));
+		// Check max object count
+		C4ID iddef = C4ID(StringParam);
+		C4Def *def = C4Id2Def(iddef);
+		if (!def) return;
+		int32_t placement_limit = def->GetPropertyInt(P_EditorPlacementLimit);
+		if (placement_limit)
+		{
+			if (Game.ObjectCount(iddef) >= placement_limit)
+			{
+				// Too many objects
+				::Console.Message(FormatString(LoadResStr("IDS_CNS_CREATORTOOMANYINSTANCES"), int(placement_limit)).getData());
+				return;
+			}
+		}
+		// Create object outside or contained
+		// If container is desired but not valid, do nothing (don't create object outside instead)
+		C4Object *container = NULL;
+		if (iTargetObj)
+		{
+			container = ::Objects.SafeObjectPointer(iTargetObj);
+			if (!container || !container->Status) return;
+		}
+		bool create_centered = false;
+#ifdef WITH_QT_EDITOR
+		// Qt editor: Object creation is done through creator; centered creation is usually more convenient
+		create_centered = true;
+#endif
+		C4Object *obj = ::Game.CreateObject(iddef, nullptr, NO_OWNER, fixtoi(tx), fixtoi(ty), 0, create_centered);
+		if (container && obj && container->Status && obj->Status) obj->Enter(container);
+		if (obj && obj->Status) obj->Call(P_EditorInitialize); // specific initialization when placed in editor
 	}
 	break;
+	case EMMO_Transform:
+	{
+		C4Object *pTarget = ::Objects.SafeObjectPointer(iTargetObj);
+		if (pTarget)
+		{
+			int32_t new_rot = fixtoi(this->tx, 1);
+			int32_t new_con = fixtoi(this->ty, FullCon/100);
+			if (pTarget->Def->Rotateable) pTarget->SetRotation(new_rot);
+			if (pTarget->Def->GrowthType) pTarget->DoCon(new_con - pTarget->GetCon(), false);
+		}
+	}
 	}
 	// update property dlg & status bar
-	if (fLocalCall)
+	if (fLocalCall && eAction != EMMO_Move)
 		Console.EditCursor.OnSelectionChanged();
 }
 
@@ -1373,7 +1423,7 @@ void C4ControlEMMoveObject::CompileFunc(StdCompiler *pComp)
 
 // *** C4ControlEMDrawTool
 
-C4ControlEMDrawTool::C4ControlEMDrawTool(C4ControlEMDrawAction eAction, int32_t iMode,
+C4ControlEMDrawTool::C4ControlEMDrawTool(C4ControlEMDrawAction eAction, LandscapeMode iMode,
     int32_t iX, int32_t iY, int32_t iX2, int32_t iY2, int32_t iGrade,
     const char *szMaterial, const char *szTexture, const char *szBackMaterial, const char *szBackTexture)
 		: eAction(eAction), iMode(iMode), iX(iX), iY(iY), iX2(iX2), iY2(iY2), iGrade(iGrade),
@@ -1388,12 +1438,12 @@ void C4ControlEMDrawTool::Execute() const
 	// set new mode
 	if (eAction == EMDT_SetMode)
 	{
-		Console.ToolsDlg.SetLandscapeMode(iMode, true);
+		Console.ToolsDlg.SetLandscapeMode(iMode, iX==1, true);
 		return;
 	}
 	// check current mode
-	assert(::Landscape.Mode == iMode);
-	if (::Landscape.Mode != iMode) return;
+	assert(::Landscape.GetMode() == iMode);
+	if (::Landscape.GetMode() != iMode) return;
 	// assert validity of parameters
 	if (!Material.getSize()) return;
 	const char *szMaterial = Material.getData(),
@@ -1436,7 +1486,7 @@ void C4ControlEMDrawTool::Execute() const
 void C4ControlEMDrawTool::CompileFunc(StdCompiler *pComp)
 {
 	pComp->Value(mkNamingAdapt(mkIntAdaptT<uint8_t>(eAction), "Action"));
-	pComp->Value(mkNamingAdapt(mkIntPackAdapt(iMode), "Mode", 0));
+	pComp->Value(mkNamingAdapt(mkIntAdaptT<uint8_t>(iMode), "Mode", LandscapeMode::Undefined));
 	pComp->Value(mkNamingAdapt(iX, "X", 0));
 	pComp->Value(mkNamingAdapt(iY, "Y", 0));
 	pComp->Value(mkNamingAdapt(iX2, "X2", 0));

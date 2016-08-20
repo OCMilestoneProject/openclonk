@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2003-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -16,24 +16,24 @@
 
 // text drawing facility for C4Draw
 
-#include <C4Include.h>
-#include "C4FontLoader.h"
+#include "C4Include.h"
+#include "graphics/C4FontLoader.h"
 
 #ifndef USE_CONSOLE
-#include <C4Components.h>
-#include <C4Config.h>
-#include <C4Draw.h>
-#include <C4Language.h>
-#include <C4Log.h>
-#include <C4Markup.h>
-#include <C4Surface.h>
-#include "StdColors.h"
+#include "c4group/C4Components.h"
+#include "config/C4Config.h"
+#include "graphics/C4Draw.h"
+#include "c4group/C4Language.h"
+#include "lib/C4Log.h"
+#include "lib/C4Markup.h"
+#include "graphics/C4Surface.h"
+#include "lib/StdColors.h"
 
 #include <stdexcept>
 #include <string>
 
 #ifdef _WIN32
-#include <C4windowswrapper.h>
+#include "platform/C4windowswrapper.h"
 #endif
 
 #include <ft2build.h>

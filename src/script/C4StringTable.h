@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -57,10 +57,22 @@ class C4RefCntPointer
 public:
 	C4RefCntPointer(T* p): p(p) { IncRef(); }
 	C4RefCntPointer(): p(0) { }
+	C4RefCntPointer(const C4RefCntPointer<T> & r) : p(r.p) { IncRef(); }
 	template <class U> C4RefCntPointer(const C4RefCntPointer<U> & r): p(r.p) { IncRef(); }
 	// Move constructor
+	C4RefCntPointer(C4RefCntPointer<T> &&r) : p(r.p) { r.p = 0; }
 	template <class U> C4RefCntPointer(C4RefCntPointer<U> &&r): p(r.p) { r.p = 0; }
 	// Move assignment
+	C4RefCntPointer& operator = (C4RefCntPointer<T> &&r)
+	{
+		if (p != r.p)
+		{
+			DecRef();
+			p = r.p;
+			r.p = 0;
+		}
+		return *this;
+	}
 	template <class U> C4RefCntPointer& operator = (C4RefCntPointer<U> &&r)
 	{
 		if (p != r.p)
@@ -82,6 +94,10 @@ public:
 		}
 		return *this;
 	}
+	C4RefCntPointer& operator = (const C4RefCntPointer<T>& r)
+	{
+		return *this = r.p;
+	}
 	template <class U> C4RefCntPointer& operator = (const C4RefCntPointer<U>& r)
 	{
 		return *this = r.p;
@@ -92,6 +108,7 @@ public:
 	const T* operator -> () const { return p; }
 	operator T * () { return p; }
 	operator const T * () const { return p; }
+	T *Get() const { return p; }
 private:
 	void IncRef() { if (p) p->IncRef(); }
 	void DecRef() { if (p) p->DecRef(); }
@@ -173,7 +190,7 @@ public:
 			Table[i] = b.Table[i];
 		return *this;
 	}
-	void CompileFunc(StdCompiler *pComp, C4ValueNumbers *);
+	void CompileFunc(class StdCompiler *pComp, class C4ValueNumbers *);
 	void Clear()
 	{
 		ClearTable();
@@ -294,6 +311,13 @@ enum C4PropertyName
 	P_Interval,
 	P_CommandTarget,
 	P_Time,
+	P_Construction,
+	P_Destruction,
+	P_Start,
+	P_Stop,
+	P_Timer,
+	P_Effect,
+	P_Damage,
 	P_Collectible,
 	P_Touchable,
 	P_ActMap,
@@ -302,7 +326,6 @@ enum C4PropertyName
 	P_Parallaxity,
 	P_LineColors,
 	P_LineAttach,
-	P_LineMaxDistance,		// unused?
 	P_PictureTransformation,
 	P_MeshTransformation,
 	P_Procedure,
@@ -319,6 +342,8 @@ enum C4PropertyName
 	P_y,
 	P_Wdt,
 	P_Hgt,
+	P_wdt,
+	P_hgt,
 	P_OffX,
 	P_OffY,
 	P_FacetBase,
@@ -454,6 +479,42 @@ enum C4PropertyName
 	P_MusicBreakChance,
 	P_MusicMaxPositionMemory,
 	P_InflameLandscape,
+	P_OptionKey,
+	P_ValueKey,
+	P_Value,
+	P_Delegate,
+	P_Min,
+	P_Max,
+	P_Set,
+	P_SetGlobal,
+	P_SetRoot,
+	P_Options,
+	P_Key,
+	P_AsyncGet,
+	P_Get,
+	P_Relative,
+	P_CanMoveCenter,
+	P_Storage,
+	P_Elements,
+	P_EditOnSelection,
+	P_EditorProps,
+	P_DefaultEditorProp,
+	P_EditorActions,
+	P_CopyDefault,
+	P_Display,
+	P_DefaultValue,
+	P_DefinitionPriority,
+	P_Group,
+	P_Command,
+	P_Select,
+	P_DescendPath,
+	P_EmptyName,
+	P_ShortName,
+	P_EditorHelp,
+	P_Description,
+	P_AllowEditing,
+	P_EditorInitialize,
+	P_EditorPlacementLimit,
 // Default Action Procedures
 	DFA_WALK,
 	DFA_FLIGHT,
@@ -483,7 +544,7 @@ public:
 	C4String *RegString(StdStrBuf String);
 	C4String *RegString(const char * s) { return RegString(StdStrBuf(s)); }
 	// Find existing C4String
-	C4String *FindString(const char *strString);
+	C4String *FindString(const char *strString) const;
 
 private:
 	C4Set<C4String *> Set;

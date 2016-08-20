@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -14,14 +14,15 @@
  * for the above references.
  */
 #include "C4Include.h"
-#include "C4GameParameters.h"
+#include "control/C4GameParameters.h"
 
-#include "C4Log.h"
-#include "C4Components.h"
-#include "C4Def.h"
-#include <C4DefList.h>
-#include <C4Game.h>
-#include <C4Network2.h>
+#include "lib/C4Log.h"
+#include "c4group/C4Components.h"
+#include "object/C4Def.h"
+#include "object/C4DefList.h"
+#include "game/C4Game.h"
+#include "game/C4Application.h"
+#include "network/C4Network2.h"
 
 // *** C4GameRes
 
@@ -517,6 +518,7 @@ void C4GameParameters::CompileFunc(StdCompiler *pComp, C4Scenario *pScenario)
 	pComp->Value(mkNamingAdapt(MaxPlayers,        "MaxPlayers",       !pScenario ? 0 : pScenario->Head.MaxPlayer));
 	pComp->Value(mkNamingAdapt(AllowDebug,        "AllowDebug",       true));
 	pComp->Value(mkNamingAdapt(IsNetworkGame,     "IsNetworkGame",    false));
+	pComp->Value(mkNamingAdapt(IsEditor,          "IsEditor",         !!::Application.isEditor));
 	pComp->Value(mkNamingAdapt(ControlRate,       "ControlRate",      -1));
 	pComp->Value(mkNamingAdapt(AutoFrameSkip,     "AutoFrameSkip",    false));
 	pComp->Value(mkNamingAdapt(Rules,             "Rules",            !pScenario ? C4IDList() : pScenario->Game.Rules));

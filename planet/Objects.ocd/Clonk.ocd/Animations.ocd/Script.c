@@ -332,7 +332,7 @@ func UpdateBackwardsSpeed()
 {
 	if(GetComDir() != GetDirection() && lAnim.backwards != 1 && lAnim.backwardsSpeed != nil)
 	{
-		AddEffect("IntWalkBack", this, 1, 0, this, 0, lAnim.backwardsSpeed);
+		AddEffect("IntWalkBack", this, 1, 0, this, nil, lAnim.backwardsSpeed);
 		lAnim.backwards = 1;
 	}
 	if( (GetComDir() == GetDirection() && lAnim.backwards == 1) || lAnim.backwardsSpeed == nil)
@@ -594,6 +594,16 @@ func CheckScaleTop()
 	return true;
 }
 
+func CheckScaleTopHelper()
+{
+	// Check if the clonk has passed the material with its leg vertices
+	// and if COMD_Up is used to climb in which case corner scale would fail
+
+	if (GBackSolid(-3+6*GetDir(), 6)) return false;
+	if (GetComDir() != COMD_Up) return false;
+	return true;
+}
+
 func FxIntScaleStart(target, effect, tmp)
 {
 	if(tmp) return;
@@ -624,6 +634,22 @@ func FxIntScaleTimer(target, number, time)
 		// The animation's graphics has to be shifet a bit to adjust to the clonk movement
 		var pos = GetAnimationPosition(number.animation_id);
 		SetScaleRotation(0, 0, 0, 0, 0, 1);
+		// Check if corner scale help is needed
+		if (CheckScaleTopHelper())
+		{
+			if (GetDir() == DIR_Left)
+				SetComDir(COMD_UpLeft);
+			else
+				SetComDir(COMD_UpRight);
+			number.corner_scale_helper = true;
+		}
+		else if (number.corner_scale_helper)
+			number.corner_scale_helper = false;
+	}
+	else if (number.corner_scale_helper)
+	{
+		// This will delay everything for 1 frame just for cleanup, hopefully it's not too bad
+		number.corner_scale_helper = false;
 	}
 	else if(!GBackSolid(-10+20*GetDir(), 8))
 	{
@@ -708,9 +734,13 @@ func FxIntScaleStop(target, number, reason, tmp)
 /*	if(number.animation_mode == 1) PlayAnimation(Clonk_WalkStand, CLONK_ANIM_SLOT_Movement, GetWalkAnimationPosition(Clonk_WalkStand), Anim_Const(1000));
 	// Finally stop if the user has scheduled a stop
 	if(number.ScheduleStop) SetComDir(COMD_Stop);*/
-	// and reset the transform
+
+	// Reset the transform
 	SetScaleRotation(0);
-//	SetObjDrawTransform(1000, 0, 0, 0, 1000, 0);
+	// Remove the corner scale helper com dir
+	if (number.corner_scale_helper)
+		if (GetComDir() == COMD_UpLeft || GetComDir() == COMD_UpRight)
+			Schedule(this, "SetComDir(COMD_Up)", 2);
 }
 
 /*--
@@ -770,6 +800,8 @@ func FxFallEffect(string new_name, object target)
 
 func FxFallTimer(object target, effect, int timer)
 {
+	if(GetAction() != "Jump")
+	return -1;
 	//falling off ledges without jumping results in fall animation
 	if(timer == 2 && GetYDir() > 1)
 	{
@@ -785,8 +817,6 @@ func FxFallTimer(object target, effect, int timer)
 		PlayAnimation("FallLong", CLONK_ANIM_SLOT_Movement, Anim_Linear(0, 0, GetAnimationLength("FallLong"), 8*3, ANIM_Hold), Anim_Linear(0, 0, 1000, 5, ANIM_Remove));
 		return -1;
 	}
-	if(GetAction() != "Jump")
-		return -1;
 }
 
 /*--
@@ -1311,7 +1341,7 @@ public func ControlThrow(object target, int x, int y)
 		else SetDir(DIR_Left);
 		//SetAction("Throw");
 		this->~SetHandAction(1); // Set hands ocupied
-		AddEffect("IntThrow", this, 1, 1, this, 0, target, throwAngle);
+		AddEffect("IntThrow", this, 1, 1, this, nil, target, throwAngle);
 		return true;
 	}
 	// attached

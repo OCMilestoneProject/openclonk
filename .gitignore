@@ -29,6 +29,7 @@ CPackSourceConfig.cmake
 editor-icons.h
 oc-icon.h
 NativeToolsExport.cmake
+engine-resource.c
 
 # Documentation
 *.pyc
@@ -55,6 +56,10 @@ planet/fmod.dll
 planet/cmake_install.cmake
 planet/clonk.sln
 planet/clonk.ilk
+*.ipdb
+*.iobj
+openclonk.VC.db
+openclonk.VC.VC.opendb
 
 build
 planet/clonk.app
@@ -131,8 +136,12 @@ tests/openclonk_unittest.sln
 
 # Packed groups created directly in root path
 /*.oc*
-/planet/GoldRushMissions.ocf
-/planet/TexTest.ocs
-/planet/NewMaterials.ocs
-/.gitignore
-/*.gitignore
+
+# QMake stuff
+*_automoc.cpp
+moc_*.cpp
+qrc_resource.cpp
+ui_C4ConsoleQt*.h
+resource.qrc.depends
+*.exp
+qt.conf

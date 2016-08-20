@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,8 +20,8 @@
 #ifndef INC_C4MouseControl
 #define INC_C4MouseControl
 
-#include <C4Facet.h>
-#include "C4ObjectList.h"
+#include "graphics/C4Facet.h"
+#include "object/C4ObjectList.h"
 
 const int32_t C4MC_Button_None        = 0,
               C4MC_Button_LeftDown    = 1,
@@ -32,7 +32,14 @@ const int32_t C4MC_Button_None        = 0,
               C4MC_Button_RightDouble = 6,
               C4MC_Button_Wheel       = 7,
               C4MC_Button_MiddleDown  = 8,
-              C4MC_Button_MiddleUp    = 9;
+              C4MC_Button_MiddleUp    = 9,
+              C4MC_Button_MiddleDouble= 10,
+              C4MC_Button_X1Down      = 11,
+              C4MC_Button_X1Up        = 12,
+              C4MC_Button_X1Double    = 13,
+              C4MC_Button_X2Down      = 14,
+              C4MC_Button_X2Up        = 15,
+              C4MC_Button_X2Double    = 16;
 
 const int32_t C4MC_DragSensitivity = 5;
 
@@ -113,7 +120,7 @@ public:
 	void SetOwnedMouse(bool fToVal) { fMouseOwned = fToVal; }
 	bool IsMouseOwned() { return fMouseOwned; }
 	bool IsActive() { return !!Active; }
-	bool GetLastGUIPos(int32_t *x_out, int32_t *y_out) const;
+	bool GetLastCursorPos(int32_t *x_out_gui, int32_t *y_out_gui, int32_t *x_out_game, int32_t *y_out_game) const;
 
 	const char *GetCaption();
 	void SetTooltipText(const StdStrBuf &text);

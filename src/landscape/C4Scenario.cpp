@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,14 +17,14 @@
 
 /* Core component of a scenario file */
 
-#include <C4Include.h>
-#include <C4Scenario.h>
+#include "C4Include.h"
+#include "landscape/C4Scenario.h"
 
-#include <C4InputValidation.h>
-#include <C4Random.h>
-#include <C4Group.h>
-#include <C4Components.h>
-#include <StdColors.h>
+#include "lib/C4InputValidation.h"
+#include "lib/C4Random.h"
+#include "c4group/C4Group.h"
+#include "c4group/C4Components.h"
+#include "lib/StdColors.h"
 
 //==================================== C4SVal ==============================================
 
@@ -38,9 +38,18 @@ void C4SVal::Set(int32_t std, int32_t rnd, int32_t min, int32_t max)
 	Std=std; Rnd=rnd; Min=min; Max=max;
 }
 
+void C4SVal::SetConstant(int32_t val)
+{
+	// Set to constant value and ensure limits allow it
+	Std = val;
+	Rnd = 0;
+	Min = std::min<int32_t>(Min, val);
+	Max = std::max<int32_t>(Max, val);
+}
+
 int32_t C4SVal::Evaluate()
 {
-	return Clamp(Std+Random(2*Rnd+1)-Rnd,Min,Max);
+	return Clamp<int32_t>(Std+Random(2*Rnd+1)-Rnd,Min,Max);
 }
 
 void C4SVal::Default()
@@ -278,7 +287,7 @@ void C4SLandscape::Default()
 	InEarth.Default();
 	MapWdt.Set(100,0,64,250);
 	MapHgt.Set(50,0,40,250);
-	MapZoom.Set(8,0,5,15);
+	MapZoom.Set(8,0,1,15);
 	Amplitude.Set(0,0);
 	Phase.Set(50);
 	Period.Set(15);
@@ -322,7 +331,7 @@ void C4SLandscape::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkNamingAdapt(AutoScanSideOpen,        "AutoScanSideOpen",      true));
 	pComp->Value(mkNamingAdapt(MapWdt,                  "MapWidth",              C4SVal(100,0,64,250), true));
 	pComp->Value(mkNamingAdapt(MapHgt,                  "MapHeight",             C4SVal(50,0,40,250), true));
-	pComp->Value(mkNamingAdapt(MapZoom,                 "MapZoom",               C4SVal(8,0,5,15), true));
+	pComp->Value(mkNamingAdapt(MapZoom,                 "MapZoom",               C4SVal(8,0,1,15), true));
 	pComp->Value(mkNamingAdapt(Amplitude,               "Amplitude",             C4SVal(0)));
 	pComp->Value(mkNamingAdapt(Phase,                   "Phase",                 C4SVal(50)));
 	pComp->Value(mkNamingAdapt(Period,                  "Period",                C4SVal(15)));

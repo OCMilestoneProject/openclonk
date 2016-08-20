@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2004-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -32,11 +32,11 @@
 #ifndef INC_C4PlayerInfo
 #define INC_C4PlayerInfo
 
-#include "C4PacketBase.h"
-#include "C4Network2Res.h"
-#include "C4Constants.h"
-#include "C4InputValidation.h"
-#include "C4Id.h"
+#include "network/C4PacketBase.h"
+#include "network/C4Network2Res.h"
+#include "config/C4Constants.h"
+#include "lib/C4InputValidation.h"
+#include "object/C4Id.h"
 
 // information about one player at a client
 class C4PlayerInfo
@@ -167,6 +167,7 @@ public:
 	bool HasJoined() const { return !!(dwFlags & PIF_Joined); }    // return whether player has joined
 	bool IsJoined() const { return HasJoined() && !(dwFlags & PIF_Removed); } // return whether player is currently in the game
 	bool HasJoinIssued() const { return !!(dwFlags & (PIF_Joined | PIF_JoinIssued)); } // return whether player join is in the queue already (or performed long ago, even)
+	bool HasJoinPending() const { return !(dwFlags & (PIF_Joined | PIF_Removed)); } // return whether player join should be done but has not been performed yet
 	bool IsUsingColor() const { return !IsRemoved() && !idSavegamePlayer; } //return whether the player is actually using the player color
 	bool IsUsingName() const { return !IsRemoved() && !sLeagueAccount.getLength(); } //return whether the player is actually using the player name (e.g. not if league name is used)
 	bool IsUsingAttribute(Attribute eAttr) const { if (eAttr == PLRATT_Color) return IsUsingColor(); else return IsUsingName(); }
@@ -369,6 +370,7 @@ public:
 	C4PlayerInfo *GetActivePlayerInfoByName(const char *szName);    // find info by name (case insensitive)
 	int32_t GetPlayerCount() const;                           // get number of players on all clients
 	int32_t GetJoinIssuedPlayerCount() const;                 // get number of players with PIF_JoinIssued-flag set
+	int32_t GetJoinPendingPlayerCount() const;                 // get number of players with PIF_JoinIssued-flag but not joined or removed flag set
 	int32_t GetActivePlayerCount(bool fCountInvisible) const;                     // get number of players that have not been removed
 	StdStrBuf GetActivePlayerNames(bool fCountInvisible, int32_t iAtClientID=-1) const;                   // get a comma-separated list of players that have not been removed yet
 	int32_t GetActiveScriptPlayerCount(bool fCountSavegameResumes, bool fCountInvisible) const;               // get number of script players that have not been removed

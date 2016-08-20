@@ -233,11 +233,14 @@ public func GetInventoryIconOverlay()
 	{
 		Bottom = "0.75em", Margin = ["0.1em", "0.25em"],
 		BackgroundColor = RGB(0, 0, 0),
-		inner = 
+		margin = 
 		{
 			Margin = "0.05em",
-			BackgroundColor = RGB(200, 150, 0),
-			Right = Format("%d%%", percentage),
+			bar = 
+			{
+				BackgroundColor = RGB(200, 150, 0),
+				Right = Format("%d%%", percentage),
+			}
 		}
 	};
 	
@@ -245,10 +248,10 @@ public func GetInventoryIconOverlay()
 }
 
 public func IsFoundryProduct() { return true; }
-public func GetLiquidNeed() { return ["Water", 60]; }
 
 local Collectible = 1;
 local Name = "$Name$";
 local Description = "$Description$";
 local BridgeLength = 37; // bridge length in pixels
 local Plane = 470;
+local Components = {Earth = 2, Water = 60};

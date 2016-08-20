@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,10 +20,10 @@
 #ifndef INC_C4Menu
 #define INC_C4Menu
 
-#include "C4Id.h"
-#include "C4FacetEx.h"
-#include "C4Gui.h"
-#include "C4IDList.h"
+#include "object/C4Id.h"
+#include "graphics/C4FacetEx.h"
+#include "gui/C4Gui.h"
+#include "object/C4IDList.h"
 
 enum
 {
@@ -42,7 +42,6 @@ enum
 enum
 {
 	C4MN_Extra_None       = 0,
-	C4MN_Extra_Components = 1,
 	C4MN_Extra_Value      = 2,
 	C4MN_Extra_Info       = 4,
 };
@@ -88,7 +87,6 @@ protected:
 	int32_t iIndex;
 	bool IsSelectable;
 	int32_t TextDisplayProgress; // dialog menus only: Amount of text which is to be displayed already (-1 for everything)
-	C4IDList Components; // components to be displayed in info line if item is selected
 
 private:
 	bool IsDragElement();

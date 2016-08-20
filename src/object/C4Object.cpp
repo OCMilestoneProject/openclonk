@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,36 +17,39 @@
 
 /* That which fills the world with life */
 
-#include <C4Include.h>
-#include <C4Object.h>
+#include "C4Include.h"
+#include "object/C4Object.h"
 
-#include <C4AulExec.h>
-#include <C4DefList.h>
-#include <C4Effect.h>
-#include <C4ObjectInfo.h>
-#include <C4Physics.h>
-#include <C4PXS.h>
-#include <C4ObjectCom.h>
-#include <C4Command.h>
-#include <C4Viewport.h>
-#include <C4MaterialList.h>
-#include <C4Record.h>
-#include <C4SolidMask.h>
-#include <C4SoundSystem.h>
-#include <C4Random.h>
-#include <C4Log.h>
-#include <C4Player.h>
-#include <C4ObjectMenu.h>
-#include <C4RankSystem.h>
-#include <C4GameMessage.h>
-#include <C4GraphicsResource.h>
-#include <C4GraphicsSystem.h>
-#include <C4Game.h>
-#include <C4PlayerList.h>
-#include <C4GameObjects.h>
-#include <C4Record.h>
-#include <C4MeshAnimation.h>
-#include <C4FoW.h>
+#include "script/C4AulExec.h"
+#include "object/C4Def.h"
+#include "object/C4DefList.h"
+#include "script/C4Effect.h"
+#include "object/C4ObjectInfo.h"
+#include "game/C4Physics.h"
+#include "landscape/C4PXS.h"
+#include "object/C4ObjectCom.h"
+#include "object/C4Command.h"
+#include "game/C4Viewport.h"
+#include "landscape/C4MaterialList.h"
+#include "control/C4Record.h"
+#include "landscape/C4SolidMask.h"
+#include "platform/C4SoundSystem.h"
+#include "lib/C4Random.h"
+#include "lib/C4Log.h"
+#include "player/C4Player.h"
+#include "object/C4ObjectMenu.h"
+#include "player/C4RankSystem.h"
+#include "gui/C4GameMessage.h"
+#include "graphics/C4GraphicsResource.h"
+#include "game/C4GraphicsSystem.h"
+#include "game/C4Game.h"
+#include "game/C4Application.h"
+#include "player/C4PlayerList.h"
+#include "object/C4GameObjects.h"
+#include "control/C4Record.h"
+#include "object/C4MeshAnimation.h"
+#include "landscape/fow/C4FoW.h"
+#include "landscape/C4Particles.h"
 
 namespace
 {
@@ -202,7 +205,6 @@ void C4Object::Default()
 	Shape.Default();
 	fOwnVertices=0;
 	Contents.Default();
-	Component.Default();
 	SolidMask.Default();
 	PictureRect.Default();
 	Def=NULL;
@@ -283,10 +285,6 @@ bool C4Object::Init(C4PropList *pDef, C4Object *pCreator,
 	if (Alive) Energy=GetPropertyInt(P_MaxEnergy);
 	Breath=GetPropertyInt(P_MaxBreath);
 
-	// Components
-	Component=Def->Component;
-	ComponentConCutoff();
-
 	// Color
 	if (Def->ColorByOwner)
 	{
@@ -361,7 +359,7 @@ void C4Object::AssignRemoval(bool fExitContents)
 	// remove all effects (extinguishes as well)
 	if (pEffects)
 	{
-		pEffects->ClearAll(this, C4FxCall_RemoveClear);
+		pEffects->ClearAll(C4FxCall_RemoveClear);
 		// Effect-callback might actually have deleted the object already
 		if (!Status) return;
 	}
@@ -581,6 +579,14 @@ void C4Object::DrawFaceImpl(C4TargetFacet &cgo, bool action, float fx, float fy,
 		if (!C4ValueToMatrix(value, &matrix))
 			matrix = StdMeshMatrix::Identity();
 
+		if (fix_r != Fix0)
+		{
+			const auto mesh_center = pMeshInstance->GetMesh().GetBoundingBox().GetCenter();
+			matrix = StdMeshMatrix::Translate(-mesh_center.x, -mesh_center.y, -mesh_center.z) * matrix;
+			matrix = StdMeshMatrix::Rotate(fixtof(fix_r) * (M_PI / 180.0f), 0.0f, 0.0f, 1.0f) * matrix;
+			matrix = StdMeshMatrix::Translate(mesh_center.x, mesh_center.y, mesh_center.z) * matrix;
+		}
+
 		if(twdt != fwdt || thgt != fhgt)
 		{
 			// Also scale Z so that the mesh is not totally distorted and
@@ -623,34 +629,25 @@ void C4Object::DrawFace(C4TargetFacet &cgo, float offX, float offY, int32_t iPha
 		fhgt = thgt;
 	}
 
-	// Straight
-	if ((!Def->Rotateable || (fix_r == Fix0)) && !pDrawTransform)
+	C4DrawTransform transform;
+	bool transform_active = false;
+	if (pDrawTransform)
 	{
-		DrawFaceImpl(cgo, false, fx, fy, fwdt, fhgt, tx, ty, twdt, thgt, NULL);
-		/*    pDraw->Blit(GetGraphics()->GetBitmap(Color),
-		      fx, fy, fwdt, fhgt,
-		      cgo.Surface, tx, ty, twdt, thgt,
-		      true, NULL);*/
+		transform.SetTransformAt(*pDrawTransform, offX, offY);
+		transform_active = true;
 	}
-	// Rotated or transformed
-	else
+
+	// Meshes aren't rotated via DrawTransform to ensure lighting is applied correctly.
+	if (GetGraphics()->Type != C4DefGraphics::TYPE_Mesh && Def->Rotateable && fix_r != Fix0)
 	{
-		C4DrawTransform rot;
 		if (pDrawTransform)
-		{
-			rot.SetTransformAt(*pDrawTransform, offX, offY);
-			if (fix_r != Fix0) rot.Rotate(fixtof(fix_r), offX, offY);
-		}
+			transform.Rotate(fixtof(fix_r), offX, offY);
 		else
-		{
-			rot.SetRotate(fixtof(fix_r), offX, offY);
-		}
-		DrawFaceImpl(cgo, false, fx, fy, fwdt, fhgt, tx, ty, twdt, thgt, &rot);
-		/*    pDraw->Blit(GetGraphics()->GetBitmap(Color),
-		      fx, fy, fwdt, fhgt,
-		      cgo.Surface, tx, ty, twdt, thgt,
-		      true, &rot);*/
+			transform.SetRotate(fixtof(fix_r), offX, offY);
+		transform_active = true;
 	}
+
+	DrawFaceImpl(cgo, false, fx, fy, fwdt, fhgt, tx, ty, twdt, thgt, transform_active ? &transform : NULL);
 }
 
 void C4Object::DrawActionFace(C4TargetFacet &cgo, float offX, float offY) const
@@ -695,62 +692,37 @@ void C4Object::DrawActionFace(C4TargetFacet &cgo, float offX, float offY) const
 		fy += offset_from_top;
 		fhgt -= offset_from_top;
 	}
+	
+	C4DrawTransform transform;
+	bool transform_active = false;
+	if (pDrawTransform)
+	{
+		transform.SetTransformAt(*pDrawTransform, offX, offY);
+		transform_active = true;
+	}
 
-	// Straight
-	if ((!Def->Rotateable || (fix_r == Fix0)) && !pDrawTransform)
+	// Meshes aren't rotated via DrawTransform to ensure lighting is applied correctly.
+	if (GetGraphics()->Type != C4DefGraphics::TYPE_Mesh && Def->Rotateable && fix_r != Fix0)
 	{
-		DrawFaceImpl(cgo, true, fx, fy, fwdt, fhgt, tx, ty, twdt, thgt, NULL);
-	}
-	// Rotated or transformed
-	else
-	{
-		// rotate midpoint of action facet around center of shape
-		// combine with existing transform if necessary
-		C4DrawTransform rot;
 		if (pDrawTransform)
-		{
-			rot.SetTransformAt(*pDrawTransform, offX, offY);
-			if (fix_r != Fix0) rot.Rotate(fixtof(fix_r), offX, offY);
-		}
+			transform.Rotate(fixtof(fix_r), offX, offY);
 		else
-		{
-			rot.SetRotate(fixtof(fix_r), offX, offY);
-		}
-		DrawFaceImpl(cgo, true, fx, fy, fwdt, fhgt, tx, ty, twdt, thgt, &rot);
-		/*    pDraw->Blit(Action.Facet.Surface,
-		      fx, fy, fwdt, fhgt,
-		      cgo.Surface, tx, ty, twdt, thgt,
-		      true, &rot);*/
+			transform.SetRotate(fixtof(fix_r), offX, offY);
+		transform_active = true;
 	}
+
+	DrawFaceImpl(cgo, true, fx, fy, fwdt, fhgt, tx, ty, twdt, thgt, transform_active ? &transform : NULL);
 }
 
 void C4Object::UpdateMass()
 {
 	Mass=std::max<int32_t>((Def->Mass+OwnMass)*Con/FullCon,1);
-	if (!Def->NoComponentMass) Mass+=Contents.Mass;
+	if (!Def->NoMassFromContents) Mass+=Contents.Mass;
 	if (Contained)
 	{
 		Contained->Contents.MassCount();
 		Contained->UpdateMass();
 	}
-}
-
-void C4Object::ComponentConCutoff()
-{
-	// this is not ideal, since it does not know about custom builder components
-	int32_t cnt;
-	for (cnt=0; Component.GetID(cnt); cnt++)
-		Component.SetCount(cnt,
-		                   std::min(Component.GetCount(cnt),Def->Component.GetCount(cnt)*Con/FullCon));
-}
-
-void C4Object::ComponentConGain()
-{
-	// this is not ideal, since it does not know about custom builder components
-	int32_t cnt;
-	for (cnt=0; Component.GetID(cnt); cnt++)
-		Component.SetCount(cnt,
-		                   std::max(Component.GetCount(cnt),Def->Component.GetCount(cnt)*Con/FullCon));
 }
 
 void C4Object::UpdateInMat()
@@ -1053,7 +1025,7 @@ void C4Object::Execute()
 	// effects
 	if (pEffects)
 	{
-		pEffects->Execute(this);
+		C4Effect::Execute(&pEffects);
 		if (!Status) return;
 	}
 	// Life
@@ -1116,7 +1088,7 @@ void C4Object::AssignDeath(bool fForced)
 	// get death causing player before doing effect calls, because those might meddle around with the flags
 	int32_t iDeathCausingPlayer = LastEnergyLossCausePlayer;
 	Alive=0;
-	if (pEffects) pEffects->ClearAll(this, C4FxCall_RemoveDeath);
+	if (pEffects) pEffects->ClearAll(C4FxCall_RemoveDeath);
 	// if the object is alive again, abort here if the kill is not forced
 	if (Alive && !fForced) return;
 	// Action
@@ -1195,7 +1167,10 @@ bool C4Object::ChangeDef(C4ID idNew)
 	SetOCF();
 	// Any effect callbacks to this object might need to reinitialize their target functions
 	// This is ugly, because every effect there is must be updated...
-	if (Game.pGlobalEffects) Game.pGlobalEffects->OnObjectChangedDef(this);
+	if (::ScriptEngine.pGlobalEffects)
+		::ScriptEngine.pGlobalEffects->OnObjectChangedDef(this);
+	if (::GameScript.pScenarioEffects)
+		::GameScript.pScenarioEffects->OnObjectChangedDef(this);
 	for (C4Object *obj : Objects)
 		if (obj->pEffects) obj->pEffects->OnObjectChangedDef(this);
 	// Containment (no Entrance)
@@ -1209,7 +1184,7 @@ void C4Object::DoDamage(int32_t iChange, int32_t iCausedBy, int32_t iCause)
 	// non-living: ask effects first
 	if (pEffects && !Alive)
 	{
-		pEffects->DoDamage(this, iChange, iCause, iCausedBy);
+		pEffects->DoDamage(iChange, iCause, iCausedBy);
 		if (!iChange) return;
 	}
 	// Change value
@@ -1234,7 +1209,7 @@ void C4Object::DoEnergy(int32_t iChange, bool fExact, int32_t iCause, int32_t iC
 	if (iChange < 0) UpdatLastEnergyLossCause(iCausedByPlr);
 	// Living things: ask effects for change first
 	if (pEffects && Alive)
-		pEffects->DoDamage(this, iChange, iCause, iCausedByPlr);
+		pEffects->DoDamage(iChange, iCause, iCausedByPlr);
 	// Do change
 	iChange = Clamp<int32_t>(iChange, -Energy, GetPropertyInt(P_MaxEnergy) - Energy);
 	Energy += iChange;
@@ -1268,6 +1243,7 @@ void C4Object::DoCon(int32_t iChange, bool grow_from_center)
 {
 	C4Real strgt_con_b = fix_y + Shape.GetBottom();
 	bool fWasFull = (Con>=FullCon);
+	int32_t old_con = Con;
 
 	// Change con
 	if (Def->Oversize)
@@ -1291,13 +1267,9 @@ void C4Object::DoCon(int32_t iChange, bool grow_from_center)
 	// Face (except for the shape)
 	UpdateFace(false);
 
-	// component update
-	// Decay: reduce components
-	if (iChange<0)
-		ComponentConCutoff();
-	// Growth: gain components
-	else
-		ComponentConGain();
+	// Do a callback on completion change.
+	if (iChange != 0)
+		Call(PSF_OnCompletionChange, &C4AulParSet(old_con, Con));
 
 	// Unfullcon
 	if (fWasFull && (Con<FullCon))
@@ -1366,6 +1338,8 @@ bool C4Object::Exit(int32_t iX, int32_t iY, int32_t iR, C4Real iXDir, C4Real iYD
 	CloseMenu(true);
 	UpdateFace(true);
 	SetOCF();
+	// Object list callback (before script callbacks, because script callbacks may enter again)
+	ObjectListChangeListener.OnObjectContainerChanged(this, pContainer, NULL);
 	// Engine calls
 	if (fCalls) pContainer->Call(PSF_Ejection,&C4AulParSet(this));
 	if (fCalls) Call(PSF_Departure,&C4AulParSet(pContainer));
@@ -1437,6 +1411,8 @@ bool C4Object::Enter(C4Object *pTarget, bool fCalls, bool fCopyMotion, bool *pfR
 	// Update container
 	Contained->UpdateMass();
 	Contained->SetOCF();
+	// Object list callback (before script callbacks, because script callbacks may exit again)
+	ObjectListChangeListener.OnObjectContainerChanged(this, NULL, Contained);
 	// Collection call
 	if (fCalls) pTarget->Call(PSF_Collection2,&C4AulParSet(this));
 	if (!Contained || !Contained->Status || !pTarget->Status) return true;
@@ -2318,7 +2294,6 @@ void C4Object::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 	pComp->Value(mkNamingAdapt( Contained,                        "Contained",          C4ObjectPtr::Null ));
 	pComp->Value(mkNamingAdapt( Action.Target,                    "ActionTarget1",      C4ObjectPtr::Null ));
 	pComp->Value(mkNamingAdapt( Action.Target2,                   "ActionTarget2",      C4ObjectPtr::Null ));
-	pComp->Value(mkNamingAdapt( Component,                        "Component",          Def->Component    ));
 	pComp->Value(mkNamingAdapt( mkParAdapt(Contents, numbers),    "Contents"                              ));
 	pComp->Value(mkNamingAdapt( lightRange,                       "LightRange",         0                 ));
 	pComp->Value(mkNamingAdapt( lightFadeoutRange,                "LightFadeoutRange",  0                 ));
@@ -2329,7 +2304,7 @@ void C4Object::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 	pComp->Value(mkNamingAdapt( Layer,                            "Layer",              C4ObjectPtr::Null ));
 	pComp->Value(mkNamingAdapt( C4DefGraphicsAdapt(pGraphics),    "Graphics",           &Def->Graphics    ));
 	pComp->Value(mkNamingPtrAdapt( pDrawTransform,                "DrawTransform"                         ));
-	pComp->Value(mkParAdapt(mkNamingPtrAdapt( pEffects,           "Effects"                               ), numbers));
+	pComp->Value(mkParAdapt(mkNamingPtrAdapt( pEffects,           "Effects"                               ), this, numbers));
 	pComp->Value(mkNamingAdapt( C4GraphicsOverlayListAdapt(pGfxOverlay),"GfxOverlay",   (C4GraphicsOverlay *)NULL));
 
 	// Serialize mesh instance if we have a mesh graphics
@@ -2559,58 +2534,11 @@ void C4Object::Clear()
 	if (pMeshInstance) { delete pMeshInstance; pMeshInstance = NULL; }
 }
 
-
-
 bool C4Object::MenuCommand(const char *szCommand)
 {
 	// Native script execution
 	if (!Def || !Status) return false;
 	return !! ::AulExec.DirectExec(this, szCommand, "MenuCommand");
-}
-
-C4Object *C4Object::ComposeContents(C4ID id)
-{
-	int32_t cnt,cnt2;
-	C4ID c_id;
-	bool fInsufficient = false;
-	C4Object *pObj;
-	C4ID idNeeded=C4ID::None;
-	int32_t iNeeded=0;
-	// Get def
-	C4Def *pDef = C4Id2Def(id); if (!pDef) return NULL;
-	// get needed contents
-	C4IDList NeededComponents;
-	pDef->GetComponents(&NeededComponents, NULL);
-	// Check for sufficient components
-	StdStrBuf Needs; Needs.Format(LoadResStr("IDS_CON_BUILDMATNEED"),pDef->GetName());
-	for (cnt=0; (c_id=NeededComponents.GetID(cnt)); cnt++)
-		if (NeededComponents.GetCount(cnt) > Contents.ObjectCount(c_id))
-		{
-			Needs.AppendFormat("|%ix %s", NeededComponents.GetCount(cnt) - Contents.ObjectCount(c_id), C4Id2Def(c_id) ? C4Id2Def(c_id)->GetName() : c_id.ToString() );
-			if (!idNeeded) { idNeeded=c_id; iNeeded=NeededComponents.GetCount(cnt)-Contents.ObjectCount(c_id); }
-			fInsufficient = true;
-		}
-	// Insufficient
-	if (fInsufficient)
-	{
-		// BuildNeedsMaterial call to object...
-		if (!Call(PSF_BuildNeedsMaterial,&C4AulParSet(C4Id2Def(idNeeded), iNeeded)))
-			// ...game message if not overloaded
-			GameMsgObjectError(Needs.getData(),this);
-		// Return
-		return NULL;
-	}
-	// Remove components
-	for (cnt=0; (c_id=NeededComponents.GetID(cnt)); cnt++)
-		for (cnt2=0; cnt2<NeededComponents.GetCount(cnt); cnt2++)
-			if (!( pObj = Contents.Find(C4Id2Def(c_id)) ))
-				return NULL;
-			else
-				pObj->AssignRemoval();
-	// Create composed object
-	// the object is created with default components instead of builder components
-	// this is done because some objects (e.g. arrow packs) will set custom components during initialization, which should not be overriden
-	return CreateContents(C4Id2Def(id));
 }
 
 void C4Object::SetSolidMask(int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, int32_t iTX, int32_t iTY)
@@ -3999,13 +3927,14 @@ void C4Object::ExecAction()
 	case DFA_CONNECT:
 		{
 			bool fBroke=false;
+			bool fLineChange = false;
 
 			// Line destruction check: Target missing or incomplete
 			if (!Action.Target || (Action.Target->Con<FullCon)) fBroke=true;
 			if (!Action.Target2 || (Action.Target2->Con<FullCon)) fBroke=true;
 			if (fBroke)
 			{
-				Call(PSF_LineBreak,&C4AulParSet(true));
+				Call(PSF_OnLineBreak,&C4AulParSet(true));
 				AssignRemoval();
 				return;
 			}
@@ -4032,6 +3961,8 @@ void C4Object::ExecAction()
 				// No-intersection line
 				if (Def->LineIntersect == 1)
 					{ Shape.VtxX[0]=iConnectX1; Shape.VtxY[0]=iConnectY1; }
+					
+				fLineChange = true;
 			}
 
 			// Movement by Target2
@@ -4055,29 +3986,26 @@ void C4Object::ExecAction()
 				// No-intersection line
 				if (Def->LineIntersect == 1)
 					{ Shape.VtxX[Shape.VtxNum-1]=iConnectX2; Shape.VtxY[Shape.VtxNum-1]=iConnectY2; }
-			}
-
-			// Check max length
-			int32_t max_dist;
-			max_dist = GetPropertyInt(P_LineMaxDistance);
-			if (max_dist)
-			{
-				int32_t dist_x = iConnectX2 - iConnectX1, dist_y = iConnectY2 - iConnectY1;
-				int64_t dist_x2 = int64_t(dist_x)*dist_x, dist_y2 = int64_t(dist_y)*dist_y, max_dist2 = int64_t(max_dist)*max_dist;
-				if (dist_x2+dist_y2 > max_dist2) fBroke = true;
+					
+				fLineChange = true;
 			}
 
 			// Line fBroke
 			if (fBroke)
 			{
-				Call(PSF_LineBreak,0);
+				Call(PSF_OnLineBreak,0);
 				AssignRemoval();
 				return;
 			}
 
 			// Reduce line segments
 			if (!::Game.iTick35)
-				ReduceLineSegments(Shape, !::Game.iTick2);
+				if (ReduceLineSegments(Shape, !::Game.iTick2))
+					fLineChange = true;
+					
+			// Line change callback
+			if (fLineChange)
+				Call(PSF_OnLineChange);
 		}
 		break;
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4185,7 +4113,7 @@ bool C4Object::SetLightColor(uint32_t iValue)
 
 void C4Object::UpdateLight()
 {
-	if (Landscape.pFoW) Landscape.pFoW->Add(this);
+	if (Landscape.HasFoW()) Landscape.GetFoW()->Add(this);
 }
 
 void C4Object::SetAudibilityAt(C4TargetFacet &cgo, int32_t iX, int32_t iY, int32_t player)
@@ -4233,6 +4161,11 @@ bool C4Object::IsVisible(int32_t iForPlr, bool fAsOverlay) const
 	{
 		if (!fAsOverlay) return false;
 		if (Visibility == VIS_OverlayOnly) return true;
+	}
+	// editor visibility
+	if (::Application.isEditor)
+	{
+		if (Visibility & VIS_Editor) return true;
 	}
 	// check visibility
 	fDraw=false;
@@ -4448,6 +4381,17 @@ bool C4Object::GetDragImage(C4Object **drag_object, C4Def **drag_def) const
 	return true;
 }
 
+int32_t C4Object::AddObjectAndContentsToArray(C4ValueArray *target_array, int32_t index)
+{
+	// add self, contents and child contents count recursively to value array. Return index after last added item.
+	target_array->SetItem(index++, C4VObj(this));
+	for (C4Object *cobj : Contents)
+	{
+		index = cobj->AddObjectAndContentsToArray(target_array, index);
+	}
+	return index;
+}
+
 bool C4Object::DoSelect()
 {
 	// selection allowed?
@@ -4462,6 +4406,11 @@ void C4Object::UnSelect()
 {
 	// do callback
 	Call(PSF_CrewSelection, &C4AulParSet(true));
+}
+
+void C4Object::GetViewPos(float & riX, float & riY, float tx, float ty, const C4Facet & fctViewport) const       // get position this object is seen at (for given scroll)
+{
+	if (Category & C4D_Parallax) GetViewPosPar(riX, riY, tx, ty, fctViewport); else { riX = float(GetX()); riY = float(GetY()); }
 }
 
 bool C4Object::GetDrawPosition(const C4TargetFacet & cgo,
@@ -4691,7 +4640,7 @@ bool C4Object::StatusDeactivate(bool fClearPointers)
 	// put into inactive list
 	::Objects.Remove(this);
 	Status = C4OS_INACTIVE;
-	if (Landscape.pFoW) Landscape.pFoW->Remove(this);
+	if (Landscape.HasFoW()) Landscape.GetFoW()->Remove(this);
 	::Objects.InactiveObjects.Add(this, C4ObjectList::stMain);
 	// if desired, clear game pointers
 	if (fClearPointers)
@@ -4928,46 +4877,19 @@ bool C4Object::CanConcatPictureWith(C4Object *pOtherObject) const
 	return true;
 }
 
+bool C4Object::IsMoveableBySolidMask(int ComparisonPlane) const
+{
+	return (Status == C4OS_NORMAL)
+		&& !(Category & C4D_StaticBack)
+		&& (ComparisonPlane < GetPlane())
+		&& !Contained
+		;
+}
+
 void C4Object::UpdateScriptPointers()
 {
 	if (pEffects)
 		pEffects->ReAssignAllCallbackFunctions();
-}
-
-StdStrBuf C4Object::GetNeededMatStr() const
-{
-	C4Def* pComponent;
-	int32_t cnt, ncnt;
-	StdStrBuf NeededMats;
-
-	C4IDList NeededComponents;
-	Def->GetComponents(&NeededComponents, NULL);
-
-	C4ID idComponent;
-
-	for (cnt = 0; (idComponent=NeededComponents.GetID(cnt)); cnt ++)
-	{
-		if (NeededComponents.GetCount(cnt)!=0)
-		{
-			ncnt = NeededComponents.GetCount(cnt) - Component.GetIDCount(idComponent);
-			if (ncnt > 0)
-			{
-				NeededMats.AppendFormat("|%dx ", ncnt);
-				if ((pComponent = C4Id2Def(idComponent)))
-					NeededMats.Append(pComponent->GetName());
-				else
-					NeededMats.Append(idComponent.ToString());
-			}
-		}
-	}
-
-	StdStrBuf result;
-	if (!!NeededMats)
-		{ result.Format(LoadResStr("IDS_CON_BUILDMATNEED"), GetName()); result.Append(NeededMats.getData()); }
-	else
-		result.Format(LoadResStr("IDS_CON_BUILDMATNONE"), GetName());
-
-	return result;
 }
 
 bool C4Object::IsPlayerObject(int32_t iPlayerNumber) const
@@ -5034,7 +4956,7 @@ void C4Object::ResetProperty(C4String * k)
 	return C4PropListNumbered::ResetProperty(k);
 }
 
-bool C4Object::GetPropertyByS(C4String *k, C4Value *pResult) const
+bool C4Object::GetPropertyByS(const C4String *k, C4Value *pResult) const
 {
 	if (k >= &Strings.P[0] && k < &Strings.P[P_LAST])
 	{

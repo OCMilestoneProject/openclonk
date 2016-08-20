@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -18,7 +18,7 @@
 #ifndef STDBUF_H
 #define STDBUF_H
 
-#include "PlatformAbstraction.h"
+#include "platform/PlatformAbstraction.h"
 
 #include <zlib.h>
 
@@ -63,12 +63,10 @@ public:
 		else
 			Ref(Buf2);
 	}
-	StdBuf(StdBuf &&Buf2, bool fCopy = false)
+	StdBuf(StdBuf && Buf2) noexcept
 			: fRef(true), pData(NULL), iSize(0)
 	{
-		if (fCopy)
-			Copy(Buf2);
-		else if (!Buf2.isRef())
+		if (!Buf2.isRef())
 			Take(std::move(Buf2));
 		else
 			Ref(Buf2);
@@ -373,11 +371,11 @@ public:
 	StdCopyBuf(const StdCopyBuf &Buf2, bool fCopy = true)
 			: StdBuf(Buf2.getRef(), fCopy)
 	{ }
-	StdCopyBuf(StdBuf &&Buf2, bool fCopy = false)
-			: StdBuf(std::move(Buf2), fCopy)
+	StdCopyBuf(StdBuf & Buf2) noexcept
+			: StdBuf(std::move(Buf2))
 	{ }
-	StdCopyBuf(StdCopyBuf &&Buf2, bool fCopy = false)
-			: StdBuf(std::move(Buf2), fCopy)
+	StdCopyBuf(StdCopyBuf &&Buf2) noexcept
+			: StdBuf(std::move(Buf2))
 	{ }
 
 	// Set by constant data. Copies data by default.
@@ -414,8 +412,8 @@ public:
 	StdStrBuf(const StdStrBuf & Buf2, bool fCopy = true)
 			: StdBuf(Buf2, fCopy)
 	{ }
-	StdStrBuf(StdStrBuf &&Buf2, bool fCopy = false)
-			: StdBuf(std::move(Buf2), fCopy)
+	StdStrBuf(StdStrBuf && Buf2) noexcept
+			: StdBuf(std::move(Buf2))
 	{ }
 
 	// Set by constant data. References data by default, copies if specified.
@@ -480,16 +478,27 @@ public:
 	StdStrBuf Duplicate() const { StdStrBuf Buf; Buf.Copy(*this); return Buf; }
 	void Move(size_t iFrom, size_t inSize, size_t iTo = 0) { StdBuf::Move(iFrom, inSize, iTo); }
 
-	// Byte-wise compare (will compare characters up to the length of the second string)
+	// Byte-wise compare (will compare this string from iAt to the full string in Buf2)
 	int Compare(const StdStrBuf &Buf2, size_t iAt = 0) const
 	{
 		assert(iAt <= getLength());
-		return StdBuf::Compare(Buf2.getData(), Buf2.getLength(), iAt);
+		const int result = StdBuf::Compare(Buf2.getData(), std::min(getLength() - iAt, Buf2.getLength()), iAt);
+		if (result) return result;
+
+		if (getLength() < Buf2.getLength() + iAt) return -1;
+		else if (getLength() > Buf2.getLength() + iAt) return 1;
+		return 0;
 	}
 	int Compare_(const char *pCData, size_t iAt = 0) const
 	{
 		StdStrBuf str(pCData); // GCC needs this, for some obscure reason
 		return Compare(str, iAt);
+	}
+	bool BeginsWith(const char *beginning) const
+	{
+		// Return whether string starts with beginning
+		return strncmp((const char 
+			*)pData, beginning, strlen(beginning)) == 0;
 	}
 
 	// Grows the string to contain the specified number more/less characters.
@@ -548,6 +557,7 @@ public:
 	StdStrBuf &operator += (const char *szString) { Append(szString); return *this; }
 	StdStrBuf operator + (const StdStrBuf &Buf2) const { StdStrBuf Buf = getRef(); Buf.Append(Buf2); return Buf; }
 	StdStrBuf operator + (const char *szString) const { StdStrBuf Buf = getRef(); Buf.Append(szString); return Buf; }
+	StdStrBuf operator + (char c) const { StdStrBuf Buf = getRef(); Buf.AppendChar(c); return Buf; }
 
 	bool operator == (const StdStrBuf &Buf2) const
 	{
@@ -692,11 +702,11 @@ public:
 	StdCopyStrBuf(const StdCopyStrBuf &Buf2, bool fCopy = true)
 			: StdStrBuf(Buf2.getRef(), fCopy)
 	{ }
-	StdCopyStrBuf(StdStrBuf &&Buf2, bool fCopy = false)
-			: StdStrBuf(std::move(Buf2), fCopy)
+	StdCopyStrBuf(StdStrBuf && Buf2) noexcept
+			: StdStrBuf(std::move(Buf2))
 	{ }
-	StdCopyStrBuf(StdCopyStrBuf &&Buf2, bool fCopy = false)
-			: StdStrBuf(std::move(Buf2), fCopy)
+	StdCopyStrBuf(StdCopyStrBuf && Buf2) noexcept
+			: StdStrBuf(std::move(Buf2))
 	{ }
 
 	// Set by constant data. Copies data if desired.

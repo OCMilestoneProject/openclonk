@@ -34,6 +34,11 @@
           <col>Description</col>
         </rowh>
         <row id="Initialize">
+          <literal_col>Definition</literal_col>
+          <col></col>
+          <col>Called in definition context after all definitions have been loaded and before definition properties are frozen. Use this callback to initialize complex definition properties such as EditorProps or dependencies between definitions. Definition() callbacks are performed in descending order of the DefinitionPriority property or 0 if that property is not defined.</col>
+        </row>
+        <row id="Initialize">
           <literal_col>Initialize</literal_col>
           <col></col>
           <col>When the object is completed (<emlink href="script/fn/GetCon.html">Con</emlink> >= 100).</col>
@@ -47,6 +52,11 @@
           <literal_col>Destruction</literal_col>
           <col></col>
           <col>When the object is removed.</col>
+        </row>
+        <row id="EditorInitialize">
+          <literal_col>EditorInitialize</literal_col>
+          <col></col>
+          <col>Called after Construction and Initialize when the object is placed in the editor.</col>
         </row>
         <row id="Hit">
           <literal_col>Hit</literal_col>
@@ -188,15 +198,15 @@
           <col>object by</col>
           <col>Called before the object is hit or punched by another object. By returning <code>true</code>, QueryCatchBlow can reject physical blows.</col>
         </row>
-        <row id="LineBreak">
-          <literal_col>LineBreak</literal_col>
+        <row id="OnLineBreak">
+          <literal_col>OnLineBreak</literal_col>
           <col>int cause</col>
           <col>When a line object is broken. cause: 0 by movement, 1 because of a missing or incomplete target object.</col>
         </row>
-        <row id="BuildNeedsMaterial">
-          <literal_col>BuildNeedsMaterial</literal_col>
-          <col>id material_definition, int amount</col>
-          <col>When the object is building another object and building material is required. The parameters are the type and amount of the first needed material. If this function returns <code>true</code>, no material message is displayed above the object.</col>
+        <row id="OnLineChange">
+          <literal_col>OnLineChange</literal_col>
+          <col>int cause</col>
+          <col>When a line object is changed, that is when one of it vertices changed its position.</col>
         </row>
         <row id="AttachTargetLost">
           <literal_col>AttachTargetLost</literal_col>
@@ -333,6 +343,11 @@
           <col>int player, int new_team, int old_team</col>
           <col>Callback in game goal, rule, and environment objects and in the scenario script. Called when a player has successfully switch from old_team to new_team (see <funclink>SetPlayerTeam</funclink>).</col>
         </row>
+        <row id="OnCompletionChange">
+          <literal_col>OnCompletionChange</literal_col>
+          <col>int old_con, int new_con</col>
+          <col>Callback in when the completion of the object has changed (see <funclink>GetCon</funclink>, <funclink>DoCon</funclink> and <funclink>SetCon</funclink>).</col>
+        </row>     
         <row id="EditCursorSelection">
           <literal_col>EditCursorSelection</literal_col>
           <col></col>
@@ -348,7 +363,6 @@
           <col>int old_x, int old_y</col>
           <col>When object is moved in editor. Callback is also done when moved in non-network pause mode. old_x, old_y contains object position before movement.</col>
         </row>
-
         <row id="SaveScenarioObject">
           <literal_col>SaveScenarioObject</literal_col>
           <col>proplist props</col>
@@ -512,6 +526,19 @@ func SaveScenarioObject(props)
         </row>
       </table>
     </text>
+    <text>Properties published to the editor as EditorProps can also be saved automatically by setting the Save property of the EditorProp to a string that serves as an identifier so saved properties can be removed by derived definitions. These properties are atuomatically saved if they are different from their default value. E.g.:</text>
+   <code>/* Define two properties that can be set in the editor */
+// foo is a property with a setter function
+local foo = 42;
+public func SetFoo(new_foo) { foo = new_foo; return true; }
+
+// bar is just a property without setter
+local bar = 23;
+
+local EditorProps = {
+  foo = { Type="int", Set="SetFoo", Save="Foo" }; // saved as object->SetFoo(value); unless foo is 42.
+  bar = { Type="int", Save="Bar"; } // saved as object.bar = value; unless bar is 23.
+};</code>
     <text>By default, effects are not saved in scenarios. To force saving of an effect, define the Fx*SaveScen callback. For example, the fire effect saves itself like this:</text>
 <code>global func FxFireSaveScen(object obj, proplist fx, proplist props)
 {

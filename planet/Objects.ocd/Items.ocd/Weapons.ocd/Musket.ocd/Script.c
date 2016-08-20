@@ -1,30 +1,25 @@
-/*--
+/**
 	Musket
-	Author: Ringwaul
-
 	A single shot musket which fires metal-shot at incredible speed.
+	
+	@author: Ringwaul
+*/
 
---*/
-
-//Uses the extra slot library
 #include Library_HasExtraSlot
 
-func Hit()
-{
-	Sound("Hits::GeneralHit?");
-}
-
-local fAiming;
-
-public func GetCarryMode(clonk) { if(fAiming >= 0) return CARRY_Musket; }
-public func GetCarrySpecial(clonk) { if(fAiming > 0) return "pos_hand2"; }
-public func GetCarryBone()	{	return	"main";	}
-public func GetCarryTransform()
-{
-	return Trans_Rotate(90, 1, 0, 0);
-}
-
+local is_aiming;
 local animation_set;
+local loaded;
+local reload;
+
+local yOffset;
+local iBarrel;
+
+local holding;
+
+local MuskUp; local MuskFront; local MuskDown; local MuskOffset;
+
+/*-- Engine Callbacks --*/
 
 func Initialize()
 {
@@ -33,6 +28,9 @@ func Initialize()
 	MuskFront = 13;
 	MuskDown = 16;
 	MuskOffset = -8;
+	
+	loaded = false;
+	is_aiming = false;
 	
 	animation_set = {
 		AimMode        = AIM_Position, // The aiming animation is done by adjusting the animation position to fit the angle
@@ -46,26 +44,57 @@ func Initialize()
 	};
 }
 
+func Hit()
+{
+	Sound("Hits::GeneralHit?");
+}
+
+func RejectCollect(id shotid, object shot)
+{
+	// Only collect musket-ammo
+	if(!(shot->~IsMusketAmmo())) return true;
+}
+
+/*-- Callbacks --*/
+
 public func GetAnimationSet() { return animation_set; }
 
-local loaded;
-local reload;
+// Callback from the clonk when loading is finished
+public func FinishedLoading(object clonk)
+{
+	SetLoaded();
+	if(holding) clonk->StartAim(this);
+	return holding; // false means stop here and reset the clonk
+}
 
-local yOffset;
-local iBarrel;
+// Callback from the clonk, when he actually has stopped aiming
+public func FinishedAiming(object clonk, int angle)
+{
+	if(!loaded) return;
+	
+	// Fire
+	if(Contents(0) && Contents(0)->IsMusketAmmo())
+		FireWeapon(clonk, angle);
+	clonk->StartShoot(this);
+	return true;
+}
 
-local holding;
+// Can only be stacked with same state: loaded vs. non-loaded.
+public func CanBeStackedWith(object other)
+{
+	return this->IsLoaded() == other->~IsLoaded() && inherited(other, ...);
+}
 
-local MuskUp; local MuskFront; local MuskDown; local MuskOffset;
+/*-- Usage --*/
 
-protected func HoldingEnabled() { return true; }
+public func HoldingEnabled() { return true; }
 
-func RejectUse(object clonk)
+public func RejectUse(object clonk)
 {
 	return !clonk->HasHandAction(false, false, true);
 }
 
-func ControlUseStart(object clonk, int x, int y)
+public func ControlUseStart(object clonk, int x, int y)
 {
 	// nothing in extraslot?
 	if(!Contents(0))
@@ -86,7 +115,7 @@ func ControlUseStart(object clonk, int x, int y)
 		return true;
 	}
 
-	fAiming = 1;
+	is_aiming = true;
 
 	holding = true;
 	
@@ -101,16 +130,7 @@ func ControlUseStart(object clonk, int x, int y)
 	return true;
 }
 
-// Callback from the clonk when loading is finished
-public func FinishedLoading(object clonk)
-{
-	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(500,1000,-000),Trans_Rotate(130,0,1,0),Trans_Rotate(20,0,0,1)));
-	loaded = true;
-	if(holding) clonk->StartAim(this);
-	return holding; // false means stop here and reset the clonk
-}
-
-func ControlUseHolding(object clonk, ix, iy)
+public func ControlUseHolding(object clonk, ix, iy)
 {
 	var angle = Angle(0,0,ix,iy-MuskOffset);
 	angle = Normalize(angle,-180);
@@ -120,37 +140,25 @@ func ControlUseHolding(object clonk, ix, iy)
 	return true;
 }
 
-protected func ControlUseStop(object clonk, ix, iy)
-{
-	holding = false;
-	clonk->StopAim();
-	return -1;
-}
-
-// Callback from the clonk, when he actually has stopped aiming
-public func FinishedAiming(object clonk, int angle)
-{
-	if(!loaded) return;
-	
-	// Fire
-	if(Contents(0) && Contents(0)->IsMusketAmmo())
-		FireWeapon(clonk, angle);
-	clonk->StartShoot(this);
-	return true;
-}
-
-protected func ControlUseCancel(object clonk, int x, int y)
+public func ControlUseCancel(object clonk, int x, int y)
 {
 	clonk->CancelAiming(this);
 	return true;
 }
 
-public func Reset(clonk)
+public func ControlUseStop(object clonk, ix, iy)
 {
-	fAiming = 0;
+	holding = false;
+	clonk->StopAim();
+	return true;
 }
 
-private func FireWeapon(object clonk, int angle)
+public func Reset(clonk)
+{
+	is_aiming = false;
+}
+
+func FireWeapon(object clonk, int angle)
 {
 	// calculate offset for shot and effects
 	var IX=Sin(180-angle,MuskFront);
@@ -175,20 +183,49 @@ private func FireWeapon(object clonk, int angle)
 	CreateParticle("Flash", 0, 0, 0, 0, 8, Particles_Flash());
 }
 
-func RejectCollect(id shotid, object shot)
+public func SetLoaded()
 {
-	// Only collect musket-ammo
-	if(!(shot->~IsMusketAmmo())) return true;
+	loaded = true;
+	// Change picture to indicate being loaded.
+	this.PictureTransformation = Trans_Mul(Trans_Translate(500,1000,-000),Trans_Rotate(130,0,1,0),Trans_Rotate(20,0,0,1));
+	return;
 }
+
+public func IsLoaded() { return loaded; }
+
+/*-- Production --*/
 
 public func IsWeapon() { return true; }
 public func IsArmoryProduct() { return true; }
+
+/*-- Display --*/
+
+public func GetCarryMode(object clonk, bool idle, bool nohand)
+{
+	if (idle || nohand)
+		return CARRY_Back;
+
+	return CARRY_Musket;
+}
+
+public func GetCarrySpecial(clonk)
+{
+	if (is_aiming) return "pos_hand2";
+}
+
+public func GetCarryTransform()
+{
+	return Trans_Rotate(90, 1, 0, 0);
+}
 
 func Definition(def) {
 	SetProperty("PictureTransformation",Trans_Mul(Trans_Translate(1500,0,-1500),Trans_Rotate(170,0,1,0),Trans_Rotate(30,0,0,1)),def);
 }
 
+/*-- Properties --*/
+
 local Name = "$Name$";
 local Description = "$Description$";
-local Collectible = 1;
+local Collectible = true;
 local ForceFreeHands = true;
+local Components = {Wood = 1, Metal = 2};

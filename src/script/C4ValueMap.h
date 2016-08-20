@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2013, The OpenClonk Team and contributors
+ * Copyright (c) 2013-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -118,7 +118,7 @@ public:
 	// returns the nr of the given name
 	// (= nr of value in "child" data lists)
 	// returns -1 if no item with given name exists
-	int32_t GetItemNr(const char *strName);
+	int32_t GetItemNr(const char *strName) const;
 
 	// get name by index; awway bounds not checked
 	const char *GetItemUnsafe(int32_t idx) const { return pNames[idx]; }

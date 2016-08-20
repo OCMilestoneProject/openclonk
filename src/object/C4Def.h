@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,19 +20,19 @@
 #ifndef INC_C4Def
 #define INC_C4Def
 
-#include <C4Shape.h>
-#include <C4InfoCore.h>
-#include <C4IDList.h>
-#include <C4ValueMap.h>
-#include <C4Facet.h>
-#include <C4Surface.h>
-#include <C4ComponentHost.h>
-#include <C4PropList.h>
+#include "object/C4Shape.h"
+#include "object/C4InfoCore.h"
+#include "object/C4IDList.h"
+#include "script/C4ValueMap.h"
+#include "graphics/C4Facet.h"
+#include "graphics/C4Surface.h"
+#include "c4group/C4ComponentHost.h"
+#include "script/C4PropList.h"
 
-#include <C4ScriptHost.h>
-#include <C4DefGraphics.h>
-#include "C4LangStringTable.h"
-#include "C4InputValidation.h"
+#include "script/C4ScriptHost.h"
+#include "object/C4DefGraphics.h"
+#include "c4group/C4LangStringTable.h"
+#include "lib/C4InputValidation.h"
 
 #include <functional>
 #include <set>
@@ -110,7 +110,6 @@ public:
 	C4Rect PictureRect;
 	C4TargetRect SolidMask;
 	C4TargetRect TopFace;
-	C4IDList Component;
 	C4ID BurnTurnTo;
 	int32_t GrowthType;
 	int32_t CrewMember;
@@ -138,7 +137,7 @@ public:
 	int32_t VehicleControl;
 	int32_t Pathfinder;
 	int32_t MoveToRange;
-	int32_t NoComponentMass;
+	int32_t NoMassFromContents;
 	int32_t NoStabilize;
 	int32_t ClosedContainer;  // if set, contained objects are not damaged by lava/acid etc. 1: Contained objects can't view out; 2: They can
 	int32_t SilentCommands;   // if set, no command failure messages are printed
@@ -150,6 +149,7 @@ public:
 	int32_t RotatedEntrance;  // 0 entrance not rotateable, 1 entrance always, 2-360 entrance within this rotation
 	int32_t NoTransferZones;
 	int32_t AllowPictureStack; // allow stacking of multiple items in menus even if some attributes do not match. APS_*-values
+	bool HideInCreator;       // If true, the definition is not visible in the object creator of the editor
 public:
 	void DefaultDefCore();
 	bool LoadDefCore(C4Group &hGroup);
@@ -159,7 +159,7 @@ protected:
 	bool Compile(const char *szSource, const char *szName);
 	bool Decompile(StdStrBuf *pOut, const char *szName);
 private:
-	void LoadMeshMaterials(C4Group &hGroup);
+	void LoadMeshMaterials(C4Group &hGroup, C4DefGraphicsPtrBackup *gfx_backup);
 	bool LoadParticleDef(C4Group &hGroup);
 	bool LoadSolidMask(C4Group &hGroup);
 	bool LoadGraphics(C4Group &hGroup, StdMeshSkeletonLoader &loader);
@@ -169,6 +169,7 @@ private:
 	void LoadRankFaces(C4Group &hGroup);
 	void LoadSounds(C4Group &hGroup, C4SoundSystem* pSoundSystem);
 
+	std::set<StdCopyStrBuf> mesh_materials;
 
 // Here begins the C4Def
 	friend class C4DefList;
@@ -203,9 +204,10 @@ public:
 	void Clear();
 	void Default();
 	bool Load(C4Group &hGroup,
-		      StdMeshSkeletonLoader &loader,
-	          DWORD dwLoadWhat, const char *szLanguage,
-	          class C4SoundSystem *pSoundSystem = NULL);
+		StdMeshSkeletonLoader &loader,
+		DWORD dwLoadWhat, const char *szLanguage,
+		class C4SoundSystem *pSoundSystem = nullptr,
+		C4DefGraphicsPtrBackup *gfx_backup = nullptr);
 	void Draw(C4Facet &cgo, bool fSelected=false, DWORD iColor=0, C4Object *pObj=NULL, int32_t iPhaseX=0, int32_t iPhaseY=0, C4DrawTransform* trans=NULL, const char * graphicsName=NULL);
 
 	inline C4Facet &GetMainFace(C4DefGraphics *pGraphics, DWORD dwClr=0) { MainFace.Surface=pGraphics->GetBitmap(dwClr); return MainFace; }
@@ -219,11 +221,6 @@ protected:
 	bool LoadActMap(C4Group &hGroup);
 	void CrossMapActMap();
 public:
-	// return def components - may be overloaded by script callback
-	int32_t GetComponentCount(C4ID idComponent);
-	C4ID GetIndexedComponent(int32_t idx);
-	void GetComponents(C4IDList *pOutList, C4Object *pObjInstance=NULL);
-
 	void IncludeDefinition(C4Def *pIncludeDef); // inherit components from other definition
 	void ResetIncludeDependencies(); // resets all pointers into foreign definitions caused by include chains
 

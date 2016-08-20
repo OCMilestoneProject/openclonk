@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,17 +17,18 @@
 
 /* Textures used by the landscape */
 
-#include <C4Include.h>
-#include <C4Texture.h>
-#include <C4TextureShape.h>
+#include "C4Include.h"
+#include "landscape/C4Texture.h"
+#include "landscape/C4TextureShape.h"
 
-#include <C4Group.h>
-#include <C4Game.h>
-#include <C4Config.h>
-#include <C4Components.h>
-#include <C4Material.h>
-#include <C4Landscape.h>
-#include <C4Log.h>
+#include "c4group/C4Group.h"
+#include "game/C4Game.h"
+#include "config/C4Config.h"
+#include "c4group/C4Components.h"
+#include "landscape/C4Material.h"
+#include "landscape/C4Landscape.h"
+#include "lib/C4Log.h"
+#include "lib/C4Random.h"
 #include "lib/StdColors.h"
 
 #include <ctype.h>
@@ -217,7 +218,7 @@ bool C4TextureMap::LoadFlags(C4Group &hGroup, const char *szEntryName, bool *pOv
 
 int32_t C4TextureMap::LoadMap(C4Group &hGroup, const char *szEntryName, bool *pOverloadMaterials, bool *pOverloadTextures)
 {
-	static re::regex line_terminator("\r?\n", static_cast<re::regex::flag_type>(re::regex_constants::optimize | re::regex_constants::ECMAScript));
+	static std::regex line_terminator("\r?\n", static_cast<std::regex::flag_type>(std::regex_constants::optimize | std::regex_constants::ECMAScript));
 
 	char *bpMap;
 	size_t map_size;
@@ -229,7 +230,7 @@ int32_t C4TextureMap::LoadMap(C4Group &hGroup, const char *szEntryName, bool *pO
 	char *end = begin + map_size;
 
 	size_t line = 1; // Counter for error messages
-	for (auto it = re::cregex_token_iterator(begin, end, line_terminator, -1); it != re::cregex_token_iterator(); ++it, ++line)
+	for (auto it = std::cregex_token_iterator(begin, end, line_terminator, -1); it != std::cregex_token_iterator(); ++it, ++line)
 	{
 		if (it->compare("OverloadMaterials") == 0)
 		{
@@ -570,9 +571,9 @@ void C4TextureMap::StoreMapPalette(CStdPalette *Palette, C4MaterialMap &rMateria
 				if (j >= i) break;
 				// change randomly
 				Palette->Colors[i] = C4RGB(
-					(rand() < RAND_MAX / 2) ? GetRedValue(Palette->Colors[i]) + 3 : GetRedValue(Palette->Colors[i]) - 3,
-					(rand() < RAND_MAX / 2) ? GetGreenValue(Palette->Colors[i]) + 3 : GetGreenValue(Palette->Colors[i]) - 3,
-					(rand() < RAND_MAX / 2) ? GetBlueValue(Palette->Colors[i]) + 3 : GetBlueValue(Palette->Colors[i]) - 3);
+					UnsyncedRandom(2) ? GetRedValue(Palette->Colors[i]) + 3 : GetRedValue(Palette->Colors[i]) - 3,
+					UnsyncedRandom(2) ? GetGreenValue(Palette->Colors[i]) + 3 : GetGreenValue(Palette->Colors[i]) - 3,
+					UnsyncedRandom(2) ? GetBlueValue(Palette->Colors[i]) + 3 : GetBlueValue(Palette->Colors[i]) - 3);
 			}
 }
 

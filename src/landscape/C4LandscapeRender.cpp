@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2011-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2011-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -14,17 +14,17 @@
  */
 
 #include "C4Include.h"
-#include "C4LandscapeRender.h"
+#include "landscape/C4LandscapeRender.h"
 
-#include "C4Landscape.h"
-#include "C4Texture.h"
-#include "C4FoWRegion.h"
+#include "landscape/C4Landscape.h"
+#include "landscape/C4Texture.h"
+#include "landscape/fow/C4FoWRegion.h"
 
-#include "C4GroupSet.h"
-#include "C4Components.h"
+#include "c4group/C4GroupSet.h"
+#include "c4group/C4Components.h"
 
-#include "C4DrawGL.h"
-#include "StdColors.h"
+#include "graphics/C4DrawGL.h"
+#include "lib/StdColors.h"
 
 #include <algorithm>
 
@@ -54,7 +54,7 @@ const char *const SEPERATOR_TEXTURE = "--SEP--";
 C4LandscapeRenderGL::C4LandscapeRenderGL()
 {
 	ZeroMem(Surfaces, sizeof(Surfaces));
-	hMaterialTexture = 0;
+	hMaterialTexture = matMapTexture = 0;
 	hVBO = 0;
 	hVAOIDNoLight = 0;
 	hVAOIDLight = 0;
@@ -146,6 +146,8 @@ void C4LandscapeRenderGL::Clear()
 	}
 	if (hMaterialTexture) glDeleteTextures(1, &hMaterialTexture);
 	hMaterialTexture = 0;
+	if (matMapTexture) glDeleteTextures(1, &matMapTexture);
+	matMapTexture = 0;
 
 	if (hVBO != 0)
 	{
@@ -297,6 +299,9 @@ bool C4LandscapeRenderGL::InitMaterialTexture(C4TextureMap *pTexs)
 	// Clear error error(s?)
 	while(glGetError()) {}
 	
+	// Alloc 1D matmap texture
+	glGenTextures(1, &matMapTexture);
+
 	// Alloc 2D texture array
 	glGenTextures(1, &hMaterialTexture);
 
@@ -625,6 +630,7 @@ bool C4LandscapeRenderGL::LoadShaders(C4GroupSet *pGroups)
 	UniformNames[C4LRU_MaterialSize]      = "materialSize";
 	UniformNames[C4LRU_AmbientBrightness] = "ambientBrightness";
 	UniformNames[C4LRU_AmbientTransform]  = "ambientTransform";
+	UniformNames[C4LRU_Modulation]        = "clrMod";
 
 	if(!LoadShader(pGroups, Shader, "landscape", 0))
 		return false;
@@ -921,7 +927,7 @@ void C4LandscapeRenderGL::BuildMatMap(uint32_t *pTex)
 	}
 }
 
-void C4LandscapeRenderGL::Draw(const C4TargetFacet &cgo, const C4FoWRegion *Light)
+void C4LandscapeRenderGL::Draw(const C4TargetFacet &cgo, const C4FoWRegion *Light, uint32_t clrMod)
 {
 	// Must have GL and be initialized
 	if(!pGL && !Shader.Initialised() && !ShaderLight.Initialised()) return;
@@ -952,6 +958,13 @@ void C4LandscapeRenderGL::Draw(const C4TargetFacet &cgo, const C4FoWRegion *Ligh
 	ShaderCall.SetUniform2f(C4LRU_MaterialSize,
 	                        float(iMaterialWidth) / ::Game.C4S.Landscape.MaterialZoom,
 	                        float(iMaterialHeight) / ::Game.C4S.Landscape.MaterialZoom);
+	const float fMod[4] = {
+		((clrMod >> 16) & 0xff) / 255.0f,
+		((clrMod >>  8) & 0xff) / 255.0f,
+		((clrMod      ) & 0xff) / 255.0f,
+		((clrMod >> 24) & 0xff) / 255.0f
+	};
+	ShaderCall.SetUniform4fv(C4LRU_Modulation, 1, fMod);
 
 	if (Light)
 	{
@@ -1009,6 +1022,7 @@ void C4LandscapeRenderGL::Draw(const C4TargetFacet &cgo, const C4FoWRegion *Ligh
 	{
 		uint32_t MatMap[2*256];
 		BuildMatMap(MatMap);
+		glBindTexture(GL_TEXTURE_1D, matMapTexture);
 		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA8, 2*256, 0, GL_RGBA, GL_UNSIGNED_BYTE, MatMap);
 		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	}

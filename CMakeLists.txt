@@ -1,6 +1,6 @@
 # OpenClonk, http://www.openclonk.org
 #
-# Copyright (c) 2009-2015, The OpenClonk Team and contributors
+# Copyright (c) 2009-2016, The OpenClonk Team and contributors
 #
 # Distributed under the terms of the ISC license; see accompanying file
 # "COPYING" for details.
@@ -12,6 +12,17 @@
 # for the above references.
 
 cmake_minimum_required (VERSION 3.0.2)
+
+# Don't allow people to build "Release" builds because there's no reason to do that.
+# Use one of RelWithDebInfo or MinSizeRel instead.
+set(CMAKE_CONFIGURATION_TYPES Debug RelWithDebInfo MinSizeRel CACHE STRING "List of supported configuration types." FORCE)
+
+# Set a default build type as the empty build type is without either debug
+# symbols or optimizations and thus completely useless.
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
 project (openclonk CXX C)
 
 # CMP0054: Only interpret if() arguments as variables or keywords when unquoted
@@ -34,8 +45,7 @@ include(CMakeDependentOption)
 option(PROJECT_FOLDERS "Put source files into subfolders in project file" ON)
 CMAKE_DEPENDENT_OPTION(USE_COCOA         "Use Apple Cocoa widgets." ON "APPLE" OFF)
 CMAKE_DEPENDENT_OPTION(USE_WIN32_WINDOWS "Use Microsoft Desktop App User Interface widgets." ON "WIN32" OFF)
-CMAKE_DEPENDENT_OPTION(USE_GTK           "Use GTK+ widgets." ON "NOT USE_COCOA AND NOT USE_WIN32_WINDOWS" OFF)
-CMAKE_DEPENDENT_OPTION(USE_SDL_MAINLOOP  "Use SDL to create windows etc. No editor." ON "NOT USE_COCOA AND NOT USE_WIN32_WINDOWS AND NOT USE_GTK" OFF)
+CMAKE_DEPENDENT_OPTION(USE_SDL_MAINLOOP  "Use SDL to create windows etc. Qt editor." ON "NOT USE_COCOA AND NOT USE_WIN32_WINDOWS" OFF)
 option(WITH_AUTOMATIC_UPDATE "Automatic updates are downloaded from the project website." OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ${PROJECT_FOLDERS})
@@ -45,95 +55,118 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ${PROJECT_FOLDERS})
 ############################################################################
 include(CheckCXXCompilerFlag)
 
-set(OC_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-separate_arguments(OC_CXX_FLAGS)
-set(OC_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
-separate_arguments(OC_CXX_FLAGS_DEBUG)
-set(OC_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS})
-separate_arguments(OC_EXE_LINKER_FLAGS)
-set(OC_EXE_LINKER_FLAGS_DEBUG ${CMAKE_EXE_LINKER_FLAGS_DEBUG})
-separate_arguments(OC_EXE_LINKER_FLAGS_DEBUG)
+# Required for CMake >= 3.1.0 and Qt >= 5.7
+set(CMAKE_CXX_STANDARD 14)
 
 CHECK_CXX_COMPILER_FLAG("-std=gnu++14" USE_GCC_STD_14)
 if(USE_GCC_STD_14)
-	list(APPEND OC_CXX_FLAGS "-std=gnu++14")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14")
+endif()
+
+# Enable link-time code generation. We have to do this manually because while
+# there is a INTERPROCEDURAL_OPTIMIZATION cmake flag, it's only implemented
+# for icc so far; https://cmake.org/Bug/view.php?id=15939
+function(add_linker_flags)
+	include(CMakeParseArguments)
+	set(options optimized debug)
+	set(oneValueArgs FLAGS)
+	set(multiValueArgs MODULES)
+
+	cmake_parse_arguments(_alf "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+	# Adds some linker flags to all optimized build configurations
+	set(_configurations "")
+	if(_alf_optimized)
+		list(APPEND _configurations MINSIZEREL RELWITHDEBINFO RELEASE)
+	endif()
+	if(_alf_debug)
+		list(APPEND _configurations DEBUG)
+	endif()
+
+	foreach(_module ${_alf_MODULES})
+		string(TOUPPER "${_module}" _obj_type)
+		foreach(_config ${_configurations})
+			set(CMAKE_${_obj_type}_LINKER_FLAGS_${_config} "${CMAKE_${_obj_type}_LINKER_FLAGS_${_config}} ${_alf_FLAGS}" PARENT_SCOPE)
+		endforeach()
+	endforeach()
+endfunction()
+
+CHECK_CXX_COMPILER_FLAG("-flto" USE_GCC_STYLE_LTCG)
+if(USE_GCC_STYLE_LTCG)
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -flto")
+	set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -flto")
+	add_linker_flags(optimized MODULES exe shared FLAGS -flto)
+
+	# Use GCC's ar and ranlib wrappers if necessary, because the plain ones 
+	# don't understand lto objects without an explicit plugin parameter
+	if(CMAKE_C_COMPILER MATCHES "gcc$")
+		set(LTCG_NEEDS_AR_WRAPPER 1)
+		set(LTCG_AR_WRAPPER_PREFIX "${CMAKE_C_COMPILER}")
+	elseif(CMAKE_C_COMPILER MATCHES "cc$")
+		set(LTCG_NEEDS_AR_WRAPPER 1)
+		set(LTCG_AR_WRAPPER_PREFIX "gcc")
+	else()
+		set(LTCG_NEEDS_AR_WRAPPER 0)
+	endif()
+
+	if(LTCG_NEEDS_AR_WRAPPER)
+		find_program(AR_WRAPPER "${LTCG_AR_WRAPPER_PREFIX}-ar")
+		if (AR_WRAPPER)
+			message("Using ${AR_WRAPPER} instead of ${CMAKE_AR} to support lto objects.")
+			set(CMAKE_AR "${AR_WRAPPER}" CACHE FILEPATH "Path to an ar that supports lto objects." FORCE)
+		endif()
+		find_program(RANLIB_WRAPPER "${LTCG_AR_WRAPPER_PREFIX}-ranlib")
+		if (RANLIB_WRAPPER)
+			message("Using ${RANLIB_WRAPPER} instead of ${CMAKE_RANLIB} to support lto objects.")
+			set(CMAKE_RANLIB "${RANLIB_WRAPPER}" CACHE FILEPATH "Path to a ranlib that supports lto objects." FORCE)
+		endif()
+	endif()
 endif()
 
 if(MSVC)
 	# Disable non-standard conversion from string literal to (nonconst) char*
-	list(APPEND OC_CXX_FLAGS /Zc:strictStrings)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:strictStrings")
 
-	list(APPEND OC_CXX_FLAGS /MP)
-	list(REMOVE_ITEM OC_CXX_FLAGS_DEBUG /Gm)
+	# Enable multi-core builds
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+
+	# Enable LTCG for release builds
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Ob2 /GL")
+	set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /Ob2 /GL")
+	add_linker_flags(optimized MODULES exe shared static FLAGS "/LTCG:incremental")
 
 	# Activate edit-and-continue
-	list(REMOVE_ITEM OC_CXX_FLAGS_DEBUG /Zi)
-	list(APPEND OC_CXX_FLAGS_DEBUG /ZI /Gy)
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /ZI /Gy")
 
 	# do not link the release CRT in debug builds
-	list(APPEND OC_EXE_LINKER_FLAGS_DEBUG "/NODEFAULTLIB:MSVCRT")
+	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /NODEFAULTLIB:MSVCRT")
 	set(HAVE_PRECOMPILED_HEADERS ON CACHE INTERNAL "Compiler supports precompiled headers")
 
 	# Suppress warnings about "non-secure" functions
 	add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS)
 	# Disable warning C4244: 'conversion' conversion from 'type1' to 'type2', possible loss of data
-	list(APPEND OC_CXX_FLAGS "/wd4244")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244")
 	# Disable warning C4267: 'var' : conversion from 'size_t' to 'type', possible loss of data (64 bit build only)
-	list(APPEND OC_CXX_FLAGS "/wd4267")
-endif()
-
-if(CMAKE_COMPILER_IS_GNUCXX)
-	list(APPEND OC_CXX_FLAGS -Wall -Wextra -Wredundant-decls -Wendif-labels -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings -Winit-self -Wsign-promo -Wno-reorder -Wno-unused-parameter -Wnon-virtual-dtor -Woverloaded-virtual)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4267")
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	list(APPEND OC_CXX_FLAGS -Wall -Wextra -Wextra-tokens -Wpointer-arith -Wno-cast-align -Wno-reorder -Wno-unused-parameter -Wnon-virtual-dtor -Woverloaded-virtual)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wextra-tokens -Wpointer-arith -Wno-cast-align -Wno-reorder -Wno-unused-parameter -Wnon-virtual-dtor -Woverloaded-virtual")
+elseif(CMAKE_COMPILER_IS_GNUCXX)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wredundant-decls -Wendif-labels -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings -Winit-self -Wsign-promo -Wno-reorder -Wno-unused-parameter -Wnon-virtual-dtor -Woverloaded-virtual")
 endif()
 
 if(WIN32 AND MINGW)
 	# Activate DEP and ASLR
-	list(APPEND OC_EXE_LINKER_FLAGS -Wl,--nxcompat -Wl,--dynamicbase)
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--nxcompat -Wl,--dynamicbase")
 endif()
 
 if(UNIX)
-	# Don't put this into CMAKE_CXX_FLAGS because otherwise it is cached,
-	# and when the path is changed both the old and new definition appears
-	# in the list of flags.
 	add_definitions("-DOC_SYSTEM_DATA_DIR=\"${CMAKE_INSTALL_PREFIX}/share/games/openclonk\"")
 endif()
 
 if(APPLE)
-	list(APPEND OC_CXX_FLAGS -fobjc-arc)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fobjc-arc -headerpad_max_install_names")
 endif()
-
-if(OC_CXX_FLAGS)
-	list(REMOVE_DUPLICATES OC_CXX_FLAGS)
-endif()
-set(CMAKE_CXX_FLAGS "" CACHE STRING "C++ compiler flags" FORCE)
-foreach(FLAG ${OC_CXX_FLAGS})
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAG}" CACHE STRING "C++ compiler flags" FORCE)
-endforeach()
-if(OC_CXX_FLAGS_DEBUG)
-	list(REMOVE_DUPLICATES OC_CXX_FLAGS_DEBUG)
-endif()
-set(CMAKE_CXX_FLAGS_DEBUG "" CACHE STRING "Flags used by the compiler during debug builds." FORCE)
-foreach(FLAG ${OC_CXX_FLAGS_DEBUG})
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${FLAG}" CACHE STRING "Flags used by the compiler during debug builds." FORCE)
-endforeach()
-if(OC_EXE_LINKER_FLAGS)
-	list(REMOVE_DUPLICATES OC_EXE_LINKER_FLAGS)
-endif()
-set(CMAKE_EXE_LINKER_FLAGS "" CACHE STRING "Flags used by the linker." FORCE)
-foreach(FLAG ${OC_EXE_LINKER_FLAGS})
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${FLAG}" CACHE STRING "Flags used by the linker." FORCE)
-endforeach()
-if(OC_EXE_LINKER_FLAGS_DEBUG)
-	list(REMOVE_DUPLICATES OC_EXE_LINKER_FLAGS_DEBUG)
-endif()
-set(CMAKE_EXE_LINKER_FLAGS_DEBUG "" CACHE STRING "Flags used by the linker during debug builds." FORCE)
-foreach(FLAG ${OC_EXE_LINKER_FLAGS_DEBUG})
-	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${FLAG}" CACHE STRING "Flags used by the linker during debug builds." FORCE)
-endforeach()
 
 ############################################################################
 # Check for compiler quirks and features
@@ -262,9 +295,8 @@ add_definitions(${GLEW_DEFINITIONS})
 set(CMAKE_REQUIRED_INCLUDES "${GLEW_INCLUDE_DIRS}")
 CHECK_CXX_SOURCE_COMPILES("#include <GL/glew.h>\nvoid GLAPIENTRY OpenGLDebugProc(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const char* message, const void* userParam) {}\nint main() { GLDEBUGPROCARB proc = &OpenGLDebugProc; }" GLDEBUGPROCARB_USERPARAM_IS_CONST)
 
-if(USE_GTK AND UNIX)
+if(UNIX AND NOT APPLE)
 	FINDLIB(X11_LIBRARIES X11)
-	FINDLIB(XRANDR_LIBRARIES Xrandr)
 endif()
 
 if (WIN32)
@@ -287,13 +319,6 @@ endif()
 SET(HAVE_LIBREADLINE ${READLINE_FOUND} CACHE INTERNAL "libreadline available")
 
 find_package(GTK3 COMPONENTS gthread gio gobject glib OPTIONAL_COMPONENTS gtksourceview)
-if(USE_GTK)
-	SET(WITH_GLIB ${GTK3_FOUND})
-	include_directories(SYSTEM ${GTK3_INCLUDE_DIRS})
-	# Set GTK link directory. This needs to be done before add_executable,
-	# otherwise the path is not used for linking clonk
-	link_directories(${GTK3_LIBRARY_DIRS})
-endif()
 
 # Select an audio library
 find_package("Audio")
@@ -304,12 +329,27 @@ endif()
 # SDL
 if(USE_SDL_MAINLOOP)
 	find_package(SDL2 REQUIRED)
-elseif(NOT WIN32)
+else()
 	# for gamepads
 	find_package(SDL2)
 endif()
 set(HAVE_SDL ${SDL2_FOUND})
 include_directories(SYSTEM ${SDL2_INCLUDE_DIRS})
+
+# Qt5 for editor
+find_path(Qt5DIR qt.pro PATHS ${CMAKE_ADDITIONAL_DEPS_PATH}/qt-5.5.0)
+find_package(Qt5Widgets PATHS ${Qt5DIR}/qtbase/lib/cmake/Qt5Widgets)
+if(Qt5Widgets_FOUND)
+	SET(WITH_QT_EDITOR ${Qt5Widgets_FOUND} "Qt editor dialogues available")
+	set(CMAKE_AUTOMOC ON)
+	set(CMAKE_AUTOUIC ON)
+	# As moc files are generated in the binary dir, tell CMake
+	# to always look for includes there:
+	set(CMAKE_INCLUDE_CURRENT_DIR ON)
+else()
+	message("Qt5Widgets not found. Building openclonk without editor.")		
+	UNSET(WITH_QT_EDITOR)
+endif()
 
 ############################################################################
 # generated source files
@@ -330,31 +370,6 @@ add_custom_command(
 		${CMAKE_CURRENT_SOURCE_DIR}/src/res/ocg.ico
 		${CMAKE_CURRENT_SOURCE_DIR}/src/res/ocm.ico
 		${CMAKE_CURRENT_SOURCE_DIR}/src/res/ocs.ico
-	VERBATIM
-)
-
-add_custom_command(
-	OUTPUT engine-resource.c
-	COMMAND
-		${GLIB_COMPILE_RESOURCES} "--internal" "--generate"
-		"--target" "engine-resource.c"
-		"--sourcedir" ${CMAKE_CURRENT_SOURCE_DIR}/src/res
-		"${CMAKE_CURRENT_SOURCE_DIR}/src/res/engine.xml"
-	MAIN_DEPENDENCY src/res/engine.xml
-	DEPENDS
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Brush_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Halt_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Picker_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Cursor_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Play_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Dynamic_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Line_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Rect_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Exact_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Mouse_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Static_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/Fill_Trans.png
-		${CMAKE_CURRENT_SOURCE_DIR}/src/res/oc.ico
 	VERBATIM
 )
 
@@ -467,20 +482,14 @@ set(OC_CLONK_SOURCES
 	src/game/C4FullScreen.h
 	src/game/C4Game.cpp
 	src/game/C4Game.h
+	src/game/C4GameScript.cpp
+	src/game/C4GameScript.h
 	src/game/C4GameVersion.h
 	src/game/C4GraphicsSystem.cpp
 	src/game/C4GraphicsSystem.h
 	src/game/C4Physics.h
 	src/game/C4Viewport.cpp
 	src/game/C4Viewport.h
-	src/gamescript/C4Effect.cpp
-	src/gamescript/C4Effect.h
-	src/gamescript/C4FindObject.cpp
-	src/gamescript/C4FindObject.h
-	src/gamescript/C4GameScript.cpp
-	src/gamescript/C4GameScript.h
-	src/gamescript/C4TransferZone.cpp
-	src/gamescript/C4TransferZone.h
 	src/graphics/Bitmap256.cpp
 	src/graphics/Bitmap256.h
 	src/graphics/C4Draw.cpp
@@ -594,7 +603,6 @@ set(OC_CLONK_SOURCES
 	src/landscape/fow/C4FoWBeamTriangle.h
 	src/landscape/C4Landscape.cpp
 	src/landscape/C4Landscape.h
-	src/landscape/C4LandscapeRenderClassic.cpp
 	src/landscape/C4LandscapeRender.cpp
 	src/landscape/C4LandscapeRender.h
 	src/landscape/C4Map.cpp
@@ -627,6 +635,8 @@ set(OC_CLONK_SOURCES
 	src/landscape/C4Texture.h
 	src/landscape/C4TextureShape.cpp
 	src/landscape/C4TextureShape.h
+	src/landscape/C4TransferZone.cpp
+	src/landscape/C4TransferZone.h
 	src/landscape/C4Weather.cpp
 	src/landscape/C4Weather.h
 	src/lib/C4LogBuf.cpp
@@ -697,6 +707,8 @@ set(OC_CLONK_SOURCES
 	src/object/C4Def.h
 	src/object/C4DefList.cpp
 	src/object/C4DefList.h
+	src/object/C4FindObject.cpp
+	src/object/C4FindObject.h
 	src/object/C4GameObjects.cpp
 	src/object/C4GameObjects.h
 	src/object/C4Id.cpp
@@ -766,6 +778,32 @@ set(OC_CLONK_SOURCES
 	src/script/C4AulDebug.h
 	thirdparty/timsort/sort.h
 )
+
+if(WITH_QT_EDITOR)
+  qt5_add_resources(qt_editor_resources "src/editor/resource.qrc")
+  set(QT_EDITOR_SOURCES
+	  src/editor/C4ConsoleQt.cpp
+	  src/editor/C4ConsoleQt.h
+	  src/editor/C4ConsoleQtState.cpp
+	  src/editor/C4ConsoleQtState.h
+	  src/editor/C4ConsoleQtShapes.cpp
+	  src/editor/C4ConsoleQtShapes.h
+	  src/editor/C4ConsoleQtPropListViewer.cpp
+	  src/editor/C4ConsoleQtPropListViewer.h
+	  src/editor/C4ConsoleQtObjectListViewer.cpp
+	  src/editor/C4ConsoleQtObjectListViewer.h
+	  src/editor/C4ConsoleQtDefinitionListViewer.cpp
+	  src/editor/C4ConsoleQtDefinitionListViewer.h
+	  src/editor/C4ConsoleQtViewport.cpp
+	  src/editor/C4ConsoleQtViewport.h
+	  src/editor/C4ConsoleQtNewScenario.cpp
+	  src/editor/C4ConsoleQtNewScenario.h
+	  src/editor/C4ConsoleQtNewScenario.ui
+	  src/editor/C4ConsoleQtMainWindow.ui
+	  src/editor/resource.qrc
+	  ${qt_editor_resources}
+  )
+endif()
 
 set(MAPE_BASE_SOURCES
 	src/C4Include.cpp
@@ -885,37 +923,34 @@ elseif(UPNP_STYLE STREQUAL "Win32")
 	list(APPEND OC_SYSTEM_SOURCES
 		src/network/C4Network2UPnPWin32.cpp
 	)
-elseif(UPNP_STYLE STREQUAL "libupnp")
+elseif(UPNP_STYLE STREQUAL "miniupnpc")
 	list(APPEND OC_SYSTEM_SOURCES
 		src/network/C4Network2UPnPLinux.cpp
 	)
 endif()
 
 # source files specific to a GUI library
-if(USE_GTK)
-	list(APPEND OC_GUI_SOURCES
-		src/editor/C4ConsoleGTK.cpp
-		src/editor/C4ConsoleGTKDlg.cpp
-		src/editor/C4ConsoleGTKDlg.h
-		src/platform/C4AppGTK.cpp
-		src/platform/C4WindowGTK.cpp
-		engine-resource.c
-	)
-elseif(USE_SDL_MAINLOOP)
+if(USE_SDL_MAINLOOP)
 	list(APPEND OC_GUI_SOURCES
 		src/platform/C4AppSDL.cpp
 		src/platform/C4WindowSDL.cpp
 	)
+	if(WITH_QT_EDITOR)
+		list(APPEND OC_GUI_SOURCES ${QT_EDITOR_SOURCES})
+	endif()
 elseif(USE_WIN32_WINDOWS)
+	if(WITH_QT_EDITOR)
+		list(APPEND OC_GUI_SOURCES ${QT_EDITOR_SOURCES})
+	else()
+		list(APPEND OC_GUI_SOURCES
+			src/editor/C4ConsoleWin32.cpp
+		)
+	endif()
 	list(APPEND OC_GUI_SOURCES
-		src/editor/C4ConsoleWin32.cpp
 		src/platform/C4WindowWin32.cpp
-		src/platform/StdJoystick.cpp
-		src/platform/StdJoystick.h
 	)
 elseif(USE_COCOA)
 	list(APPEND OC_GUI_SOURCES
-		src/editor/C4ConsoleCocoa.mm
 		src/platform/C4WindowMac.mm
 		src/platform/C4AppDelegate+MainMenuActions.h
 		src/platform/C4AppDelegate+MainMenuActions.mm
@@ -924,9 +959,10 @@ elseif(USE_COCOA)
 		src/platform/C4WindowController.h
 		src/platform/C4WindowController.mm
 		src/platform/CocoaKeycodeMap.h
-		src/editor/C4EditorWindowController.h
-		src/editor/C4EditorWindowController.mm
 	)
+	if(WITH_QT_EDITOR)
+		list(APPEND OC_GUI_SOURCES ${QT_EDITOR_SOURCES})
+	endif()
 endif()
 if(WITH_AUTOMATIC_UPDATE)
 	list(APPEND OC_GUI_SOURCES
@@ -956,23 +992,6 @@ endif()
 include_directories(
 	${CMAKE_CURRENT_BINARY_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/src
-	${CMAKE_CURRENT_SOURCE_DIR}/src/c4group
-	${CMAKE_CURRENT_SOURCE_DIR}/src/config
-	${CMAKE_CURRENT_SOURCE_DIR}/src/control
-	${CMAKE_CURRENT_SOURCE_DIR}/src/editor
-	${CMAKE_CURRENT_SOURCE_DIR}/src/game
-	${CMAKE_CURRENT_SOURCE_DIR}/src/gamescript
-	${CMAKE_CURRENT_SOURCE_DIR}/src/graphics
-	${CMAKE_CURRENT_SOURCE_DIR}/src/gui
-	${CMAKE_CURRENT_SOURCE_DIR}/src/landscape
-	${CMAKE_CURRENT_SOURCE_DIR}/src/landscape/fow
-	${CMAKE_CURRENT_SOURCE_DIR}/src/lib
-	${CMAKE_CURRENT_SOURCE_DIR}/src/network
-	${CMAKE_CURRENT_SOURCE_DIR}/src/object
-	${CMAKE_CURRENT_SOURCE_DIR}/src/platform
-	${CMAKE_CURRENT_SOURCE_DIR}/src/player
-	${CMAKE_CURRENT_SOURCE_DIR}/src/res
-	${CMAKE_CURRENT_SOURCE_DIR}/src/script
 )
 
 # Mark thirdparty as system headers so we don't get warnings from them
@@ -1021,6 +1040,14 @@ src/platform/C4TimeMilliseconds.h
 src/zlib/gzio.c
 src/zlib/gzio.h
 src/zlib/zutil.h
+
+	# pcg is a header-only library which we're listing solely so MSVC shows
+	# the sources in the solution explorer. We could use an INTERFACE library
+	# but there is no point to that because we don't need it for non-IDE
+	# generators and support on IDE-targetting generators is nonexistant.
+	thirdparty/pcg/pcg_extras.hpp
+	thirdparty/pcg/pcg_random.hpp
+	thirdparty/pcg/pcg_uint128.hpp
 )
 
 target_link_libraries(libmisc ${ZLIB_LIBRARIES})
@@ -1047,6 +1074,8 @@ src/lib/C4Real.h
 src/lib/C4Random.cpp
 src/lib/C4Random.h
 src/script/C4Aul.cpp
+src/script/C4AulCompiler.h
+src/script/C4AulCompiler.cpp
 src/script/C4AulDefFunc.h
 src/script/C4AulExec.cpp
 src/script/C4AulExec.h
@@ -1055,8 +1084,11 @@ src/script/C4AulFunc.h
 src/script/C4Aul.h
 src/script/C4AulLink.cpp
 src/script/C4AulParse.cpp
+src/script/C4AulParse.h
 src/script/C4AulScriptFunc.cpp
 src/script/C4AulScriptFunc.h
+src/script/C4Effect.cpp
+src/script/C4Effect.h
 src/script/C4PropList.cpp
 src/script/C4PropList.h
 src/script/C4Script.cpp
@@ -1111,11 +1143,13 @@ target_link_libraries(openclonk
 	libc4script
 	libmisc
 )
-if(USE_GTK)
-	target_link_libraries(openclonk ${GTK3_LIBRARIES})
-endif()
 if(USE_COCOA)
 	target_link_libraries(openclonk "-framework Cocoa -framework AppKit -framework Quartz -framework OpenAL -framework AudioToolbox")
+endif()
+
+if(WITH_QT_EDITOR)
+	set_target_properties(openclonk PROPERTIES COMPILE_DEFINITIONS WITH_QT_EDITOR)
+	qt5_use_modules(openclonk Widgets)
 endif()
 
 add_executable(openclonk-server
@@ -1131,10 +1165,10 @@ target_link_libraries(openclonk-server
 	${PNG_LIBRARIES}
 	${JPEG_LIBRARIES}
 	${EXECINFO_LIBRARY}
+	${SDL2_LIBRARIES}
 	${READLINE_LIBRARIES}
 	${Audio_LIBRARIES}
 	${GETOPT_LIBRARIES}
-	${GTK3_glib_LIBRARIES}
 	${TinyXML_LIBRARIES}
 	${DBGHELP_LIBRARIES}
 	${UPNP_LIBRARIES}
@@ -1227,9 +1261,10 @@ if(HAVE_PRECOMPILED_HEADERS)
 		foreach(FILE ${OC_SOURCES})
 			get_filename_component(FILE_EXT ${FILE} EXT)
 			get_filename_component(FILE_NAME_WE ${FILE} NAME_WE)
-			if(FILE_EXT STREQUAL ".cpp")
-				# This check is necessary since gzio.c gets compiled as C
-				# code, which can't use C++ PCH.
+			if(FILE_EXT STREQUAL ".cpp" AND NOT FILE STREQUAL qt_editor_resources)
+				# The check for .cpp is necessary since gzio.c gets compiled as C
+				# code, which can't use C++ PCH. Also, the auto-generated file
+				# qt_editor_resources does not include the PCH.
 				set_property(SOURCE ${FILE} PROPERTY COMPILE_FLAGS /YuC4Include.h)
 			endif()
 		endforeach()
@@ -1266,10 +1301,11 @@ if (APPLE)
 	endif()
 
 	add_custom_command(TARGET openclonk
-		POST_BUILD COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/osx_bundle_libs"
+		POST_BUILD COMMAND
+		"${CMAKE_CURRENT_SOURCE_DIR}/tools/osx_bundle_libs"
+		"$<$<BOOL:${CMAKE_SYSROOT}>:--sysroot=${CMAKE_SYSROOT}>"
 		"$<TARGET_FILE:openclonk>"
 	)
-
 endif()
 
 ############################################################################

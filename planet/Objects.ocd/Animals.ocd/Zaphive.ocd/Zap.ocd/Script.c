@@ -74,7 +74,9 @@ private func Sleep()
 	}
 	// One last trip, then become invisible
 	MoveToTarget();
-	lib_insect_going2sleep = true;
+	// Insect might have been removed.
+	if (this)
+		lib_insect_going2sleep = true;
 }
 
 private func SleepComplete()
@@ -115,6 +117,8 @@ private func Enrage(proplist coordinates)
 {
 	if (!enrage_target)
 		CheckTarget();
+	if (!this)
+		return false;
 	if (!enrage_target)
 		return false;
 	if (ObjectDistance(enrage_target) < 10)
@@ -170,7 +174,7 @@ private func CheckTurn()
 
 private func AngryBuzz()
 {
-	Sound("Animals::Zap::Zap?", nil,nil,nil,nil, nil, -Random(100));
+	Sound("Animals::Zap::Zap?", {pitch = -Random(100)});
 }
 
 /*-- Saving --*/

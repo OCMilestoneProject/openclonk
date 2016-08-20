@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2004-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,17 +17,17 @@
 // permanent player information management
 // see header for some additional information
 
-#include <C4Include.h>
-#include <C4PlayerInfo.h>
+#include "C4Include.h"
+#include "control/C4PlayerInfo.h"
 
-#include <C4Game.h>
-#include <C4Config.h>
-#include <C4Log.h>
-#include <C4Player.h>
-#include <C4FullScreen.h>
-#include <C4PlayerList.h>
-#include <C4GameControl.h>
-#include <C4Components.h>
+#include "game/C4Game.h"
+#include "config/C4Config.h"
+#include "lib/C4Log.h"
+#include "player/C4Player.h"
+#include "game/C4FullScreen.h"
+#include "player/C4PlayerList.h"
+#include "control/C4GameControl.h"
+#include "c4group/C4Components.h"
 
 // *** C4PlayerInfo
 
@@ -962,6 +962,21 @@ int32_t C4PlayerInfoList::GetJoinIssuedPlayerCount() const
 		C4ClientPlayerInfos *pClient = ppClients[i];
 		for (int32_t j=0; j<pClient->GetPlayerCount(); ++j)
 			if (pClient->GetPlayerInfo(j)->HasJoinIssued())
+				++iCount;
+	}
+	// return it
+	return iCount;
+}
+
+int32_t C4PlayerInfoList::GetJoinPendingPlayerCount() const
+{
+	// count players of all clients
+	int32_t iCount = 0;
+	for (int32_t i = 0; i<iClientCount; ++i)
+	{
+		C4ClientPlayerInfos *pClient = ppClients[i];
+		for (int32_t j = 0; j<pClient->GetPlayerCount(); ++j)
+			if (pClient->GetPlayerInfo(j)->HasJoinPending())
 				++iCount;
 	}
 	// return it

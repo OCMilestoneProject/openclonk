@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,9 +15,9 @@
  */
 
 #include "C4Include.h"
-#include "C4ValueMap.h"
+#include "script/C4ValueMap.h"
 
-#include <C4Value.h>
+#include "script/C4Value.h"
 
 // *** C4ValueMapData ***
 
@@ -466,7 +466,7 @@ int32_t C4ValueMapNames::AddName(const char *pnName)
 	return iSize-1;
 }
 
-int32_t C4ValueMapNames::GetItemNr(const char *strName)
+int32_t C4ValueMapNames::GetItemNr(const char *strName) const
 {
 	for (int32_t i = 0; i < iSize; i++)
 		if (SEqual(pNames[i], strName))

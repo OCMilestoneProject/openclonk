@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,7 +20,7 @@
 #ifndef INC_C4ObjectList
 #define INC_C4ObjectList
 
-#include <C4Id.h>
+#include "object/C4Id.h"
 
 class C4ObjectLink
 {
@@ -32,9 +32,12 @@ public:
 class C4ObjectListChangeListener
 {
 public:
-	virtual void OnObjectRemove(C4ObjectList * pList, C4ObjectLink * pLnk) = 0;
-	virtual void OnObjectAdded(C4ObjectList * pList, C4ObjectLink * pLnk) = 0;
-	virtual void OnObjectRename(C4ObjectList * pList, C4ObjectLink * pLnk) = 0;
+	virtual void OnObjectRemove(C4ObjectList * pList, C4ObjectLink * pLnk) {};
+	virtual void OnObjectAdded(C4ObjectList * pList, C4ObjectLink * pLnk) {};
+	virtual void OnObjectRename(C4ObjectList * pList, C4ObjectLink * pLnk) {};
+	virtual void OnObjectContainerChanged(C4Object *obj, C4Object *old_container, C4Object *new_container) {};
+	virtual void OnEffectAdded(class C4Effect *fx) {};
+	virtual void OnEffectRemoved(class C4Effect *fx) {};
 	virtual ~C4ObjectListChangeListener() { }
 };
 
@@ -123,7 +126,6 @@ public:
 	virtual bool AssignInfo();
 	virtual bool ValidateOwners();
 	StdStrBuf GetNameList(C4DefList &rDefs) const;
-	StdStrBuf GetDataString();
 	bool IsClear() const;
 	bool DenumeratePointers();
 	bool Write(char *szTarget);

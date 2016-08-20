@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,12 +20,12 @@
 #ifndef INC_C4Control
 #define INC_C4Control
 
-#include "C4Id.h"
-#include "C4PacketBase.h"
-#include "C4PlayerInfo.h"
-#include "C4Client.h"
-#include "C4KeyboardInput.h"
-#include "C4ObjectList.h"
+#include "object/C4Id.h"
+#include "network/C4PacketBase.h"
+#include "control/C4PlayerInfo.h"
+#include "network/C4Client.h"
+#include "gui/C4KeyboardInput.h"
+#include "object/C4ObjectList.h"
 
 // *** control base classes
 
@@ -134,12 +134,13 @@ public:
 	C4ControlScript()
 			: iTargetObj(-1), fUseVarsFromCallerContext(false)
 	{ }
-	C4ControlScript(const char *szScript, int32_t iTargetObj, bool fUseVarsFromCallerContext = false)
-			: iTargetObj(iTargetObj), fUseVarsFromCallerContext(fUseVarsFromCallerContext), Script(szScript, true)
+	C4ControlScript(const char *szScript, int32_t iTargetObj, bool fUseVarsFromCallerContext = false, bool editor_select_result = false)
+			: iTargetObj(iTargetObj), fUseVarsFromCallerContext(fUseVarsFromCallerContext), Script(szScript, true), editor_select_result(editor_select_result)
 	{ }
 protected:
 	int32_t iTargetObj;
 	bool fUseVarsFromCallerContext;
+	bool editor_select_result; // if true and executed script from local client in editor mode, select the object returned by this script
 	StdStrBuf Script;
 public:
 	void SetTargetObj(int32_t iObj) { iTargetObj = iObj; }
@@ -203,11 +204,11 @@ public:
 class C4ControlPlayerControl : public C4ControlPacket // sync
 {
 public:
-	C4ControlPlayerControl() : iPlr(-1), fRelease(false) {}
-	C4ControlPlayerControl(int32_t iPlr, bool fRelease, const C4KeyEventData &rExtraData)
-			: iPlr(iPlr), fRelease(fRelease), ExtraData(rExtraData) { }
+	C4ControlPlayerControl() : iPlr(-1), state(C4PlayerControl::CONS_Down) {}
+	C4ControlPlayerControl(int32_t iPlr, C4PlayerControl::ControlState state, const C4KeyEventData &rExtraData)
+			: iPlr(iPlr), state(state), ExtraData(rExtraData) { }
 	C4ControlPlayerControl(int32_t iPlr, int32_t iControl, int32_t iExtraData) // old-style menu com emulation
-			: iPlr(iPlr), fRelease(false), ExtraData(iExtraData,0,0,0,0) { AddControl(iControl,0); }
+			: iPlr(iPlr), state(C4PlayerControl::CONS_Down), ExtraData(iExtraData,0,0,0,0) { AddControl(iControl,0); }
 
 	struct ControlItem
 	{
@@ -221,7 +222,7 @@ public:
 	typedef std::vector<ControlItem> ControlItemVec;
 protected:
 	int32_t iPlr;
-	bool fRelease;
+	int32_t state;
 	C4KeyEventData ExtraData;
 	ControlItemVec ControlItems;
 public:
@@ -229,7 +230,7 @@ public:
 	void AddControl(int32_t iControl, int32_t iTriggerMode)
 	{ ControlItems.push_back(ControlItem(iControl, iTriggerMode)); }
 	const ControlItemVec &GetControlItems() const { return ControlItems; }
-	bool IsReleaseControl() const { return fRelease; }
+	C4PlayerControl::ControlState GetState() const { return static_cast<C4PlayerControl::ControlState>(state); }
 	const C4KeyEventData &GetExtraData() const { return ExtraData; }
 	void SetExtraData(const C4KeyEventData &new_extra_data) { ExtraData = new_extra_data; }
 };
@@ -453,7 +454,8 @@ enum C4ControlEMObjectAction
 	EMMO_Exit,      // exit objects
 	EMMO_Select,    // select object
 	EMMO_Deselect,  // deselect object
-	EMMO_Create     // create a new object (used by C4Game::DropDef)
+	EMMO_Create,    // create a new object (used by C4Game::DropDef)
+	EMMO_Transform  // adjust rotation / con of selected object
 };
 
 class C4ControlEMMoveObject : public C4ControlPacket // sync
@@ -462,7 +464,7 @@ public:
 	C4ControlEMMoveObject() : eAction(EMMO_Move), tx(Fix0), ty(Fix0), iTargetObj(0), iObjectNum(0), pObjects(NULL) { }
 	C4ControlEMMoveObject(C4ControlEMObjectAction eAction, C4Real tx, C4Real ty, C4Object *pTargetObj,
 	                      int32_t iObjectNum = 0, int32_t *pObjects = NULL, const char *szScript = NULL);
-	static C4ControlEMMoveObject *CreateObject(const C4ID &id, C4Real x, C4Real y);
+	static C4ControlEMMoveObject *CreateObject(const C4ID &id, C4Real x, C4Real y, C4Object *container);
 	~C4ControlEMMoveObject();
 protected:
 	C4ControlEMObjectAction eAction; // action to be performed
@@ -486,17 +488,18 @@ enum C4ControlEMDrawAction
 	EMDT_Rect       // drawing tool
 };
 
+enum class LandscapeMode;
 class C4ControlEMDrawTool : public C4ControlPacket // sync
 {
 public:
 	C4ControlEMDrawTool() : eAction(EMDT_SetMode), iX(0), iY(0), iX2(0), iY2(0), iGrade(0) { }
-	C4ControlEMDrawTool(C4ControlEMDrawAction eAction, int32_t iMode,
+	C4ControlEMDrawTool(C4ControlEMDrawAction eAction, LandscapeMode iMode,
 	                    int32_t iX=-1, int32_t iY=-1, int32_t iX2=-1, int32_t iY2=-1, int32_t iGrade=-1,
 	                    const char *szMaterial=NULL, const char *szTexture=NULL,
 	                    const char *szBackMaterial=NULL, const char *szBackTexture=NULL);
 protected:
 	C4ControlEMDrawAction eAction;  // action to be performed
-	int32_t iMode;        // new mode, or mode action was performed in (action will fail if changed)
+	LandscapeMode iMode;        // new mode, or mode action was performed in (action will fail if changed)
 	int32_t iX,iY,iX2,iY2,iGrade; // drawing parameters
 	StdStrBuf Material; // used material
 	StdStrBuf Texture;  // used texture

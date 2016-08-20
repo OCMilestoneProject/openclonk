@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2009-2015, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,29 +15,30 @@
 
 #include <GL/glew.h>
 
-#include <C4Include.h>
-#include <C4Console.h>
-#include <C4Application.h>
+#include "C4Include.h"
+#include "editor/C4Console.h"
+#include "game/C4Application.h"
 
-#include <C4GameSave.h>
-#include <C4Game.h>
-#include <C4MessageInput.h>
-#include <C4Version.h>
-#include <C4Language.h>
-#include <C4Player.h>
-#include <C4Landscape.h>
-#include <C4GraphicsSystem.h>
-#include <C4PlayerList.h>
-#include <C4GameControl.h>
-#include <C4Texture.h>
+#include "control/C4GameSave.h"
+#include "game/C4Game.h"
+#include "gui/C4MessageInput.h"
+#include "C4Version.h"
+#include "c4group/C4Language.h"
+#include "player/C4Player.h"
+#include "landscape/C4Landscape.h"
+#include "landscape/C4Sky.h"
+#include "game/C4GraphicsSystem.h"
+#include "player/C4PlayerList.h"
+#include "control/C4GameControl.h"
+#include "landscape/C4Texture.h"
 
-#include <StdFile.h>
-#include <StdRegistry.h>
+#include "platform/StdFile.h"
+#include "platform/StdRegistry.h"
 
 #import <Cocoa/Cocoa.h>
-#import "C4AppDelegate.h"
-#import "C4EditorWindowController.h"
-#import "C4DrawGLMac.h"
+#import "platform/C4AppDelegate.h"
+#import "editor/C4EditorWindowController.h"
+#import "graphics/C4DrawGLMac.h"
 
 // implementation of C4Console GUI for Mac OS X
 
@@ -171,7 +172,7 @@ void C4ConsoleGUI::PropertyDlgClose()
 	[ctrler(this).objectsPanel orderOut:nil];
 }
 
-void C4ConsoleGUI::PropertyDlgUpdate(C4ObjectList &rSelection, bool force_function_update)
+void C4ConsoleGUI::PropertyDlgUpdate(C4EditCursorSelection &rSelection, bool force_function_update)
 {	
 	if (![ctrler(this).objectsPanel isVisible])
 		return;
@@ -221,7 +222,7 @@ void C4ToolsDlg::UpdateTextures()
 	[texturesPopup removeAllItems];
 	// bottom-most: any invalid textures
 	bool fAnyEntry = false; int32_t cnt; const char *szTexture;
-	if (::Landscape.Mode!=C4LSC_Exact)
+	if (::Landscape.GetMode()!=LandscapeMode::Exact)
 		for (cnt=0; (szTexture=::TextureMap.GetTexture(cnt)); cnt++)
 		{
 			if (!::TextureMap.GetIndex(Material, szTexture, false))
@@ -240,7 +241,7 @@ void C4ToolsDlg::UpdateTextures()
 	for (cnt=0; (szTexture=::TextureMap.GetTexture(cnt)); cnt++)
 	{
 		// Current material-texture valid? Always valid for exact mode
-		if (::TextureMap.GetIndex(Material,szTexture,false) || ::Landscape.Mode==C4LSC_Exact)
+		if (::TextureMap.GetIndex(Material,szTexture,false) || ::Landscape.GetMode()==LandscapeMode::Exact)
 		{
 			[texturesPopup insertItemWithTitle:[NSString stringWithUTF8String:szTexture] atIndex:0];
 		}
@@ -295,7 +296,7 @@ CGImageRef C4ToolsDlg::State::CreatePreviewImage()
 	// Sky material: sky as pattern only
 	if (SEqual(GetOwner()->Material,C4TLS_MatSky))
 	{
-		Pattern.Set(::Landscape.Sky.Surface, 0);
+		Pattern.Set(::Landscape.GetSky().Surface, 0);
 	}
 	// Material-Texture
 	else
@@ -414,7 +415,7 @@ void C4ConsoleGUI::ClearPlayerMenu()
 {
 }
 
-void C4ConsoleGUI::AddNetMenuItemForPlayer(int32_t index, StdStrBuf &text)
+void C4ConsoleGUI::AddNetMenuItemForPlayer(int32_t index, StdStrBuf &text, C4ConsoleGUI::ClientOperation op)
 {
 	NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:[NSString stringWithCString:text.getData() encoding:NSUTF8StringEncoding] action:@selector(kickPlayer:) keyEquivalent:[NSString string]];
 	[item setTarget:ctrler(this)];
@@ -453,4 +454,4 @@ bool C4ConsoleGUI::UpdateModeCtrls(int iMode)
 }
 
 #define CONSOLEGUICOMMONINCLUDE
-#include "C4ConsoleGUICommon.h"
+#include "editor/C4ConsoleGUICommon.h"

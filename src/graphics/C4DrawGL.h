@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2010-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2010-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -21,16 +21,16 @@
 #define INC_StdGL
 
 #ifdef _WIN32
-#include <C4windowswrapper.h>
+#include "platform/C4windowswrapper.h"
 #endif
 
 #include <GL/glew.h>
 
 #ifdef USE_COCOA
-#import "ObjectiveCAssociated.h"
+#import "platform/ObjectiveCAssociated.h"
 #endif
-#include <C4Draw.h>
-#include <C4Shader.h>
+#include "graphics/C4Draw.h"
+#include "graphics/C4Shader.h"
 
 class C4Window;
 
@@ -77,6 +77,8 @@ enum C4SS_Uniforms
 	C4SSU_Bones, // for meshes
 	C4SSU_CullMode, // for meshes
 
+	C4SSU_FrameCounter, // for custom shaders
+
 	C4SSU_Count
 };
 
@@ -105,19 +107,19 @@ class CStdGLCtx
 {
 public:
 	CStdGLCtx();  // ctor
-	~CStdGLCtx() { Clear(); } // dtor
+	virtual ~CStdGLCtx() { Clear(); } // dtor
 
-	void Clear(bool multisample_change = false);               // clear objects
+	virtual void Clear(bool multisample_change = false);               // clear objects
 
 #ifdef USE_WGL
 	std::vector<int> EnumerateMultiSamples() const;
 #endif
-	bool Init(C4Window * pWindow, C4AbstractApp *pApp);
+	virtual bool Init(C4Window * pWindow, C4AbstractApp *pApp);
 
-	bool Select(bool verbose = false);              // select this context
-	void Deselect();              // select this context
+	virtual bool Select(bool verbose = false);              // select this context
+	virtual void Deselect();              // select this context
 
-	bool PageFlip();            // present scene
+	virtual bool PageFlip();            // present scene
 
 protected:
 	void SelectCommon();
@@ -125,8 +127,6 @@ protected:
 	C4Window * pWindow; // window to draw in
 #ifdef USE_WGL
 	HDC hDC;                    // device context handle
-#elif defined(USE_GTK)
-	/*GLXContext*/void * ctx;
 #elif defined(USE_SDL_MAINLOOP)
 	void * ctx;
 #endif
@@ -143,6 +143,26 @@ protected:
 	friend class CStdGL;
 	friend class C4Surface;
 };
+
+#ifdef WITH_QT_EDITOR
+// OpenGL context with Qt as backend. Implemented as subclass to allow co-existance with a different backend for fullscreen.
+class CStdGLCtxQt : public CStdGLCtx
+{
+public:
+	CStdGLCtxQt();
+	virtual ~CStdGLCtxQt() { Clear(); }
+
+	void Clear(bool multisample_change = false) override;               // clear objects
+	bool Init(C4Window * pWindow, C4AbstractApp *pApp) override;
+	bool Select(bool verbose = false) override;              // select this context
+	void Deselect() override;              // select this context
+	bool PageFlip() override;            // present scene
+
+private:
+	class QOpenGLContext *context = nullptr;
+	class QOffscreenSurface *surface = nullptr;
+};
+#endif
 
 // OpenGL encapsulation
 class CStdGL : public C4Draw
@@ -255,6 +275,7 @@ public:
 	struct
 	{
 		bool LowMaxVertexUniformCount;
+		bool ForceSoftwareTransform;
 	} Workarounds;
 	void ObjectLabel(uint32_t identifier, uint32_t name, int32_t length, const char * label);
 
@@ -272,6 +293,9 @@ protected:
 	friend class C4Window;
 	friend class C4ShaderCall;
 	friend class C4FoWRegion;
+#ifdef WITH_QT_EDITOR
+	friend class CStdGLCtxQt;
+#endif
 };
 
 // Global access pointer

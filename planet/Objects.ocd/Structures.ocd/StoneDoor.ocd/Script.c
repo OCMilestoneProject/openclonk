@@ -158,6 +158,38 @@ public func GetFloorOffset()
 	return y_off;
 }
 
+
+/* Editor */
+
+local EditorActions = {
+	OpenDoor = { Name = "$DoorUp$", Command = "OpenDoor()" },
+	CloseDoor = { Name = "$DoorDown$", Command = "CloseDoor()" }
+};
+
+public func Definition(def, ...)
+{
+	UserAction->AddEvaluator("Action", "Structure", "$DoorUp$", "$DoorUpDesc$", "open_door", [def, def.EvalAct_OpenDoor], { }, UserAction->GetObjectEvaluator("IsDoor", "$Door$", "$DoorTargetHelp$"), "Door");
+	UserAction->AddEvaluator("Action", "Structure", "$DoorDown$", "$DoorDownDesc$", "close_door", [def, def.EvalAct_CloseDoor], { }, UserAction->GetObjectEvaluator("IsDoor", "$Door$", "$DoorTargetHelp$"), "Door");
+	return _inherited(def, ...);
+}
+
+private func EvalAct_OpenDoor(props, context)
+{
+	var door = UserAction->EvaluateValue("Object", props.Door, context);
+	if (door) door->~OpenDoor();
+}
+
+private func EvalAct_CloseDoor(props, context)
+{
+	var door = UserAction->EvaluateValue("Object", props.Door, context);
+	if (door) door->~CloseDoor();
+}
+
+/* Properties */
+
+public func IsSwitchTarget() { return true; }
+public func IsDoor() { return true; }
+
 local ActMap = {
 	Door = {
 		Prototype = Action,
@@ -175,6 +207,9 @@ local ActMap = {
 		NextAction = "Door",
 	},
 };
+
 local Name = "$Name$";
-local EditCursorCommands = ["OpenDoor()", "CloseDoor()"];
 local Plane = 200;
+local Components = {Rock = 6};
+
+

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,19 +17,24 @@
 
 /* Handles script file components (calls, inheritance, function maps) */
 
-#include <C4Include.h>
-#include <C4ScriptHost.h>
+#include "C4Include.h"
+#include "script/C4ScriptHost.h"
 
-#include <C4Def.h>
+#include "object/C4Def.h"
+#include "script/C4AulScriptFunc.h"
+#include "script/C4Effect.h"
 
 /*--- C4ScriptHost ---*/
 
-C4ScriptHost::C4ScriptHost()
+C4ScriptHost::C4ScriptHost():
+	// prepare lists
+	Prev(NULL), Next(NULL),
+	Engine(NULL),
+	State(ASS_NONE) // not compiled
 {
 	Script = NULL;
 	stringTable = 0;
 	SourceScripts.push_back(this);
-	LocalNamed.Reset();
 	// prepare include list
 	IncludesResolved = false;
 	Resolving=false;
@@ -38,15 +43,15 @@ C4ScriptHost::C4ScriptHost()
 }
 C4ScriptHost::~C4ScriptHost()
 {
+	Unreg();
 	Clear();
 }
 
 void C4ScriptHost::Clear()
 {
-	C4AulScript::Clear();
-	ComponentHost.Clear();
+	UnlinkOwnedFunctions();
+	C4ComponentHost::Clear();
 	Script.Clear();
-	LocalNamed.Reset();
 	LocalValues.Clear();
 	SourceScripts.clear();
 	SourceScripts.push_back(this);
@@ -58,13 +63,85 @@ void C4ScriptHost::Clear()
 	// remove includes
 	Includes.clear();
 	Appends.clear();
+	// reset flags
+	State = ASS_NONE;
+}
+
+void C4ScriptHost::UnlinkOwnedFunctions()
+{
+	// Remove owned functions from their parents. This solves a problem
+	// where overloading a definition would unload the C4ScriptHost, but
+	// keep around global functions, which then contained dangling pointers.
+	for (auto func : ownedFunctions)
+	{
+		C4PropList *parent = func->Parent;
+		if (parent == GetPropList())
+			continue;
+		assert(parent == &::ScriptEngine);
+		C4Value v;
+		parent->GetPropertyByS(func->Name, &v);
+		if (v.getFunction() == func)
+		{
+			// If the function we're deleting is the top-level function in
+			// the inheritance chain, promote the next one in its stead;
+			// if there is no overloaded function, remove the property.
+			if (func->OwnerOverloaded)
+				parent->SetPropertyByS(func->Name, C4VFunction(func->OwnerOverloaded));
+			else
+				parent->ResetProperty(func->Name);
+		}
+		else
+		{
+			C4AulScriptFunc *func_chain = v.getFunction()->SFunc();
+			assert(func_chain != func);
+			while (func_chain)
+			{
+				// Unlink the removed function from the inheritance chain
+				if (func_chain->OwnerOverloaded == func)
+				{
+					func_chain->SetOverloaded(func->OwnerOverloaded);
+					break;
+				}
+				assert(func_chain->OwnerOverloaded && "Removed function not found in inheritance chain");
+				func_chain = func_chain->OwnerOverloaded->SFunc();
+			}
+		}
+	}
+	ownedFunctions.clear();
+}
+
+void C4ScriptHost::Unreg()
+{
+	// remove from list
+	if (Prev) Prev->Next = Next; else if (Engine) Engine->Child0 = Next;
+	if (Next) Next->Prev = Prev; else if (Engine) Engine->ChildL = Prev;
+	Prev = Next = NULL;
+	Engine = NULL;
+}
+
+void C4ScriptHost::Reg2List(C4AulScriptEngine *pEngine)
+{
+	// already regged? (def reloaded)
+	if (Engine) return;
+	// reg to list
+	if ((Engine = pEngine))
+	{
+		if ((Prev = Engine->ChildL))
+			Prev->Next = this;
+		else
+			Engine->Child0 = this;
+		Engine->ChildL = this;
+	}
+	else
+		Prev = NULL;
+	Next = NULL;
 }
 
 bool C4ScriptHost::Load(C4Group &hGroup, const char *szFilename,
                         const char *szLanguage, class C4LangStringTable *pLocalTable)
 {
 	// Base load
-	bool fSuccess = ComponentHost.Load(hGroup,szFilename,szLanguage);
+	bool fSuccess = C4ComponentHost::Load(hGroup,szFilename,szLanguage);
 	// String Table
 	if (stringTable != pLocalTable)
 	{
@@ -73,7 +150,7 @@ bool C4ScriptHost::Load(C4Group &hGroup, const char *szFilename,
 		if (stringTable) stringTable->AddRef();
 	}
 	// set name
-	ScriptName.Ref(ComponentHost.GetFilePath());
+	ScriptName.Ref(GetFilePath());
 	// preparse script
 	MakeScript();
 	// Success
@@ -112,11 +189,11 @@ void C4ScriptHost::MakeScript()
 	// create script
 	if (stringTable)
 	{
-		stringTable->ReplaceStrings(ComponentHost.GetDataBuf(), Script);
+		stringTable->ReplaceStrings(GetDataBuf(), Script);
 	}
 	else
 	{
-		Script.Ref(ComponentHost.GetDataBuf());
+		Script.Ref(GetDataBuf());
 	}
 
 	// preparse script
@@ -126,7 +203,7 @@ void C4ScriptHost::MakeScript()
 bool C4ScriptHost::ReloadScript(const char *szPath, const char *szLanguage)
 {
 	// this?
-	if (SEqualNoCase(szPath, ComponentHost.GetFilePath()) || (stringTable && SEqualNoCase(szPath, stringTable->GetFilePath())))
+	if (SEqualNoCase(szPath, GetFilePath()) || (stringTable && SEqualNoCase(szPath, stringTable->GetFilePath())))
 	{
 		// try reload
 		char szParentPath[_MAX_PATH + 1]; C4Group ParentGrp;
@@ -138,11 +215,12 @@ bool C4ScriptHost::ReloadScript(const char *szPath, const char *szLanguage)
 	return false;
 }
 
-void C4ScriptHost::SetError(const char *szMessage)
+std::string C4ScriptHost::Translate(const std::string &text) const
 {
-
+	if (stringTable)
+		return stringTable->Translate(text);
+	throw C4LangStringTable::NoSuchTranslation(text);
 }
-
 
 /*--- C4ExtraScriptHost ---*/
 
@@ -151,8 +229,14 @@ C4ExtraScriptHost::C4ExtraScriptHost(C4String *parent_key_name):
 {
 }
 
+C4ExtraScriptHost::~C4ExtraScriptHost()
+{
+	Clear();
+}
+
 void C4ExtraScriptHost::Clear()
 {
+	C4ScriptHost::Clear();
 	ParserPropList._getPropList()->Clear();
 }
 
@@ -266,12 +350,19 @@ void C4GameScriptHost::Clear()
 	C4ScriptHost::Clear();
 	ScenPropList.Set0();
 	ScenPrototype.Set0();
+	delete pScenarioEffects; pScenarioEffects=NULL;
 }
 
 C4PropListStatic * C4GameScriptHost::GetPropList()
 {
 	C4PropList * p = ScenPrototype._getPropList();
 	return p ? p->IsStatic() : 0;
+}
+
+void C4GameScriptHost::Denumerate(C4ValueNumbers * numbers)
+{
+	ScenPropList.Denumerate(numbers);
+	if (pScenarioEffects) pScenarioEffects->Denumerate(numbers);
 }
 
 C4Value C4GameScriptHost::Call(const char *szFunction, C4AulParSet *Pars, bool fPassError)

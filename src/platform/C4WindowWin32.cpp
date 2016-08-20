@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -18,24 +18,24 @@
 /* A wrapper class to OS dependent event and window interfaces, WIN32 version */
 
 #include "C4Include.h"
-#include <C4Window.h>
+#include "platform/C4Window.h"
 
-#include <C4Application.h>
-#include <C4AppWin32Impl.h>
-#include <C4Config.h>
-#include <C4Console.h>
-#include <C4DrawGL.h>
-#include <C4FullScreen.h>
-#include <C4GraphicsSystem.h>
-#include <C4MouseControl.h>
-#include <C4Rect.h>
-#include <C4Version.h>
-#include <C4Viewport.h>
-#include <C4ViewportWindow.h>
-#include <StdRegistry.h>
-#include "resource.h"
+#include "game/C4Application.h"
+#include "platform/C4AppWin32Impl.h"
+#include "config/C4Config.h"
+#include "editor/C4Console.h"
+#include "graphics/C4DrawGL.h"
+#include "game/C4FullScreen.h"
+#include "game/C4GraphicsSystem.h"
+#include "gui/C4MouseControl.h"
+#include "lib/C4Rect.h"
+#include "C4Version.h"
+#include "game/C4Viewport.h"
+#include "editor/C4ViewportWindow.h"
+#include "platform/StdRegistry.h"
+#include "res/resource.h"
 
-#include <C4windowswrapper.h>
+#include "platform/C4windowswrapper.h"
 #include <mmsystem.h>
 #include <shellapi.h>
 
@@ -238,6 +238,34 @@ LRESULT APIENTRY FullScreenWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		break;
 	}
 	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+}
+
+static C4KeyCode msg2scancode(MSG *msg)
+{
+	// compute scancode
+	C4KeyCode scancode = (((unsigned int)msg->lParam) >> 16) & 0xFF;
+	bool extended = ((msg->lParam & 0x01000000) != 0);
+	ConvertToUnixScancode(msg->wParam, &scancode, extended);
+	return scancode;
+}
+
+bool ConsoleHandleWin32KeyboardMessage(MSG *msg)
+{
+	switch (msg->message)
+	{
+	case WM_KEYDOWN:
+		if (Game.DoKeyboardInput(msg2scancode(msg), KEYEV_Down, !!(msg->lParam & 0x20000000), GetKeyState(VK_CONTROL) < 0, GetKeyState(VK_SHIFT) < 0, !!(msg->lParam & 0x40000000), NULL)) return true;
+		break;
+	case WM_KEYUP:
+		if (Game.DoKeyboardInput(msg2scancode(msg), KEYEV_Up, !!(msg->lParam & 0x20000000), GetKeyState(VK_CONTROL) < 0, GetKeyState(VK_SHIFT) < 0, false, NULL)) return 0;
+		break;
+	case WM_SYSKEYDOWN:
+		if (msg->wParam == 18) break; // VK_MENU (Alt)
+		if (Game.DoKeyboardInput(msg2scancode(msg), KEYEV_Down, !!(msg->lParam & 0x20000000), GetKeyState(VK_CONTROL) < 0, GetKeyState(VK_SHIFT) < 0, !!(msg->lParam & 0x40000000), NULL)) return 0;
+		break;
+	}
+	return false;
+
 }
 
 LRESULT APIENTRY ViewportWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -543,6 +571,9 @@ LRESULT APIENTRY DialogWinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 }
 
 C4Window::C4Window (): Active(false), pSurface(0), hWindow(0)
+#ifdef WITH_QT_EDITOR
+, glwidget(nullptr)
+#endif
 {
 }
 C4Window::~C4Window ()
@@ -555,6 +586,11 @@ C4Window * C4Window::Init(C4Window::WindowKind windowKind, C4AbstractApp * pApp,
 	eKind = windowKind;
 	if (windowKind == W_Viewport)
 	{
+#ifdef WITH_QT_EDITOR
+		// embed into editor: Viewport widget creation handled by C4ConsoleQt
+		::Console.AddViewport(static_cast<C4ViewportWindow *>(this));
+		return this;
+#else
 		static bool fViewportClassRegistered = false;
 		if (!fViewportClassRegistered)
 		{
@@ -582,7 +618,7 @@ C4Window * C4Window::Init(C4Window::WindowKind windowKind, C4AbstractApp * pApp,
 		            CW_USEDEFAULT,CW_USEDEFAULT, size->Wdt, size->Hgt,
 		            Console.hWindow,NULL,pApp->GetInstance(),NULL);
 		if(!hWindow) return NULL;
-
+#endif
 		// We don't re-init viewport windows currently, so we don't need a child window
 		// for now: Render into main window.
 		renderwnd = hWindow;
@@ -705,6 +741,13 @@ void C4Window::Clear()
 		if (renderwnd) DestroyWindow(renderwnd);
 		if (hWindow && hWindow != renderwnd) DestroyWindow(hWindow);
 	}
+#ifdef WITH_QT_EDITOR
+	if (eKind == W_Viewport)
+	{
+		// embed into editor: Viewport widget creation handled by C4ConsoleQt
+		::Console.RemoveViewport(static_cast<C4ViewportWindow *>(this));
+	}
+#endif
 	renderwnd = NULL;
 	hWindow = NULL;
 }

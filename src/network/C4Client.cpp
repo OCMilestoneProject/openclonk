@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -13,16 +13,16 @@
  * To redistribute this file separately, substitute the full license texts
  * for the above references.
  */
-#include <C4Include.h>
-#include <C4Client.h>
+#include "C4Include.h"
+#include "network/C4Client.h"
 
-#include <C4Application.h>
-#include <C4Config.h>
-#include <C4Network2Client.h>
-#include <C4Game.h>
-#include <C4Log.h>
-#include <C4PlayerList.h>
-#include <C4GameControl.h>
+#include "game/C4Application.h"
+#include "config/C4Config.h"
+#include "network/C4Network2Client.h"
+#include "game/C4Game.h"
+#include "lib/C4Log.h"
+#include "player/C4PlayerList.h"
+#include "control/C4GameControl.h"
 
 #ifndef HAVE_WINSOCK
 #include <netdb.h>
@@ -246,6 +246,17 @@ int32_t C4ClientList::getClientCnt() const
 	return iCnt;
 }
 
+StdStrBuf C4ClientList::GetAllClientNames() const
+{
+	StdStrBuf result;
+	for (C4Client *pClient = pFirst; pClient; pClient = pClient->pNext)
+	{
+		if (result.getSize()) result.Append(", ");
+		result.Append(pClient->getName());
+	}
+	return result;
+}
+
 bool C4ClientList::Init(int32_t iLocalClientID)
 {
 	Clear();
@@ -339,7 +350,7 @@ void C4ClientList::SetLocalID(int32_t iID)
 void C4ClientList::CtrlRemove(const C4Client *pClient, const char *szReason)
 {
 	// host only
-	if (!pLocal || !pLocal->isHost()) return;
+	if (!pLocal || !pLocal->isHost() || !pClient) return;
 	// Net client? flag
 	if (pClient->getNetClient())
 		pClient->getNetClient()->SetStatus(NCS_Remove);

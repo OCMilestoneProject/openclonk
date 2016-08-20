@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -14,26 +14,26 @@
  * for the above references.
  */
 
-#include <C4Include.h>
-#include <C4Network2.h>
+#include "C4Include.h"
+#include "network/C4Network2.h"
 
-#include <C4Version.h>
-#include <C4Log.h>
-#include <C4Application.h>
-#include <C4Console.h>
-#include <C4GameSave.h>
-#include <C4RoundResults.h>
-#include <C4Game.h>
-#include <C4GraphicsSystem.h>
-#include <C4GraphicsResource.h>
-#include <C4GameControl.h>
+#include "C4Version.h"
+#include "lib/C4Log.h"
+#include "game/C4Application.h"
+#include "editor/C4Console.h"
+#include "control/C4GameSave.h"
+#include "control/C4RoundResults.h"
+#include "game/C4Game.h"
+#include "game/C4GraphicsSystem.h"
+#include "graphics/C4GraphicsResource.h"
+#include "control/C4GameControl.h"
 
 // lobby
-#include <C4Gui.h>
-#include <C4GameLobby.h>
+#include "gui/C4Gui.h"
+#include "gui/C4GameLobby.h"
 
-#include <C4Network2Dialogs.h>
-#include <C4League.h>
+#include "network/C4Network2Dialogs.h"
+#include "network/C4League.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -1024,7 +1024,7 @@ bool C4Network2::InitNetIO(bool fNoClientID, bool fHost)
 	int16_t iPortDiscovery = fHost ? Config.Network.PortDiscovery : -1;
 	int16_t iPortRefServer = fHost ? Config.Network.PortRefServer : -1;
 	// init subclass
-	if (!NetIO.Init(Config.Network.PortTCP, Config.Network.PortUDP, iPortDiscovery, iPortRefServer, fHost, Config.Network.EnableUPnP))
+	if (!NetIO.Init(Config.Network.PortTCP, Config.Network.PortUDP, iPortDiscovery, iPortRefServer, fHost, !!Config.Network.EnableUPnP))
 		return false;
 	// set core (unset ID if sepecified, has to be set later)
 	C4ClientCore Core = Game.Clients.getLocalCore();
@@ -1789,8 +1789,8 @@ void C4Network2::RequestActivate()
 
 void C4Network2::DeactivateInactiveClients()
 {
-	// host only
-	if (!isHost()) return;
+	// host only and not in editor
+	if (!isHost() || ::Application.isEditor) return;
 	// update activity
 	Clients.UpdateClientActivity();
 	// find clients to deactivate

@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -22,14 +22,14 @@
 
 */
 
-#include <C4Include.h>
-#include <C4Language.h>
+#include "C4Include.h"
+#include "c4group/C4Language.h"
 
-#include <C4Application.h>
-#include <C4Components.h>
-#include <C4Log.h>
-#include <C4Config.h>
-#include <C4Game.h>
+#include "game/C4Application.h"
+#include "c4group/C4Components.h"
+#include "lib/C4Log.h"
+#include "config/C4Config.h"
+#include "game/C4Game.h"
 
 C4Language Languages;
 
@@ -257,7 +257,7 @@ namespace
 		// the beginning or end of a line, respectively, and it seems
 		// like in some implementations they only match the beginning
 		// or end of the whole string. See also #1127.
-		static re::regex line_pattern("(?:\n|^)([^=]+)=(.*?)\r?(?=\n|$)", static_cast<re::regex::flag_type>(re::regex_constants::optimize | re::regex_constants::ECMAScript));
+		static std::regex line_pattern("(?:\n|^)([^=]+)=(.*?)\r?(?=\n|$)", static_cast<std::regex::flag_type>(std::regex_constants::optimize | std::regex_constants::ECMAScript));
 
 		assert(stringtbl);
 		if (!stringtbl)
@@ -269,7 +269,7 @@ namespace
 		const char *begin = stringtbl;
 		const char *end = begin + std::char_traits<char>::length(begin);
 
-		for (auto it = re::cregex_iterator(begin, end, line_pattern); it != re::cregex_iterator(); ++it)
+		for (auto it = std::cregex_iterator(begin, end, line_pattern); it != std::cregex_iterator(); ++it)
 		{
 			assert(it->size() == 3);
 			if (it->size() != 3)

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2004, Peter Wortmann
  * Copyright (c) 2007, Günther Brammer
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -15,12 +15,14 @@
  * for the above references.
  */
 
-#include <C4Include.h>
-#include <C4PropList.h>
-#include <C4GameObjects.h>
-#include <C4Game.h>
-#include <C4Object.h>
-#include <C4Record.h>
+#include "C4Include.h"
+#include "script/C4PropList.h"
+
+#include "script/C4Aul.h"
+#include "object/C4GameObjects.h"
+#include "game/C4Game.h"
+#include "object/C4Object.h"
+#include "control/C4Record.h"
 
 void C4PropList::AddRef(C4Value *pRef)
 {
@@ -264,6 +266,14 @@ StdStrBuf C4PropListStatic::GetDataString() const
 	return r;
 }
 
+const char *C4PropListStatic::GetName() const
+{
+	const C4String * s = GetPropertyStr(P_Name);
+	if (!s) s = ParentKeyName;
+	if (!s) return "";
+	return s->GetCStr();
+}
+
 C4PropList::C4PropList(C4PropList * prototype):
 		FirstRef(NULL), prototype(prototype),
 		constant(false), Status(1)
@@ -364,7 +374,7 @@ void C4PropList::RemoveCyclicPrototypes()
 		}
 }
 
-void CompileNewFunc(C4PropList *&pStruct, StdCompiler *pComp, C4ValueNumbers * const & rPar)
+void CompileNewFunc(C4PropList *&pStruct, StdCompiler *pComp, C4ValueNumbers *rPar)
 {
 	std::unique_ptr<C4PropList> temp(C4PropList::New()); // exception-safety
 	pComp->Value(mkParAdapt(*temp, rPar));
@@ -459,6 +469,75 @@ void C4PropList::AppendDataString(StdStrBuf * out, const char * delim, int depth
 	}
 }
 
+std::vector< C4String * > C4PropList::GetSortedLocalProperties(bool add_prototype) const
+{
+	// return property list without descending into prototype
+	std::list<const C4Property *> sorted_props = Properties.GetSortedListOfElementPointers();
+	std::vector< C4String * > result;
+	result.reserve(sorted_props.size() + add_prototype);
+	if (add_prototype) result.push_back(&::Strings.P[P_Prototype]); // implicit prototype for every prop list
+	for (auto p : sorted_props) result.push_back(p->Key);
+	return result;
+}
+
+std::vector< C4String * > C4PropList::GetSortedLocalProperties(const char *prefix, const C4PropList *ignore_overridden) const
+{
+	// return property list without descending into prototype
+	// ignore properties that have been overridden by proplist given in ignore_overridden or any of its prototypes up to and excluding this
+	std::vector< C4String * > result;
+	for (const C4Property *pp = Properties.First(); pp; pp = Properties.Next(pp))
+		if (pp->Key != &::Strings.P[P_Prototype])
+			if (!prefix || pp->Key->GetData().BeginsWith(prefix))
+			{
+				// Override check
+				const C4PropList *check = ignore_overridden;
+				bool overridden = false;
+				if (check && check != this)
+				{
+					if (check->HasProperty(pp->Key)) { overridden = true; break; }
+					check = check->GetPrototype();
+				}
+				result.push_back(pp->Key);
+			}
+	// Sort
+	std::sort(result.begin(), result.end(), [](const C4String *a, const C4String *b) -> bool
+	{
+		return strcmp(a->GetCStr(), b->GetCStr()) < 0;
+	});
+	return result;
+}
+
+std::vector< C4String * > C4PropList::GetUnsortedProperties(const char *prefix, C4PropList *ignore_parent) const
+{
+	// Return property list with descending into prototype
+	// But do not include Prototype property
+	std::vector< C4String * > result;
+	const C4PropList *p = this;
+	do
+	{
+		for (const C4Property *pp = p->Properties.First(); pp; pp = p->Properties.Next(pp))
+			if (pp->Key != &::Strings.P[P_Prototype])
+				if (!prefix || pp->Key->GetData().BeginsWith(prefix))
+					result.push_back(pp->Key);
+		p = p->GetPrototype();
+		if (p == ignore_parent) break;
+	} while (p);
+	return result;
+}
+
+std::vector< C4String * > C4PropList::GetSortedProperties(const char *prefix, C4PropList *ignore_parent) const
+{
+	// Return property list with descending into prototype
+	// But do not include Prototype property
+	std::vector< C4String * > result = GetUnsortedProperties(prefix, ignore_parent);
+	// Sort
+	std::sort(result.begin(), result.end(), [](const C4String *a, const C4String *b) -> bool
+	{
+		return strcmp(a->GetCStr(), b->GetCStr()) < 0;
+	});
+	return result;
+}
+
 const char * C4PropList::GetName() const
 {
 	C4String * s = GetPropertyStr(P_Name);
@@ -477,8 +556,13 @@ void C4PropList::SetName(const char* NewName)
 }
 
 
-
 C4Object * C4PropList::GetObject()
+{
+	if (GetPrototype()) return GetPrototype()->GetObject();
+	return 0;
+}
+
+C4Object const * C4PropList::GetObject() const
 {
 	if (GetPrototype()) return GetPrototype()->GetObject();
 	return 0;
@@ -520,9 +604,8 @@ C4Effect * C4PropList::GetEffect()
 	return 0;
 }
 
-
 template<> template<>
-unsigned int C4Set<C4Property>::Hash<C4String *>(C4String * const & e)
+unsigned int C4Set<C4Property>::Hash<const C4String *>(C4String const * const & e)
 {
 	assert(e);
 	unsigned int hash = 4, tmp;
@@ -540,6 +623,18 @@ unsigned int C4Set<C4Property>::Hash<C4String *>(C4String * const & e)
 }
 
 template<> template<>
+unsigned int C4Set<C4Property>::Hash<C4String *>(C4String * const & e)
+{
+	return Hash<const C4String *>(e);
+}
+
+template<> template<>
+bool C4Set<C4Property>::Equals<const C4String *>(C4Property const & a, C4String const * const & b)
+{
+	return a.Key == b;
+}
+
+template<> template<>
 bool C4Set<C4Property>::Equals<C4String *>(C4Property const & a, C4String * const & b)
 {
 	return a.Key == b;
@@ -551,7 +646,7 @@ unsigned int C4Set<C4Property>::Hash<C4Property>(C4Property const & p)
 	return C4Set<C4Property>::Hash(p.Key);
 }
 
-bool C4PropList::GetPropertyByS(C4String * k, C4Value *pResult) const
+bool C4PropList::GetPropertyByS(const C4String * k, C4Value *pResult) const
 {
 	if (Properties.Has(k))
 	{
@@ -635,7 +730,17 @@ C4Value C4PropList::Call(const char * s, C4AulParSet *Pars, bool fPassErrors)
 	if (!Status) return C4Value();
 	assert(s && s[0]);
 	C4AulFunc *pFn = GetFunc(s);
-	if (!pFn) return C4Value();
+	if (!pFn)
+	{
+		if (s[0] != '~')
+		{
+			C4AulExecError err(FormatString("Undefined function: %s", s).getData());
+			if (fPassErrors)
+				throw err;
+			err.show();
+		}
+		return C4Value();
+	}
 	return pFn->Exec(this, Pars, fPassErrors);
 }
 
@@ -654,6 +759,20 @@ C4PropertyName C4PropList::GetPropertyP(C4PropertyName n) const
 		return GetPrototype()->GetPropertyP(n);
 	}
 	return P_LAST;
+}
+
+int32_t C4PropList::GetPropertyBool(C4PropertyName n, bool default_val) const
+{
+	C4String * k = &Strings.P[n];
+	if (Properties.Has(k))
+	{
+		return Properties.Get(k).Value.getBool();
+	}
+	if (GetPrototype())
+	{
+		return GetPrototype()->GetPropertyBool(n, default_val);
+	}
+	return default_val;
 }
 
 int32_t C4PropList::GetPropertyInt(C4PropertyName n, int32_t default_val) const

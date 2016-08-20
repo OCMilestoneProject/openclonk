@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -13,17 +13,17 @@
  * To redistribute this file separately, substitute the full license texts
  * for the above references.
  */
-#include <C4Include.h>
-#include <C4Network2Res.h>
+#include "C4Include.h"
+#include "network/C4Network2Res.h"
 
-#include <C4Application.h>
-#include <C4Random.h>
-#include <C4Config.h>
-#include <C4Log.h>
-#include <C4Group.h>
-#include <C4Components.h>
-#include <C4Game.h>
-#include <C4GameControl.h>
+#include "game/C4Application.h"
+#include "lib/C4Random.h"
+#include "config/C4Config.h"
+#include "lib/C4Log.h"
+#include "c4group/C4Group.h"
+#include "c4group/C4Components.h"
+#include "game/C4Game.h"
+#include "control/C4GameControl.h"
 
 #include <fcntl.h>
 #include <sys/types.h>
@@ -268,7 +268,7 @@ int32_t C4Network2ResChunkData::GetChunkToRetrieve(const C4Network2ResChunkData 
 	// invert to get everything that should be retrieved
 	C4Network2ResChunkData ChData2; ChData.GetNegative(ChData2);
 	// select chunk (random)
-	int32_t iRetrieveChunk = SafeRandom(ChData2.getPresentChunkCnt());
+	int32_t iRetrieveChunk = UnsyncedRandom(ChData2.getPresentChunkCnt());
 	// return
 	return ChData2.getPresentChunk(iRetrieveChunk);
 }
@@ -1029,7 +1029,7 @@ void C4Network2Res::StartNewLoads()
 	for (pChunks = pCChunks, i = 0; i < iCChunkCnt; i++, pChunks = pChunks->Next)
 	{
 		// determine position
-		int32_t iPos = SafeRandom(iCChunkCnt - i);
+		int32_t iPos = UnsyncedRandom(iCChunkCnt - i);
 		// find & set
 		for (int32_t j = 0; ; j++)
 			if (!pC[j] && !iPos--)
@@ -1215,9 +1215,9 @@ bool C4Network2ResChunk::Set(C4Network2Res *pRes, uint32_t inChunk)
 		if (lseek(f, iOffset, SEEK_SET) != iOffset)
 			{ close(f); LogF("Network: could not read resource file %s!", pRes->getFile()); return false; }
 	// read chunk of data
-	char *pBuf = new char[iSize];
+	char *pBuf = (char *) malloc(iSize);
 	if (read(f, pBuf, iSize) != iSize)
-		{ delete [] pBuf; close(f); LogF("Network: could not read resource file %s!", pRes->getFile()); return false; }
+		{ free(pBuf); close(f); LogF("Network: could not read resource file %s!", pRes->getFile()); return false; }
 	// set
 	Data.Take(pBuf, iSize);
 	// close

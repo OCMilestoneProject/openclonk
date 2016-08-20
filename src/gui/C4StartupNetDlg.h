@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2006-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2010-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2010-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -18,9 +18,9 @@
 #ifndef INC_C4StartupNetDlg
 #define INC_C4StartupNetDlg
 
-#include "C4Startup.h"
-#include "C4Network2Discover.h"
-#include "C4Network2Reference.h"
+#include "gui/C4Startup.h"
+#include "network/C4Network2Discover.h"
+#include "network/C4Network2Reference.h"
 
 // -----------------------------------------------
 
@@ -29,7 +29,7 @@ const int C4NetRefRequestTimeout = 12; // seconds after which the reference requ
 const int C4NetReferenceTimeout = 42; // seconds after which references are removed from the list (C4NetRefRequestTimeout + C4NetMasterServerQueryInterval)
 const int C4NetErrorRefTimeout = 10; // seconds after which failed reference requestsare removed
 const int C4NetGameDiscoveryInterval = 30; // seconds
-const int C4NetMinRefreshInterval = 8; // seconds; minimum time between refreshes
+const int C4NetMinRefreshInterval = 1; // seconds; minimum time between refreshes
 
 
 class C4StartupNetListEntry : public C4GUI::Window

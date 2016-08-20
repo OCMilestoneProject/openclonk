@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,19 +17,19 @@
 
 /* Object definition */
 
-#include <C4Include.h>
-#include <C4DefList.h>
+#include "C4Include.h"
+#include "object/C4DefList.h"
 
-#include <C4Components.h>
-#include <C4Config.h>
-#include <C4Def.h>
-#include <C4FileMonitor.h>
-#include <C4GameVersion.h>
-#include <C4Language.h>
-#include <C4GameScript.h>
-#include <C4Record.h>
+#include "c4group/C4Components.h"
+#include "config/C4Config.h"
+#include "object/C4Def.h"
+#include "platform/C4FileMonitor.h"
+#include "game/C4GameVersion.h"
+#include "c4group/C4Language.h"
+#include "game/C4GameScript.h"
+#include "control/C4Record.h"
 
-#include <StdMeshLoader.h>
+#include "lib/StdMeshLoader.h"
 
 namespace
 {
@@ -287,6 +287,25 @@ C4Def* C4DefList::GetDef(int32_t iIndex)
 	return NULL;
 }
 
+std::vector<C4Def*> C4DefList::GetAllDefs(C4String *filter_property) const
+{
+	// Collect vector of all definitions
+	// Filter for those where property evaluates to true if filter_property!=NULL
+	std::vector<C4Def*> result;
+	result.reserve(filter_property ? 32 : table.size());
+	C4Value prop_val;
+	for (C4Def *def = FirstDef; def; def = def->Next)
+	{
+		if (filter_property)
+		{
+			if (!def->GetPropertyByS(filter_property, &prop_val)) continue;
+			if (!prop_val) continue;
+		}
+		result.push_back(def);
+	}
+	return result;
+}
+
 C4Def *C4DefList::GetByPath(const char *szPath)
 {
 	// search defs
@@ -400,7 +419,7 @@ bool C4DefList::Reload(C4Def *pDef, DWORD dwLoadWhat, const char *szLanguage, C4
 	// clear all skeletons in that group, so that deleted skeletons are also deleted in the engine
 	SkeletonLoader->RemoveSkeletonsInGroup(hGroup.GetName());
 	// load the definition
-	if (!pDef->Load( hGroup, *SkeletonLoader, dwLoadWhat, szLanguage, pSoundSystem)) return false;
+	if (!pDef->Load(hGroup, *SkeletonLoader, dwLoadWhat, szLanguage, pSoundSystem, &GfxBackup)) return false;
 	hGroup.Close();
 	// rebuild quick access table
 	BuildTable();
@@ -434,20 +453,46 @@ void C4DefList::ResetIncludeDependencies()
 		it->second->ResetIncludeDependencies();
 }
 
+void C4DefList::SortByPriority()
+{
+	// Sort all definitions by DefinitionPriority property (descending)
+	// Build vector of definitions
+	int32_t n = GetDefCount();
+	if (!n) return;
+	std::vector<C4Def *> def_vec;
+	def_vec.reserve(n);
+	for (C4Def *def = FirstDef; def; def = def->Next)
+		def_vec.push_back(def);
+	// Sort it
+	std::stable_sort(def_vec.begin(), def_vec.end(), [](C4Def *a, C4Def *b) {
+		return b->GetPropertyInt(P_DefinitionPriority) < a->GetPropertyInt(P_DefinitionPriority);
+	});
+	// Restore linked list in new definition order
+	C4Def *prev_def = nullptr;
+	for (C4Def *def : def_vec)
+	{
+		if (prev_def)
+			prev_def->Next = def;
+		else
+			FirstDef = def;
+		prev_def = def;
+	}
+}
+
 void C4DefList::CallEveryDefinition()
 {
-	for (Table::iterator it = table.begin(); it != table.end(); ++it)
+	for (C4Def *def = FirstDef; def; def = def->Next)
 	{
 		if (Config.General.DebugRec)
 		{
 			// TODO: Might not be synchronous on runtime join since is run by joining
 			// client but not by host. Might need to go to Synchronize().
 			char sz[32+1];
-			strncpy(sz, it->first.ToString(), 32+1);
+			strncpy(sz, def->id.ToString(), 32+1);
 			AddDbgRec(RCT_Definition, sz, 32);
 		}
-		C4AulParSet Pars(it->second);
-		it->second->Call(PSF_Definition, &Pars);
+		C4AulParSet Pars(def);
+		def->Call(PSF_Definition, &Pars);
 	}
 }
 

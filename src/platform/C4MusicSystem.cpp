@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,16 +17,16 @@
 
 /* Handles Music.ocg and randomly plays songs */
 
-#include <C4Include.h>
-#include <C4MusicSystem.h>
+#include "C4Include.h"
+#include "platform/C4MusicSystem.h"
 
-#include <C4Window.h>
-#include <C4MusicFile.h>
-#include <C4Application.h>
-#include <C4Random.h>
-#include <C4Log.h>
-#include <C4Game.h>
-#include <C4GraphicsSystem.h>
+#include "platform/C4Window.h"
+#include "platform/C4MusicFile.h"
+#include "game/C4Application.h"
+#include "lib/C4Random.h"
+#include "lib/C4Log.h"
+#include "game/C4Game.h"
+#include "game/C4GraphicsSystem.h"
 
 C4MusicSystem::C4MusicSystem():
 		Songs(NULL),
@@ -481,7 +481,7 @@ bool C4MusicSystem::Play(const char *szSongname, bool fLoop, int fadetime_ms, do
 						else if (check_file_playability == new_file_playability)
 						{
 							// Found a fit in the same playability category: Roll for it
-							if (!SafeRandom(++new_file_num_rolls)) NewFile = check_file;
+							if (!UnsyncedRandom(++new_file_num_rolls)) NewFile = check_file;
 						}
 						else
 						{
@@ -596,11 +596,11 @@ bool C4MusicSystem::ScheduleWaitTime()
 {
 	// Roll for scheduling a break after the next piece.
 	if (SCounter < 3) return false; // But not right away.
-	if (SafeRandom(100) >= music_break_chance) return false;
+	if (UnsyncedRandom(100) >= music_break_chance) return false;
 	if (music_break_max > 0)
 	{
 		int32_t music_break = music_break_min;
-		if (music_break_max > music_break_min) music_break += SafeRandom(music_break_max - music_break_min); // note that SafeRandom has limited range
+		if (music_break_max > music_break_min) music_break += UnsyncedRandom(music_break_max - music_break_min); // note that UnsyncedRandom has limited range
 		if (music_break > 0)
 		{
 			is_waiting = true;

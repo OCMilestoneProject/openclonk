@@ -19,7 +19,7 @@ protected func Initialize()
 // Add an object to the list of objects that have to be constructed.
 public func AddConstruction(id construction, int count)
 {
-	PushBack(construction_list, {construction = construction, count = count});
+	PushBack(construction_list, {id = construction, count = count});
 	return;
 }
 
@@ -28,7 +28,7 @@ public func SaveScenarioObject(props)
 {
 	if (!inherited(props, ...)) return false;
 	for (var con in construction_list)
-		props->AddCall("Goal", this, "AddConstruction", con.construction, con.count);
+		props->AddCall("Goal", this, "AddConstruction", con.id, con.count);
 	return true;
 }
 
@@ -107,3 +107,13 @@ public func GetShortDescription(int plr)
 /*-- Proplist --*/
 
 local Name = "$Name$";
+local Visibility = VIS_Editor;
+
+func Definition(def)
+{
+	if (!def.EditorProps) def.EditorProps = {};
+	def.EditorProps.construction_list = EditorBase.IDList;
+	return true;
+}
+
+

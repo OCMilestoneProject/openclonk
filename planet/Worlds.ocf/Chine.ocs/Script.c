@@ -59,6 +59,14 @@ protected func InitializePlayer(int plr)
 	while (crew = GetCrew(plr, index))
 	{
 		crew->SetPosition(96 + RandomX(-12, 12), LandscapeHeight() - 92);
+		var u = 0;
+		while(crew->Stuck())
+		{
+			crew->SetPosition(crew->GetX(), crew->GetY()-1);
+			++u;
+			if (u > 50) // This is bad, the clonk will most likely die
+				break;
+		}
 
 		// First clonk can construct, others can chop.
 		if (index == 0)
@@ -84,8 +92,9 @@ protected func InitializePlayer(int plr)
 	// Additional explosives: dynamite boxes.
 	GivePlayerSpecificBaseMaterial(plr, [[DynamiteBox, 4, 2]]);
 	
-	// Set player wealth.
-	SetWealth(plr, 75 - 25 * SCENPAR_Difficulty);
+	// Ensure mimimum player wealth.
+	var add_wealth = Max(0, 75 - 25 * SCENPAR_Difficulty - GetWealth(plr));
+	DoWealth(plr, add_wealth);
 	
 	// Initialize the intro sequence if not yet started.
 	if (!intro_init)

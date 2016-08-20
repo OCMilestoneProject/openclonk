@@ -1,7 +1,7 @@
 /*
  * OpenClonk, http://www.openclonk.org
  *
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -17,8 +17,8 @@
 
 #include <memory>
 
-#include "C4Value.h"
-#include "C4StringTable.h"
+#include "script/C4Value.h"
+#include "script/C4StringTable.h"
 
 #ifndef C4PROPLIST_H
 #define C4PROPLIST_H
@@ -66,13 +66,15 @@ class C4PropList
 {
 public:
 	void Clear() { constant = false; Properties.Clear(); prototype.Set0(); }
-	const char *GetName() const;
+	virtual const char *GetName() const;
 	virtual void SetName (const char *NewName = 0);
+	virtual void SetOnFire(bool OnFire) { }
 
 	// These functions return this or a prototype.
 	virtual C4Def const * GetDef() const;
 	virtual C4Def * GetDef();
 	virtual C4Object * GetObject();
+	virtual C4Object const * GetObject() const;
 	virtual C4Effect * GetEffect();
 	virtual C4PropListNumbered * GetPropListNumbered();
 	virtual class C4MapScriptLayer * GetMapScriptLayer();
@@ -91,7 +93,7 @@ public:
 
 	// These four operate on properties as seen by script, which can be dynamic
 	// or reflect C++ variables
-	virtual bool GetPropertyByS(C4String *k, C4Value *pResult) const;
+	virtual bool GetPropertyByS(const C4String *k, C4Value *pResult) const;
 	virtual C4ValueArray * GetProperties() const;
 	// not allowed on frozen proplists
 	virtual void SetPropertyByS(C4String * k, const C4Value & to);
@@ -112,6 +114,7 @@ public:
 	C4Value Call(C4String * k, C4AulParSet *pPars=0, bool fPassErrors=false);
 	C4Value Call(const char * k, C4AulParSet *pPars=0, bool fPassErrors=false);
 	C4PropertyName GetPropertyP(C4PropertyName k) const;
+	int32_t GetPropertyBool(C4PropertyName n, bool default_val = false) const;
 	int32_t GetPropertyInt(C4PropertyName k, int32_t default_val = 0) const;
 	C4PropList *GetPropertyPropList(C4PropertyName k) const;
 	bool HasProperty(C4String * k) const { return Properties.Has(k); }
@@ -133,6 +136,10 @@ public:
 
 	void CompileFunc(StdCompiler *pComp, C4ValueNumbers *);
 	void AppendDataString(StdStrBuf * out, const char * delim, int depth = 3) const;
+	std::vector< C4String * > GetSortedLocalProperties(bool add_prototype=true) const;
+	std::vector< C4String * > GetSortedLocalProperties(const char *prefix, const C4PropList *ignore_overridden) const;
+	std::vector< C4String * > GetUnsortedProperties(const char *prefix, C4PropList *ignore_parent = nullptr) const;
+	std::vector< C4String * > GetSortedProperties(const char *prefix, C4PropList *ignore_parent = nullptr) const;
 
 	bool operator==(const C4PropList &b) const;
 #ifdef _DEBUG
@@ -194,7 +201,7 @@ public:
 	Iterator end() { return Iterator(); }
 };
 
-void CompileNewFunc(C4PropList *&pStruct, StdCompiler *pComp, C4ValueNumbers * const & rPar);
+void CompileNewFunc(C4PropList *&pStruct, StdCompiler *pComp, C4ValueNumbers *rPar);
 
 // Proplists that are created during a game and get saved in a savegame
 // Examples: Objects, Effects
@@ -254,8 +261,9 @@ public:
 	virtual C4PropListStatic * IsStatic() { return this; }
 	void RefCompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers) const;
 	StdStrBuf GetDataString() const;
-	const C4PropListStatic * GetParent() { return Parent; }
-	const C4String * GetParentKeyName() { return ParentKeyName; }
+	virtual const char *GetName() const;
+	const C4PropListStatic * GetParent() const { return Parent; }
+	C4String * GetParentKeyName() { return ParentKeyName; }
 protected:
 	const C4PropListStatic * Parent;
 	C4RefCntPointer<C4String> ParentKeyName; // property in parent this proplist was created in

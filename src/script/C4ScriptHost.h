@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,34 +20,55 @@
 #ifndef INC_C4ScriptHost
 #define INC_C4ScriptHost
 
-#include <C4ComponentHost.h>
-#include <C4Aul.h>
+#include "c4group/C4ComponentHost.h"
+#include "script/C4Aul.h"
+
+// aul script state
+enum C4AulScriptState
+{
+	ASS_NONE,       // nothing
+	ASS_PREPARSED,  // function list built; CodeSize set
+	ASS_LINKED,     // includes and appends resolved
+	ASS_PARSED      // byte code generated
+};
 
 // generic script host for objects
-class C4ScriptHost : public C4AulScript
+class C4ScriptHost: public C4ComponentHost
 {
 public:
-	~C4ScriptHost();
-	bool Delete() { return false; } // do NOT delete this - it's just a class member!
+	virtual ~C4ScriptHost();
+	virtual bool Delete() { return false; } // do NOT delete this - it's just a class member!
 
 	void Clear();
 	virtual bool Load(C4Group &hGroup, const char *szFilename,
 	          const char *szLanguage, C4LangStringTable *pLocalTable);
 	virtual bool LoadData(const char *szFilename, const char *szData, class C4LangStringTable *pLocalTable);
+	void Reg2List(C4AulScriptEngine *pEngine); // reg to linked list
+	virtual C4PropListStatic * GetPropList() { return 0; }
+	const C4PropListStatic *GetPropList() const { return const_cast<C4ScriptHost*>(this)->GetPropList(); }
 	const char *GetScript() const { return Script.getData(); }
-	virtual C4ScriptHost * GetScriptHost() { return this; }
+	bool IsReady() { return State == ASS_PARSED; } // whether script calls may be done
+	// Translate a string using the script's lang table
+	std::string Translate(const std::string &text) const;
 	std::list<C4ScriptHost *> SourceScripts;
+	StdCopyStrBuf ScriptName; // script name
+
+	void UnlinkOwnedFunctions();
+
 protected:
 	C4ScriptHost();
-	void SetError(const char *szMessage);
+	void Unreg(); // remove from list
 	void MakeScript();
-	bool ReloadScript(const char *szPath, const char *szLanguage);
-	C4ComponentHost ComponentHost;
+	virtual bool ReloadScript(const char *szPath, const char *szLanguage);
 
 	bool Preparse(); // preparse script; return if successfull
 	virtual bool Parse(); // parse preparsed script; return if successfull
 	virtual void UnLink(); // reset to unlinked state
 
+	void Warn(const char *pMsg, ...) GNUC_FORMAT_ATTRIBUTE_O;
+
+	C4AulScriptEngine *Engine; //owning engine
+	C4ScriptHost *Prev, *Next; // tree structure
 
 	std::list<StdCopyStrBuf> Includes; // include list
 	std::list<StdCopyStrBuf> Appends; // append list
@@ -56,14 +77,21 @@ protected:
 	void CopyPropList(C4Set<C4Property> & from, C4PropListStatic * to);
 	bool ResolveIncludes(C4DefList *rDefs); // resolve includes
 	bool ResolveAppends(C4DefList *rDefs); // resolve appends
+	void DoAppend(C4Def *def);
 	bool Resolving; // set while include-resolving, to catch circular includes
 	bool IncludesResolved;
 
 	StdStrBuf Script; // script
-	C4ValueMapNames LocalNamed;
+	C4LangStringTable *stringTable;
 	C4Set<C4Property> LocalValues;
+	C4AulScriptState State; // script state
+
+	// list of all functions generated from code in this script host
+	std::set<C4AulScriptFunc*> ownedFunctions;
+
 	friend class C4AulParse;
-	friend class C4AulScriptFunc;
+	friend class C4AulProfiler;
+	friend class C4AulScriptEngine;
 	friend class C4AulDebug;
 };
 
@@ -73,6 +101,7 @@ class C4ExtraScriptHost: public C4ScriptHost
 	C4Value ParserPropList;
 public:
 	C4ExtraScriptHost(C4String *parent_key_name = NULL);
+	~C4ExtraScriptHost();
 	void Clear();
 
 	bool Delete() { return true; }
@@ -110,9 +139,11 @@ public:
 	virtual bool LoadData(const char *, const char *, C4LangStringTable *);
 	void Clear();
 	virtual C4PropListStatic * GetPropList();
+	void Denumerate(C4ValueNumbers * numbers);
 	C4Value Call(const char *szFunction, C4AulParSet *pPars=0, bool fPassError=false);
 	C4Value ScenPropList;
 	C4Value ScenPrototype;
+	C4Effect * pScenarioEffects = NULL;
 };
 
 extern C4GameScriptHost GameScript;

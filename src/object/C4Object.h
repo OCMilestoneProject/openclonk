@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1998-2000, Matthes Bender
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2016, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -20,16 +20,15 @@
 #ifndef INC_C4Object
 #define INC_C4Object
 
-#include "C4Facet.h"
-#include "C4Id.h"
-#include "C4Def.h"
-#include "C4Sector.h"
-#include "C4Value.h"
-#include "C4Particles.h"
-#include "C4PropList.h"
-#include "C4ObjectPtr.h"
-#include "StdMesh.h"
-#include <C4GameScript.h>
+#include "game/C4GameScript.h"
+#include "graphics/C4Facet.h"
+#include "lib/StdMesh.h"
+#include "object/C4Id.h"
+#include "object/C4ObjectPtr.h"
+#include "object/C4Sector.h"
+#include "object/C4Shape.h"
+#include "script/C4PropList.h"
+#include "script/C4Value.h"
 
 /* Object status */
 
@@ -70,6 +69,7 @@
 #define VIS_God     32
 #define VIS_LayerToggle 64
 #define VIS_OverlayOnly 128
+#define VIS_Editor      256
 
 // Helper struct to serialize an object's mesh instance with other object's mesh instances attached
 class C4MeshDenumerator: public StdMeshInstance::AttachedMesh::Denumerator
@@ -83,7 +83,7 @@ public:
 	C4MeshDenumerator(C4Def* def): Def(def), Object(NULL) {}
 	C4MeshDenumerator(C4Object* object): Def(NULL), Object(object) {}
 
-	C4Object* GetObject() const { return Object; }
+	C4Object* GetObject() { return Object; }
 
 	virtual void CompileFunc(StdCompiler* pComp, StdMeshInstance::AttachedMesh* attach);
 	virtual void DenumeratePointers(StdMeshInstance::AttachedMesh* attach);
@@ -167,7 +167,6 @@ public:
 	C4Shape Shape;
 	bool fOwnVertices; // if set, vertices aren't restored from def but from end of own vtx list
 	C4TargetRect SolidMask;
-	C4IDList Component;
 	C4Rect PictureRect;
 	C4NotifyingObjectList Contents;
 	C4MaterialList *MaterialContents; // SyncClearance-NoSave //
@@ -175,7 +174,7 @@ public:
 	StdMeshInstance* pMeshInstance; // Instance for mesh-type objects
 	C4Effect *pEffects; // linked list of effects
 	// particle lists that are bound to this object (either in front of behind it)
-	C4ParticleList *FrontParticles, *BackParticles;
+	class C4ParticleList *FrontParticles, *BackParticles;
 	void ClearParticleLists();
 
 	uint32_t ColorMod; // color by which the object-drawing is modulated
@@ -199,7 +198,6 @@ public:
 	void SetPlane(int32_t z) { if (z) Plane = z; Resort(); }
 	int32_t GetPlane() const { return Plane; }
 	int32_t GetSolidMaskPlane() const;
-	int32_t GetAudible() const;
 	void SetCommand(int32_t iCommand, C4Object *pTarget, C4Value iTx, int32_t iTy=0, C4Object *pTarget2=NULL, bool fControl=false, C4Value iData=C4VNull, int32_t iRetries=0, C4String *szText=NULL);
 	void SetCommand(int32_t iCommand, C4Object *pTarget=NULL, int32_t iTx=0, int32_t iTy=0, C4Object *pTarget2=NULL, bool fControl=false, C4Value iData=C4VNull, int32_t iRetries=0, C4String *szText=NULL)
 	{ SetCommand(iCommand, pTarget, C4VInt(iTx), iTy, pTarget2, fControl, iData, iRetries, szText); }
@@ -215,10 +213,7 @@ public:
 	void SetSolidMask(int32_t iX, int32_t iY, int32_t iWdt, int32_t iHgt, int32_t iTX, int32_t iTY);
 	void SetHalfVehicleSolidMask(bool set);
 	bool CheckSolidMaskRect(); // clip bounds of SolidMask in graphics - return whether the solidmask still exists
-	C4Object *ComposeContents(C4ID id);
 	bool MenuCommand(const char *szCommand);
-
-	bool ContainedControl(BYTE byCom);
 
 	void Clear();
 	void ClearInfo(C4ObjectInfo *pInfo);
@@ -260,8 +255,6 @@ public:
 	void UpdatePos(); // pos/shape changed
 	void UpdateSolidMask(bool fRestoreAttachedObjects);
 	void UpdateMass();
-	void ComponentConCutoff();
-	void ComponentConGain();
 	bool ChangeDef(C4ID idNew);
 	void UpdateFace(bool bUpdateShape, bool fTemp=false);
 	void UpdateGraphics(bool fGraphicsChanged, bool fTemp=false); // recreates solidmasks (if fGraphicsChanged), validates Color
@@ -290,7 +283,6 @@ public:
 	void MovePosition(C4Real dx, C4Real dy);
 	void DoMotion(int32_t mx, int32_t my);
 	bool ActivateEntrance(int32_t by_plr, C4Object *by_obj);
-	bool Incinerate(int32_t iCausedBy, bool fBlasted=false, C4Object *pIncineratingObject=NULL);
 	void DoDamage(int32_t iLevel, int32_t iCausedByPlr, int32_t iCause);
 	void DoEnergy(int32_t iChange, bool fExact, int32_t iCause, int32_t iCausedByPlr);
 	void UpdatLastEnergyLossCause(int32_t iNewCausePlr);
@@ -348,6 +340,7 @@ public:
 	void UpdateInLiquid(); // makes splash when a liquid is entered
 	void GrabContents(C4Object *pFrom); // grab all contents that don't reject it
 	bool GetDragImage(C4Object **drag_object, C4Def **drag_id) const; // return true if object is draggable; assign drag_object/drag_id to gfx to be used for dragging
+	int32_t AddObjectAndContentsToArray(C4ValueArray *target_array, int32_t index=0); // add self, contents and child contents count recursively to value array. Return index after last added item.
 
 protected:
 	void SideBounds(C4Real &ctcox);       // apply bounds at side; regarding bourder bound and pLayer
@@ -359,8 +352,7 @@ public:
 
 	bool DoSelect(); // cursor callback if not disabled
 	void UnSelect(); // unselect callback
-	void GetViewPos(float &riX, float &riY, float tx, float ty, const C4Facet &fctViewport) const       // get position this object is seen at (for given scroll)
-	{ if (Category & C4D_Parallax) GetViewPosPar(riX, riY, tx, ty, fctViewport); else { riX=float(GetX()); riY=float(GetY()); } }
+	void GetViewPos(float &riX, float &riY, float tx, float ty, const C4Facet &fctViewport) const;
 	void GetViewPosPar(float &riX, float &riY, float tx, float ty, const C4Facet &fctViewport) const;   // get position this object is seen at, calculating parallaxity
 	bool PutAwayUnusedObject(C4Object *pToMakeRoomForObject); // either directly put the least-needed object away, or add a command to do it - return whether successful
 
@@ -385,16 +377,7 @@ public:
 
 	bool CanConcatPictureWith(C4Object *pOtherObject) const; // return whether this object should be grouped with the other in activation lists, contents list, etc.
 
-	bool IsMoveableBySolidMask(int ComparisonPlane) const
-	{
-		return (Status == C4OS_NORMAL)
-		       && !(Category & C4D_StaticBack)
-		       && (ComparisonPlane < GetPlane())
-		       && !Contained
-		       ;
-	}
-
-	StdStrBuf GetNeededMatStr() const;
+	bool IsMoveableBySolidMask(int ComparisonPlane) const;
 
 	// This function is used for:
 	// -Objects to be removed when a player is removed
@@ -407,9 +390,10 @@ public:
 
 	// overloaded from C4PropList
 	virtual C4Object * GetObject() { return this; }
+	virtual C4Object const * GetObject() const { return this; }
 	virtual void SetPropertyByS(C4String * k, const C4Value & to);
 	virtual void ResetProperty(C4String * k);
-	virtual bool GetPropertyByS(C4String *k, C4Value *pResult) const;
+	virtual bool GetPropertyByS(const C4String *k, C4Value *pResult) const;
 	virtual C4ValueArray * GetProperties() const;
 };
 

@@ -24,7 +24,7 @@
         <text>The smoke particle is reloaded.</text>
       </example>
     </examples>
-    <related><funclink>ReloadParticle</funclink></related>
+    <related><funclink>ReloadDef</funclink></related>
   </func>
   <author>Sven2</author><date>2002-04</date>
 </funcs>

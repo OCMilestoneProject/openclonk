@@ -173,6 +173,7 @@ static C4ValueArray *FnTrans_Rotate(C4PropList * _this, long angle, long rx, lon
 	long s = fixtoi(Sin(itofix(angle, 1)), 1000);
 
 	long sqrt_val = rx * rx + ry * ry + rz * rz;
+	if (!sqrt_val) return false;
 	long n = long(sqrt(double(sqrt_val)));
 	if (n * n < sqrt_val) n++;
 	else if (n * n > sqrt_val) n--;
